@@ -63,6 +63,13 @@ El módulo se descompone en cuatro contextos. El núcleo (Inspecciones) es event
 
 ### 2.1 `InspeccionTecnica`
 
+> ⚠️ **SECCIÓN HISTÓRICA — fuente de verdad: §15.**
+> Esta sección documenta la evolución del aggregate. El contrato vigente vive en §15.2 (estructura del Hallazgo), §15.3 (invariantes I-H1..I-H9), §15.4 (catálogo final de 20 eventos) y §15.7 (inmutabilidad post-firma).
+> Conceptos referenciados aquí que ya **no existen** en el modelo MVP:
+> - `Severidad` y enum `Severidad` → reemplazados por `AccionRequerida` (§15.2).
+> - `ResultadoVerificacion` y comando `VerificarNovedadPreoperacional` → consolidados; el flujo unificado vive en §15.9 (3 botones: Verificar / Seguimiento / Descartar emiten `HallazgoRegistrado_v1` o `NovedadPreopDescartada_v1`).
+> - Evento `NovedadPreopVerificada_v1` → eliminado.
+
 El aggregate central. Event-sourced. Una inspección por (equipo + rutina + técnico + momento).
 
 > **Decisión MVP (2026-04-27):** se elimina la programación previa de inspección. El técnico llega a planta, escoge equipo y rutina, e inicia la inspección directamente. La programación (con estado `Programada`, evento `InspeccionProgramada_v1`, comando `ProgramarInspeccion`) se difiere a versión posterior — es agregable de forma puramente aditiva sin reescribir el modelo.
@@ -154,7 +161,7 @@ public enum InspeccionEstado
 | I4 | Una novedad del preop solo se puede verificar **una vez** dentro de la inspección | `VerificarNovedadPreoperacional` |
 | I5 | Cada repuesto debe pertenecer a un hallazgo existente en la inspección | `EstimarRepuesto` |
 | I6 | Solo se puede cancelar en `EnEjecucion` | `CancelarInspeccion` |
-| I7 | (Refinada en §12.9.4 con AccionRequerida — ver allí) | `EstablecerDictamen` |
+| I7 | ⚠️ **OBSOLETA**. La versión original ataba dictamen a `Severidad.Critica`. Reemplazo vigente: la validación pre-firma **V-F4** (§15.5) exige dictamen seleccionado, y la regla de negocio derivada de §15.6 implica que cualquier hallazgo `AccionRequerida = RequiereIntervencion` genera OT (sin forzar dictamen específico — ver discusión abierta en `04-brief-consultor-producto.md` §6 regla #11). | `EstablecerDictamen` |
 | I8 | El técnico que firma debe ser **un técnico contribuyente** (iniciador o incorporado) o un supervisor (claim `sinco_roles` contiene `supervisor`) | `FirmarInspeccion` |
 | I9-I11 | Reglas de obligatoriedad/prohibición de campos del Hallazgo según AccionRequerida — ver §12.9.4 | `RegistrarHallazgo` |
 
@@ -171,6 +178,9 @@ public sealed record IniciarInspeccion(
     Guid ObraId,                         // de los claims sinco_obras del JWT
     UbicacionGps Ubicacion) : ICommand;  // OBLIGATORIO — GPS del teléfono al iniciar
 
+// ⚠️ OBSOLETO — eliminado en §15.9. Reemplazado por los 3 botones de la variante B
+// (Verificar / Seguimiento / Descartar) que emiten RegistrarHallazgo o
+// NovedadPreopDescartada según el botón presionado.
 public sealed record VerificarNovedadPreoperacional(
     Guid InspeccionId,
     Guid NovedadPreopId,                 // referencia al sistema preop
@@ -178,6 +188,8 @@ public sealed record VerificarNovedadPreoperacional(
     string DiagnosticoEspecifico,
     string EmitidoPor) : ICommand;
 
+// ⚠️ OBSOLETO — el campo Severidad fue eliminado del modelo (§15.2).
+// Reemplazado por AccionRequerida en RegistrarHallazgo (§15.2/§15.9).
 public sealed record DescubrirHallazgo(
     Guid InspeccionId,
     Guid ParteId,                        // del catálogo Sinco
@@ -286,13 +298,17 @@ public sealed record InspeccionIniciada_v1(
 
 // HallazgoRegistrado_v1 es el evento ÚNICO consolidado.
 // Reemplaza HallazgoEnRutina_v2, HallazgoFueraDeRutina_v2, HallazgoDescubierto_v1
-// y NovedadPreopVerificada_v1 (ver §12.10.9). Cuando origen=PreOperacional,
-// lleva ResultadoVerificacion para informar al ERP qué pasó con la novedad.
+// y NovedadPreopVerificada_v1 (ver §12.10.9).
+// ⚠️ NOTA HISTÓRICA: la versión vigente del payload NO incluye `ResultadoVerificacion`
+// (eliminado en §15.2). El campo de abajo refleja una etapa intermedia del modelo.
+// Para la forma vigente, ver §15.2 (Hallazgo) y §15.9 (botones de la variante B
+// que determinan el evento emitido: HallazgoRegistrado_v1 con AccionRequerida
+// para Verificar/Seguimiento, o NovedadPreopDescartada_v1 para Descartar).
 public sealed record HallazgoRegistrado_v1(
     Guid InspeccionId, Guid HallazgoId,
     OrigenHallazgo Origen,                          // PreOperacional | Manual
     Guid? NovedadPreopId,                           // poblado si Origen == PreOperacional (I12b)
-    ResultadoVerificacion? ResultadoVerificacion,   // poblado si Origen == PreOperacional (I12c)
+    ResultadoVerificacion? ResultadoVerificacion,   // ⚠️ OBSOLETO — eliminado del payload (§15.2)
     Guid ParteId,                                   // siempre, validado contra rutina del aggregate
     Guid? ActividadId,                              // poblado si Origen == PreOperacional (catálogo)
     string? ActividadDescripcion,                   // poblado si Origen == Manual (texto libre)
@@ -620,14 +636,18 @@ public sealed record MedicionPlantilla(
 
 ## 3. Value objects
 
+> ⚠️ **SECCIÓN HISTÓRICA — fuente de verdad: §15.2.**
+> El value object `Hallazgo` mostrado abajo refleja la primera versión. La forma vigente vive en §15.2 e incluye `ParteEquipoId` (no `ParteId`), `TipoFallaId`, `CausaFallaId`, `AccionRequerida`, `Eliminado` y `MotivoEliminacion`. **No incluye `Severidad` ni `ResultadoVerificacion`** — ambos enums están eliminados del modelo.
+
 ```csharp
+// ⚠️ OBSOLETO — versión histórica. Forma vigente en §15.2.
 public sealed record Hallazgo(
     Guid HallazgoId,
     OrigenHallazgo Origen,
     Guid? NovedadPreopId,           // null si Origen == Manual
     Guid ParteId,
     string ActividadDescripcion,
-    Severidad Severidad,
+    Severidad Severidad,            // ⚠️ ELIMINADO en §15.2
     string Descripcion,
     IReadOnlyList<Guid> AdjuntosIds,
     DateTime RegistradoEn);
@@ -645,9 +665,12 @@ public sealed record RepuestoEstimado(
 public sealed record UbicacionGps(double Latitud, double Longitud, double? PrecisionMetros);
 
 public enum OrigenHallazgo  { PreOperacional, Manual }
-public enum Severidad        { Baja, Media, Alta, Critica }
+public enum Severidad        { Baja, Media, Alta, Critica }                       // ⚠️ ELIMINADO en §15.2
 public enum DictamenOperacion { PuedeOperar, ConRestriccion, NoPuedeOperar }
-public enum ResultadoVerificacion { Confirmada, Descartada, RequiereSeguimiento }
+public enum ResultadoVerificacion { Confirmada, Descartada, RequiereSeguimiento } // ⚠️ ELIMINADO en §15.2
+
+// Enum vigente que reemplaza Severidad (definido en §15.2):
+//   public enum AccionRequerida { NoRequiereIntervencion, RequiereSeguimiento, RequiereIntervencion }
 ```
 
 ---
@@ -787,11 +810,19 @@ Lista paginada de inspecciones cerradas por equipo, con dictámenes y costos est
 
 ## 6. Integración saliente (Outbox + ACL)
 
+> ⚠️ **SECCIÓN HISTÓRICA — fuente de verdad: §15.6.**
+> La saga `CerrarInspeccionSaga` vigente:
+> - Evalúa `AccionRequerida = RequiereIntervencion` (no severidad) para decidir si emite OT.
+> - Si **no** hay hallazgos con intervención, emite `InspeccionCerradaSinOT_v1` y NO contacta MYE.
+> - Si la generación de OT falla, emite `OTGeneracionFallida_v1` y deja el aggregate en `CierrePendienteOT` con reintento.
+> - Para novedades preop **descartadas** ya no usa `ResultadoVerificacion` — el evento `NovedadPreopDescartada_v1` (§15.4) lleva su propio motivo y el adapter llama `POST /preop/novedades/{id}/descartar` directamente.
+> - Para hallazgos con `AccionRequerida = RequiereSeguimiento`, además abre el aggregate `SeguimientoHallazgo` (§15.8).
+
 ### 6.1 Decisión
 
 Cuando una inspección llega a `InspeccionFirmada_v1`, hay que materializar tres cosas hacia Sinco on-prem (todas vía REST, ADR-001):
 
-1. Marcar las novedades del preoperacional como verificadas: `POST /api/v1/preop/novedades/{id}/verificar` por cada hallazgo con `Origen == PreOperacional` (con su `ResultadoVerificacion` y `NovedadTecnica` como diagnóstico).
+1. Marcar las novedades del preoperacional como verificadas: `POST /api/v1/preop/novedades/{id}/verificar` por cada hallazgo con `Origen == PreOperacional` (con su `ResultadoVerificacion` y `NovedadTecnica` como diagnóstico). ⚠️ Vigente: el cuerpo lleva `AccionRequerida` y diagnóstico, sin `ResultadoVerificacion` (§15.6).
 2. Crear OT correctiva sugerida en MYE: `POST /api/v1/mye/ot-correctivas` con BOM consolidado.
 3. Esperar la respuesta de MYE con el `OTCorrectivaIdSinco` y emitir `InspeccionCerrada_v1` para cerrar el ciclo.
 
@@ -906,6 +937,13 @@ public interface IInventarioAdapter
 
 ## 7. Flujos representativos
 
+> ⚠️ **SECCIÓN HISTÓRICA — fuente de verdad: §15.**
+> Los diagramas de flujo abajo reflejan el modelo previo. Cambios respecto al MVP vigente:
+> - `DescubrirHallazgo` desaparece — todo entra como `RegistrarHallazgo` (§15.2).
+> - El cierre se bifurca: `InspeccionCerrada_v1` con OT **o** `InspeccionCerradaSinOT_v1` según §15.6.
+> - Aparece el aggregate `SeguimientoHallazgo` cuando hay hallazgos `RequiereSeguimiento` (§15.8).
+> - Las validaciones pre-firma V-F1..V-F7 (§15.5) son bloqueantes en el botón "Firmar".
+
 ### 7.1 Flujo "feliz" — verificación + descubrimiento + OT
 
 ```
@@ -996,7 +1034,7 @@ Con I1b en vigor, hay **un único punto de acumulación a la vez por equipo**. E
 
 Si el técnico cierra una inspección sin verificar todas las novedades pendientes (porque alguna no aplicaba a su alcance, no tenía evidencia, etc.), las no verificadas **siguen pendientes** en el lado del preop. Quedan disponibles para la siguiente inspección.
 
-El descarte explícito requiere acción del técnico: registrar un hallazgo con `Origen = PreOperacional` y `ResultadoVerificacion = Descartada` (con su diagnóstico). Sin esa acción, la novedad sigue pendiente en el preop.
+El descarte explícito requiere acción del técnico. ⚠️ **Forma vigente (§15.4):** se emite el evento dedicado `NovedadPreopDescartada_v1` (no crea hallazgo, solo audit + POST `/preop/novedades/{id}/descartar` con motivo). La forma anterior — registrar un hallazgo con `Origen = PreOperacional` y `ResultadoVerificacion = Descartada` — ya no aplica. Sin la acción de descarte, la novedad sigue pendiente en el preop.
 
 #### 7.4.6 Edge case: muchas novedades pendientes acumuladas
 
@@ -1945,6 +1983,10 @@ public sealed record Hallazgo(
 
 #### 12.10.9 Consolidación de `NovedadPreopVerificada_v1` en `HallazgoRegistrado_v1` (2026-04-27)
 
+> ⚠️ **DECISIÓN INTERMEDIA — superada en §15.**
+> Esta sección registra la **primera** vuelta de consolidación (eliminar `NovedadPreopVerificada_v1` y agregar `ResultadoVerificacion` a `HallazgoRegistrado_v1`). Una segunda vuelta (2026-04-28, §15) eliminó también `ResultadoVerificacion` del payload: la decisión Verificar/Seguimiento/Descartar se expresa por el botón presionado en la variante B (§15.9), y el descarte emite el evento dedicado `NovedadPreopDescartada_v1` (§15.4).
+> Léase como contexto histórico de la evolución; el contrato vigente es §15.
+
 Decisión: **eliminar el evento `NovedadPreopVerificada_v1`** y consolidar su información en `HallazgoRegistrado_v1` agregando un campo opcional `ResultadoVerificacion`.
 
 **Razón:** redundancia. Cada verificación de novedad emitía dos eventos atómicos (uno para registrar la decisión y otro para crear el hallazgo). Toda la información cabe en un solo evento, con `ResultadoVerificacion` como campo opcional poblado solo cuando `Origen == PreOperacional`.
@@ -2436,6 +2478,12 @@ RepuestoEstimadoActualizado_v1 (cantidad=2, justificacion="Filtro doble en este 
 
 #### 12.10.10 Acciones rápidas inline por novedad (variante B, 2026-04-27)
 
+> ⚠️ **AJUSTE 2026-04-28:** la tabla "Comportamiento por botón" (abajo) referencia `ResultadoVerificacion`, que fue eliminado en §15. Mapeo vigente:
+> - **🟢 Verificar** → wizard completo → `HallazgoRegistrado_v1` con `Origen=PreOperacional` y `AccionRequerida` elegida por el técnico (sin `ResultadoVerificacion`).
+> - **🟠 Seguimiento** → mini-modal con motivo → `HallazgoRegistrado_v1` con `AccionRequerida=RequiereSeguimiento` (sin `ResultadoVerificacion`).
+> - **🔴 Descartar** → mini-modal con motivo → `NovedadPreopDescartada_v1` (evento dedicado, **NO crea hallazgo**, ver §15.4).
+> Patrón unificado completo en §15.9.
+
 **Patrón UX adoptado:** cada novedad en la lista "Importar desde preoperacional" muestra **tres botones inline** debajo de su contenido — verde "Verificar" / naranja "Seguimiento" / rojo "Descartar". Tap directo procesa esa novedad sola, sin paso de selección intermedio.
 
 **Razón de la decisión:** comparado con el patrón de modo selección + comando bulk (descartado), la variante B reduce fricción para el caso operativo dominante (1-3 novedades por inspección, atendidas individualmente) y simplifica la implementación. El costo es que N descartes son N modales si hubiera muchos duplicados — aceptable porque ese caso es excepcional.
@@ -2615,9 +2663,15 @@ Sumar al inventario de eventos del aggregate:
 
 #### 12.10.8 Inventario final de eventos del aggregate `InspeccionTecnica`
 
+> ⚠️ **OBSOLETO — superado por §15.4.** El catálogo MVP final es de **20 eventos** (no 17). La lista vigente:
+> - Suma `InspeccionCerradaSinOT_v1`, `NovedadPreopDescartada_v1` y los 3 eventos del nuevo aggregate `SeguimientoHallazgo` (`SeguimientoAbierto_v1`, `SeguimientoResuelto_v1`, `SeguimientoEscalado_v1`).
+> - Renombra `AdjuntoAgregado_v1` → `AdjuntoSubido_v1` y `RepuestoEstimadoAgregado_v1` → `RepuestoEstimado_v1` (con familia consistente Estimado/Actualizado/Removido).
+> - `MedicionRegistrada_v1` queda **diferida a post-MVP** (§15.4).
+> - `HallazgoRegistrado_v1` ya **no lleva** `ResultadoVerificacion` (§15.2).
+
 ```
 1.  InspeccionIniciada_v1
-2.  HallazgoRegistrado_v1                  ◀ con ResultadoVerificacion si Origen=PreOp (§12.10.9)
+2.  HallazgoRegistrado_v1                  ◀ ⚠️ payload sin ResultadoVerificacion en §15.2
 3.  HallazgoActualizado_v1                 ◀ edita campos del hallazgo (§12.10.6)
 4.  HallazgoEliminado_v1                   ◀ soft delete hallazgo (§12.10.6)
 5.  MedicionRegistrada_v1                  ◀ DIFERIDO a v1.x (§12.10.15)
@@ -3361,4 +3415,4 @@ Las secciones §2.1 a §14 quedan como histórico. Las siguientes referencias de
 | Invariantes I7 (severidad crítica → dictamen) | Usaba `Severidad.Critica` | Usar `AccionRequerida = RequiereIntervencion` para forzar dictamen NoApto/AptoConRestricciones (sugerido, no forzado — ver §15.5 V-F4) |
 | §12.10.x decisiones operativas | Algunas usaron `ResultadoVerificacion` | Ahora se decide vía botón en lista (variante B) — el evento emitido depende del botón, no de un selector dentro del wizard |
 
-> **Tarea pendiente**: hacer pasada de limpieza por las secciones §2.1, §6 e invariantes I7, removiendo referencias obsoletas y apuntando a §15. Se difiere para no extender este turno; las secciones siguen siendo útiles como contexto y la fuente de verdad operativa está en §15.
+> ✅ **Limpieza completada (2026-04-28).** Las secciones §2.1, §3, §6, §7, §7.4.5, §12.10.8, §12.10.9, §12.10.10 y la fila I7 de la tabla de invariantes ahora llevan banner de obsolescencia (`⚠️ SECCIÓN HISTÓRICA`) o nota inline (`⚠️ OBSOLETO`) apuntando a la subsección de §15 que define el contrato vigente. El histórico se preserva porque documenta la evolución del modelo; los lectores nuevos quedan dirigidos siempre a §15 antes de actuar sobre código antiguo. La tabla de arriba se conserva como índice de referencia rápida.

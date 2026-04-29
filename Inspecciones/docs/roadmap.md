@@ -42,7 +42,7 @@
 | 0.17 | Validar modelo con consultor mecánico | ⏳ | Sesión ~2h tras lectura del brief |
 | 0.18 | Recibir DDL del preoperacional + contratar shape DTO | 🚧 | Espera por equipo del preop |
 | 0.19 | Confirmar lista MVP de tipos de inspección | ⏳ | Motor, hidráulica, post-mantenimiento (propuesta) |
-| 0.20 | Limpieza de referencias obsoletas en §2.1, §6, I7 del modelo | ⏸ | Tabla §15.11 documenta qué reemplazar — no urgente |
+| 0.20 | Limpieza de referencias obsoletas en §2.1, §6, I7 del modelo | ✅ | Banners `⚠️ SECCIÓN HISTÓRICA` y notas inline `⚠️ OBSOLETO` añadidos en §2.1, §3, §6, §7, §7.4.5, §12.10.8, §12.10.9, §12.10.10 e I7 (2026-04-28). Tabla §15.11 marcada como completada. |
 
 ---
 
