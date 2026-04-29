@@ -91,7 +91,7 @@ _(Añadir tantos escenarios como precondiciones + invariantes el comando pueda v
 - Método + ruta propuesta: `{POST /…}`.
 - DTO de request / response.
 - Código HTTP esperado en happy path y en cada error de dominio.
-- Scope OAuth2/OIDC requerido (Entra ID — ADR-002).
+- Rol/permiso requerido. La auth la inyecta el host PWA Sinco MYE; el slice declara qué claim/rol espera (p. ej. `tecnico` con obra asignada). Mecanismo concreto: ADR-002 (tentativo).
 
 ## 10. Impacto en SignalR / push (si aplica)
 

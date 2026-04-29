@@ -28,7 +28,7 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 | Runtime | .NET 8+ | (aceptable .NET 9 si se valida en este repo) |
 | Compute Azure | Azure Container Apps | scale-to-zero |
 | DB Azure | Azure Database for PostgreSQL Flexible | |
-| Identidad | Microsoft Entra ID | ADR-002 |
+| Identidad | **Heredada de la PWA Sinco MYE móvil** (host) | El módulo no se autentica solo; recibe el contexto del usuario del host. Mecanismo concreto a confirmar — ver ADR-002 (estado tentativo). |
 | Push frontend | Azure SignalR (Standard tier) | ADR-005 |
 | Integración Sinco on-prem | REST sobre VPN site-to-site | ADR-001 |
 | Frontend | PWA React + MUI v6 (heredada de Sinco MYE) | módulo nuevo dentro de la PWA existente |

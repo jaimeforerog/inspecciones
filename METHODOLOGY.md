@@ -232,7 +232,7 @@ Para slices de la PWA (Fase 5 del roadmap), la spec se reformula:
 - `TimeProvider` inyectado — prohibido `DateTime.UtcNow` en dominio.
 - `Guid.NewGuid()` solo en handlers; en dominio se recibe el id desde fuera.
 - `UbicacionGps` y firma manuscrita (`bytes` PNG) son value objects del dominio; se reciben por parámetro, no se generan dentro.
-- Identidad federada vía Microsoft Entra ID (ADR-002): el handler recibe `claims` por parámetro; el dominio nunca conoce JWTs.
+- Identidad: heredada de la PWA Sinco MYE móvil (host). El handler recibe `claims` (técnico, obras asignadas, roles) por parámetro; el dominio nunca conoce el mecanismo concreto de auth ni los JWTs. Mecanismo del host a confirmar — ADR-002 está en estado tentativo.
 - Adjuntos vía SAS upload pattern (ADR-005): el dominio solo conoce el `BlobUri` final; nunca firma SAS.
 
 ---

@@ -24,7 +24,7 @@ El proyecto hermano `sinco-presupuesto` lleva 52 slices implementados con la mis
 | Cambio | Razón |
 |---|---|
 | `Presupuesto`, `Rubro`, `Dinero`, `Moneda` → `InspeccionTecnica`, `Hallazgo`, `Repuesto`, `UbicacionGps`, etc. | Dominio distinto. |
-| WorkOS → Microsoft Entra ID | ADR-002 — identidad federada con la organización Sinco. |
+| WorkOS (IdP propio standalone) → auth heredada del host | Inspecciones es **módulo dentro de la PWA Sinco MYE existente**, no app standalone. No tiene IdP propio: recibe el contexto del usuario del host (técnico, obras asignadas, rol). Mecanismo concreto del host a confirmar — ADR-002 está en estado tentativo. |
 | Multi-tenant conjoint → multi-obra (claim `sinco_obras`) | Inspecciones no es SaaS multi-cliente; es módulo del ERP corporativo Sinco. Sin currency. |
 | Multimoneda → mono-moneda implícita | El módulo no transa dinero; los repuestos tienen costo informativo, no presupuestal. |
 | Mockup MD3 frontend → wireframes propios `02*.html` | Wireframes ya producidos en Fase 0 del roadmap. |

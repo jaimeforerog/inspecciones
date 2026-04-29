@@ -51,7 +51,7 @@ Dos o tres frases con el estado del slice y el veredicto. Si es `request-changes
 ### 2.7 Coherencia con decisiones previas
 
 - [ ] Alineado con `01-modelo-dominio.md` §15 (fuente de verdad).
-- [ ] Alineado con ADRs aplicables: ADR-001 (REST/VPN), ADR-002 (Entra ID), ADR-003 (OT correctiva), ADR-004 (catálogos), ADR-005 (SignalR).
+- [ ] Alineado con ADRs aplicables: ADR-001 (REST/VPN), ADR-002 (auth — tentativo, módulo hereda del host PWA Sinco MYE), ADR-003 (OT correctiva), ADR-004 (catálogos), ADR-005 (SignalR).
 - [ ] Alineado con memoria del proyecto y notas del consultor mecánico.
 
 ### 2.8 Integración cross-team Sinco (si aplica)

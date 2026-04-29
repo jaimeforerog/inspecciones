@@ -62,7 +62,7 @@ Exactamente uno de tres:
 ### Coherencia con decisiones previas
 
 - [ ] El slice es consistente con `01-modelo-dominio.md §15` (fuente de verdad).
-- [ ] Alineado con ADRs aplicables: ADR-001 (REST/VPN), ADR-002 (Entra ID), ADR-003 (OT correctiva), ADR-004 (catálogos), ADR-005 (SignalR).
+- [ ] Alineado con ADRs aplicables: ADR-001 (REST/VPN), ADR-002 (auth — tentativo, módulo hereda del host PWA Sinco MYE), ADR-003 (OT correctiva), ADR-004 (catálogos), ADR-005 (SignalR).
 - [ ] Si el slice contradice una decisión previa, o se ajusta la decisión vía ADR nuevo (lo mandas como **followup**), o el slice se rechaza (**blocker**).
 
 ### Integración cross-team Sinco (si aplica)
@@ -72,7 +72,7 @@ Exactamente uno de tres:
 
 ### SignalR / push (si aplica)
 
-- [ ] Hub registrado, autenticación JWT validada contra los técnicos contribuyentes de la inspección. **Blocker** si cualquier autenticado puede suscribirse.
+- [ ] Hub registrado; la suscripción al stream de una inspección está restringida a sus técnicos contribuyentes (verificación contra el contexto del usuario inyectado por el host PWA). **Blocker** si cualquier autenticado del host puede suscribirse a cualquier inspección.
 - [ ] Fallback HTTP polling documentado.
 
 ## Tu tono
