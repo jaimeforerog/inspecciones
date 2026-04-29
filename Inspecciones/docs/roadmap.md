@@ -134,10 +134,11 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 3.24 | Saga `CerrarInspeccionSaga` | ⏳ | `01-modelo-dominio.md` §6 |
-| 3.25 | Saga: derivación automática Cerrada vs CerradaSinOT | ⏳ | §15.6 |
-| 3.26 | Saga: apertura de seguimientos al firmar | ⏳ | Para hallazgos `RequiereSeguimiento` |
-| 3.27 | Adapter MYE: POST /mye/ot-correctivas | ⏳ | Idempotency-Key=InspeccionId. Tres tests WireMock obligatorios (replay 200, 4xx sin retry, 5xx con backoff). Cuarto test si se adopta fallback `GET` (ver 4.10). Detalle en ADR-003 §13. |
+| 3.24 | Saga `CerrarInspeccionSaga` (simplificada por ADR-007) | ⏳ | Reacciona a `InspeccionFirmada_v1`. Si **no** hay `RequiereIntervencion` → emite `InspeccionCerradaSinOT_v1`. Si sí → no-op (espera comando humano `GenerarOT`). Ver §17 (ADR-007). |
+| 3.24b | Saga `EjecutarOTSaga` (NUEVA por ADR-007) | ⏳ | Reacciona a `OTSolicitada_v1` → invoca paso 3.27 (POST MYE) vía outbox. En éxito emite `InspeccionCerrada_v1`; en fallo agotado emite `OTGeneracionFallida_v1`. Ver §17. |
+| 3.25 | Saga: derivación Cerrada vs CerradaSinOT vs EsperandoAprobacionOT | ⏳ | Cerrada/CerradaSinOT siguen siendo eventos persistidos; `EsperandoAprobacionOT` es estado derivado en proyección §15.12.5. Ver §15.6 (histórico) + §17 (vigente). |
+| 3.26 | Saga: apertura de seguimientos al firmar | ⏳ | Para hallazgos `RequiereSeguimiento`. Independiente del flujo OT (corre siempre al firmar). |
+| 3.27 | Adapter MYE: POST /mye/ot-correctivas | ⏳ | Invocado desde **`EjecutarOTSaga`** (3.24b), no desde `CerrarInspeccionSaga`. Idempotency-Key=InspeccionId. Tres tests WireMock obligatorios (replay 200, 4xx sin retry, 5xx con backoff). Cuarto test si se adopta fallback `GET` (ver 4.10). Detalle en ADR-003 §13. |
 | 3.28 | Adapter Preop: POST /preop/novedades/{id}/verificar | ⏳ | Por cada novedad procesada |
 | 3.29 | Adapter Preop: POST /preop/novedades/{id}/descartar | ⏳ | Para `NovedadPreopDescartada_v1` |
 | 3.30 | Outbox + reintento exponencial | ⏳ | Wolverine built-in |
@@ -162,11 +163,13 @@
 | 3.39 | Endpoint `DELETE /inspecciones/{id}/hallazgos/{hid}` | ⏳ | Soft delete |
 | 3.40 | Endpoints repuestos (3) | ⏳ | |
 | 3.41 | Endpoints adjuntos: solicitar SAS + confirmar upload | ⏳ | Pattern blob upload |
-| 3.42 | Endpoint `POST /inspecciones/{id}/firmar` | ⏳ | Comando consolidado |
+| 3.42 | Endpoint `POST /inspecciones/{id}/firmar` | ⏳ | Comando consolidado. **Por ADR-007**: la firma ya NO dispara POST a MYE. Solo emite `InspeccionFirmada_v1` (+ `DiagnosticoEmitido_v1` y `DictamenEstablecido_v1` atómicos). Si no hay `RequiereIntervencion`, la saga 3.24 cierra como `CerradaSinOT`. Si sí hay, la inspección queda en estado derivado `EsperandoAprobacionOT` esperando comando humano. |
+| 3.42b | Endpoint `POST /inspecciones/{id}/generar-ot` (NUEVO ADR-007) | ⏳ | Capability gate: requiere `generar-ot`. Comando `GenerarOT` valida I-F4 (§15.7) y emite `OTSolicitada_v1`. Saga `EjecutarOTSaga` (3.24b) toma desde ahí. Tests obligatorios: (a) usuario sin capability → 403, (b) inspección sin `RequiereIntervencion` → 422, (c) re-emisión sobre stream con `OTSolicitada` previo → 422, (d) éxito feliz. |
 | 3.43 | Endpoint `POST /inspecciones/{id}/cancelar` | ⏳ | |
-| 3.44 | Endpoint `GET /inspecciones?equipo=&estado=` (bandeja) | ⏳ | |
-| 3.45 | Endpoint `GET /inspecciones/{id}` (detalle) | ⏳ | Sirve `DetalleInspeccionView` (§15.12.1). **Debe** exponer: hallazgos eliminados con `MotivoEliminacion`, novedades preop descartadas con `MotivoDescarte` + `DescartadaPor` + timestamp, trazabilidad de hallazgos escalados (`SeguimientoOrigenId`). Autorización: capability `ejecutar-inspeccion` para contribuyente del stream o capability `auditar-inspecciones` para acceso amplio. |
-| 3.46 | Endpoint `GET /equipos/{id}/seguimientos?estado=Abierto` | ⏳ | |
+| 3.44 | Endpoint `GET /inspecciones?equipo=&estado=` (bandeja) | ⏳ | Sirve `BandejaTecnicoView` (§15.12.3). Autorización: capability `ejecutar-inspeccion`; filtros `equipo` y `estado` opcionales. |
+| 3.45 | Endpoint `GET /inspecciones/{id}` (detalle) | ⏳ | Sirve `DetalleInspeccionView` (§15.12.1). **Debe** exponer: hallazgos eliminados con `MotivoEliminacion`, novedades preop descartadas con `MotivoDescarte` + `DescartadaPor` + timestamp, trazabilidad de hallazgos escalados (`SeguimientoOrigenId`). **Por ADR-007**: además expone `EstadoOT` derivado (`NoAplica` / `EsperandoAprobacion` / `EnProceso` / `Generada` / `Fallida`) y las capabilities del usuario consultante para que el frontend muestre/oculte botón "Generar OT". Autorización: capability `ejecutar-inspeccion` para contribuyente del stream o capability `auditar-inspecciones` para acceso amplio. |
+| 3.45b | Endpoint `GET /inspecciones/pendientes-ot?obra=&firmada-desde=&firmada-hasta=` (NUEVO ADR-007) | ⏳ | Sirve `BandejaInspeccionesPendientesOTView` (§15.12.5) — cola de aprobación. Audiencia: capability `generar-ot`. Incluye también filas con `EstadoOT=EnProceso` (post-OTSolicitada) y `EstadoOT=Fallida` (post-OTGeneracionFallida). Proyección Marten dedicada — instanciarla con tests de derivación de estado. |
+| 3.46 | Endpoint `GET /equipos/{id}/seguimientos?estado=Abierto` | ⏳ | Sirve `SeguimientosAbiertosPorEquipoView` (§15.12.4). Audiencia: `ejecutar-inspeccion` (banner Pantalla 1 / lista Pantalla 2 del flujo seguimientos) + `auditar-inspecciones`. Filtro `?estado=` permite recuperar histórico (Resuelto/Escalado). |
 | 3.47 | Endpoint `POST /seguimientos/{id}/resolver` | ⏳ | |
 | 3.48 | Endpoint `POST /seguimientos/{id}/escalar` | ⏳ | |
 | 3.49 | Endpoint `POST /novedades-preop/{id}/descartar` | ⏳ | Crea evento dedicado |

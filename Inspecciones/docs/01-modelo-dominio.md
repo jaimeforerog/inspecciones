@@ -772,9 +772,17 @@ El **botón admin "refrescar ahora"** está diferido a v1.1 (ver ADR-004). En v1
 
 ## 5. Proyecciones de Reporting
 
+> ⚠️ **SECCIÓN HISTÓRICA — fuente de verdad: §15.12.**
+> Esta sección quedó como sketch preliminar de proyecciones de Reporting. El catálogo vigente (con audiencia, eventos consumidos y endpoint declarados explícitamente, conforme a la convención §15.12.6) vive en §15.12. Mapeo:
+> - §5.1 `BandejaTecnico` → §15.12.3 `BandejaTecnicoView` (sirve paso 3.44 del roadmap).
+> - §5.2 `DetalleInspeccion` → §15.12.1 `DetalleInspeccionView` (sirve paso 3.45).
+> - §5.3 `KPIsPorObra` y §5.4 `HistoricoEquipo` permanecen **preliminares** — sin endpoint asignado en MVP; cuando se prioricen, deberán completar el contrato bajo §15.12.
+
 Para no martillar el event store con queries de UI.
 
 ### 5.1 `BandejaTecnico`
+
+> ⚠️ **OBSOLETO** — superseded por §15.12.3 `BandejaTecnicoView`.
 
 Una fila por inspección por técnico. Útil para la pantalla principal del móvil.
 
@@ -796,13 +804,19 @@ Una proyección Marten agregada construida por `MultiStreamProjection`.
 
 ### 5.2 `DetalleInspeccion`
 
+> ⚠️ **OBSOLETO** — superseded por §15.12.1 `DetalleInspeccionView`.
+
 Vista completa para la pantalla de ejecución del técnico. Reagrupa el stream con datos de catálogo (joins en proyección).
 
 ### 5.3 `KPIsPorObra`
 
+> 📅 **PRELIMINAR** — sin endpoint asignado en MVP. Cuando se priorice, completar contrato bajo §15.12 (audiencia + eventos consumidos + endpoint).
+
 Conteos: inspecciones por estado, hallazgos por severidad, repuestos consumidos. Para dashboard de supervisor.
 
 ### 5.4 `HistoricoEquipo`
+
+> 📅 **PRELIMINAR** — sin endpoint asignado en MVP. Cuando se priorice, completar contrato bajo §15.12.
 
 Lista paginada de inspecciones cerradas por equipo, con dictámenes y costos estimados acumulados.
 
@@ -3245,11 +3259,12 @@ Aggregate SeguimientoHallazgo (3 eventos):
    18. SeguimientoResuelto_v1          (técnico cierra "Sin intervención")
    19. SeguimientoEscalado_v1          (técnico convierte a "Intervención")
 
-Integración (1):
-   20. OTGeneracionFallida_v1
+Integración OT (2):
+   20. OTSolicitada_v1                 (comando GenerarOT autorizado, ADR-007 §17)
+   21. OTGeneracionFallida_v1
 
                                        ─────────────
-                          TOTAL MVP =   20 eventos
+                          TOTAL MVP =   21 eventos
 
 Diferidos a fase 2 (no MVP):
   - MedicionRegistrada_v1
@@ -3279,7 +3294,14 @@ El botón "Firmar y cerrar inspección" se deshabilita en UI mientras alguna val
 
 ### 15.6 Regla automática de cierre con/sin OT
 
+> ⚠️ **SUPERSEDED — fuente de verdad: ADR-007 (§17).**
+> A partir del 2026-04-29 (reunión de diseño con Daniel), la generación de OT pasó de **automática al firmar** a **manual con capability gate**. Esta sección queda como referencia histórica del flujo previo. El nuevo flujo:
+> - Si la inspección no tiene hallazgos `RequiereIntervencion` → `InspeccionCerradaSinOT_v1` automático (sin cambio).
+> - Si los tiene → la saga **NO** invoca MYE inmediatamente. La inspección queda en estado derivado `EsperandoAprobacionOT`. Un usuario con capability `generar-ot` ejecuta el comando `GenerarOT` para emitir `OTSolicitada_v1` y disparar el POST a MYE vía outbox.
+> Ver ADR-007 (§17) para decisión, eventos nuevos, state machine completa y trade-offs.
+
 ```
+[FLUJO HISTÓRICO — superseded por ADR-007]
 Al firmar la inspección, la saga CerrarInspeccionSaga evalúa:
 
    si EXISTE hallazgo con AccionRequerida = RequiereIntervencion (no eliminado)
@@ -3290,7 +3312,7 @@ Al firmar la inspección, la saga CerrarInspeccionSaga evalúa:
        → InspeccionCerradaSinOT_v1
 ```
 
-**No hay opción de "saltar OT"** si hay hallazgos con intervención. Si el técnico no quiere generar OT, debe editar el hallazgo (HallazgoActualizado_v1) **antes de firmar** y cambiar la AccionRequerida. La decisión vive en la captura del hallazgo, no en el cierre.
+**Nota histórica:** la idea original era que no había opción de "saltar OT" si había hallazgos con intervención. ADR-007 mantiene esa regla — la diferencia es **quién** y **cuándo** dispara el POST a MYE: ya no la saga al firmar, sino un usuario autorizado vía comando explícito.
 
 ### 15.7 Inmutabilidad post-firma
 
@@ -3306,6 +3328,19 @@ I-F2  En estado CierrePendienteOT → solo se permite:
         - reintentar OT (re-encolar saga, máx 1 vez técnico + N veces back-office)
         - back-office puede reasignar / corregir payload
 I-F3  Una vez Cerrada o CerradaSinOT → terminal absoluto
+I-F4  Comando GenerarOT (introducido por ADR-007 §17) requiere TODAS estas
+      precondiciones (validadas en handler antes de emitir OTSolicitada_v1):
+        - Estado actual = Firmada
+        - ≥1 hallazgo no eliminado con AccionRequerida = RequiereIntervencion
+        - !OTSolicitada (no se aceptan dos OTSolicitada_v1 sobre el mismo stream)
+        - Usuario tiene capability `generar-ot` en su contexto del host PWA
+      Violar cualquiera lanza excepción de dominio en el método de decisión
+      (no en Apply — ver convención de capa en CLAUDE.md).
+I-F5  Estado derivado EsperandoAprobacionOT (introducido por ADR-007) =
+        Estado=Firmada AND existe ≥1 hallazgo RequiereIntervencion no eliminado
+        AND !OTSolicitada
+      No es estado persistido; lo computa la proyección §15.12.5
+      (BandejaInspeccionesPendientesOTView).
 ```
 
 Si el técnico descubre un error post-firma, la única opción es crear una nueva inspección. Esto preserva auditoría limpia y evita la complejidad de "des-firmar".
@@ -3551,7 +3586,88 @@ Por cada inspección cerrada del rango: fila resumen con
 
 Métricas agregadas (tasa de descarte por usuario firmante, por operador que reportó) son **diferidas a Fase 10** — útiles cuando hay volumen suficiente, no en MVP.
 
-#### 15.12.3 Convenciones para proyecciones futuras
+#### 15.12.3 `BandejaTecnicoView` — bandeja "Mis inspecciones"
+
+Audiencia: usuario con capability `ejecutar-inspeccion` (su propia bandeja). Filtro adicional `?equipo=` y `?estado=` para acotar.
+
+Materializada por proyección Marten `MultiStreamProjection` que consume eventos del stream `InspeccionTecnica` (creación, transiciones de estado, cierre, cancelación) y joins de catálogo (`EquipoLocal`, `ObraLocal`, `Rutina`) para denormalizar códigos y nombres.
+
+Endpoint que la sirve: `GET /inspecciones?equipo=&estado=` (paso 3.44 del roadmap).
+
+Campos clave que **debe** exponer (una fila por inspección del técnico):
+
+```csharp
+public sealed record BandejaItem(
+    Guid InspeccionId,
+    string TecnicoId,
+    Guid EquipoId, string EquipoCodigo,
+    Guid RutinaId, string RutinaCodigo, string RutinaNombre,
+    Guid ObraId, string ObraNombre,
+    DateTime IniciadaEn,
+    InspeccionEstado Estado,
+    int HallazgosCount,
+    int RepuestosEstimadosCount,
+    DictamenOperacion? UltimoDictamen);
+```
+
+Notas operativas:
+
+- `HallazgosCount` excluye hallazgos eliminados (soft-delete) — la bandeja muestra trabajo vigente, no audit.
+- Para inspecciones colaborativas (multi-técnico), la fila aparece para **cada** contribuyente del stream (ver `TecnicosContribuyentes` del aggregate); `TecnicoId` distingue a quién pertenece la fila.
+- Costo estimado y otros derivados financieros NO van aquí — son para `KPIsPorObra` (§5.3, diferido).
+
+#### 15.12.4 `SeguimientosAbiertosPorEquipoView` — bandeja de seguimientos por equipo
+
+Audiencia:
+
+- **Técnico** iniciando una inspección sobre el equipo (capability `ejecutar-inspeccion`): consume el banner de Pantalla 1 ("X seguimientos previos del equipo") y la lista de Pantalla 2 (§15.8.3 lifecycle).
+- **Auditor / supervisor** (capability `auditar-inspecciones`) revisando seguimientos vencidos por equipo.
+
+Materializada por proyección Marten que consume eventos del stream `SeguimientoHallazgo`: `SeguimientoAbierto_v1`, `SeguimientoResuelto_v1`, `SeguimientoEscalado_v1`. Joins con catálogo `EquipoLocal` para denormalizar `EquipoCodigo`.
+
+Endpoint que la sirve: `GET /equipos/{equipoId}/seguimientos?estado=Abierto` (paso 3.46 del roadmap).
+
+Campos clave que **debe** exponer (una fila por seguimiento):
+
+- `SeguimientoId`, `EquipoId`, `EquipoCodigo`.
+- Origen: `HallazgoOrigenId`, `InspeccionOrigenId`, `ParteEquipoId`, `DescripcionOrigen`.
+- Apertura: `AbiertoPor`, `AbiertoEn`.
+- Estado: `Estado` (`Abierto` | `Resuelto` | `Escalado`), `CerradoEn?`, `CerradoPor?`, `MotivoCierre?`, `HallazgoEscaladoId?`, `InspeccionCierreId?`.
+- **Antigüedad**: `DiasAbierto` (derivado del `TimeProvider` al consultar — no persistido) + `BadgeSla` (`Azul` < 30d, `Naranja` 30–90d, `Rojo` ≥ 90d, ver §15.8.6).
+
+Notas operativas:
+
+- Filtro por `?estado=` permite recuperar histórico de seguimientos resueltos/escalados por equipo (auditoría de "qué pasó con los seguimientos que abrimos hace meses").
+- `BadgeSla` es **derivación de presentación**: se calcula al servir, no se materializa con timestamp congelado. Esto evita reproyecciones diarias por cambio de bucket.
+- Cross-obra: la proyección agrupa por `EquipoId`, no por `ObraActualId` — un seguimiento sigue al equipo (decisión §15.8.5 punto 4).
+
+#### 15.12.5 `BandejaInspeccionesPendientesOTView` — bandeja de aprobación de OT
+
+> Introducida por ADR-007 (§17). El estado `EsperandoAprobacionOT` no se persiste como evento; se deriva.
+
+Audiencia: usuarios con capability `generar-ot`. Es la cola de trabajo del aprobador (jefe de campo / supervisor / contralor — el host PWA mapea perfiles a capability).
+
+Materializada por proyección Marten que consume eventos de `InspeccionTecnica`: `InspeccionFirmada_v1`, `HallazgoRegistrado_v1` / `HallazgoActualizado_v1` / `HallazgoEliminado_v1` (para conocer si hay ≥1 RequiereIntervencion no eliminado), `OTSolicitada_v1`, `InspeccionCerrada_v1`, `OTGeneracionFallida_v1`. Una inspección entra a la bandeja al recibir `InspeccionFirmada_v1` con ≥1 RequiereIntervencion no eliminado, y sale al recibir `OTSolicitada_v1` (pasa a `EnProcesoOT`) o ya nunca aparece si llegó `InspeccionCerradaSinOT_v1`.
+
+Endpoint que la sirve: `GET /inspecciones/pendientes-ot?obra=&firmada-desde=&firmada-hasta=` (paso 3.45b del roadmap).
+
+Campos clave por fila:
+
+- `InspeccionId`, `EquipoId`, `EquipoCodigo`, `ObraId`, `ObraNombre`.
+- `FirmadaPor`, `FirmadaEn`.
+- `HallazgosIntervencionCount` — conteo de hallazgos no eliminados con `AccionRequerida = RequiereIntervencion`.
+- `RepuestosEstimadosCount` (consolidado del BOM previsto).
+- `Dictamen` (Apto / AptoConRestricciones / NoApto).
+- `EstadoOT`: `EsperandoAprobacion` | `EnProceso` (post-OTSolicitada, pre-confirmación MYE) | `Fallida` (post-OTGeneracionFallida).
+- `DiasFirmada` — antigüedad desde firma (derivado al consultar). Útil para SLA visual: una inspección con 7+ días esperando aprobación debe alertar.
+
+Notas operativas:
+
+- Una inspección `EnProceso` (post-`OTSolicitada_v1`, esperando confirmación de MYE) sigue visible en la bandeja con `EstadoOT=EnProceso` para que el aprobador vea que su solicitud está en camino — sale solo al cierre o al fallo.
+- Si llega `OTGeneracionFallida_v1`, vuelve a aparecer con `EstadoOT=Fallida` y permite reintento (capability `generar-ot` también autoriza retry, paso 3.G del roadmap).
+- SLA de aprobación pendiente (alerta a las X horas/días) — diferido. Followup en `FOLLOWUPS.md` cuando emerja.
+
+#### 15.12.6 Convenciones para proyecciones futuras
 
 - Cada proyección declara explícitamente: audiencia, eventos consumidos, endpoint que la sirve.
 - Las proyecciones son **stale-while-revalidate-friendly**: tolerar lag de segundos respecto al stream.
@@ -3672,3 +3788,171 @@ Wolverine procesa el outbox después de que la transacción committea. Aunque el
 - ADR-005 — SignalR push para feedback al cliente (§14).
 - `06-contrato-apis-erp.md §1.8` — convención del contrato que apunta a este ADR.
 - Wolverine docs — outbox + retry policy.
+
+---
+
+## 17. ADR-007 — Aprobación manual de OT con capability gate (2026-04-29)
+
+**Estado:** Aceptada.
+
+### Contexto
+
+§15.6 (versión previa) definía que la saga `CerrarInspeccionSaga` reaccionaba a `InspeccionFirmada_v1` y, si había ≥1 hallazgo `RequiereIntervencion`, hacía POST inmediato a MYE para crear la OT correctiva. La firma del técnico equivalía a la autorización de OT.
+
+En la reunión de diseño del 2026-04-29 (Daniel + Jaime + Sergio + David), se decidió **separar firma de aprobación de OT**:
+
+- El técnico que ejecuta la inspección no necesariamente tiene autoridad para comprometer una OT correctiva (que implica costo: repuestos, mano de obra, tiempo de equipo fuera de operación).
+- En la operación real de los clientes ERP de Sinco, esa autorización suele recaer en jefes de campo, supervisores o contralores — perfiles distintos al técnico que levanta la inspección.
+- La generación automática al firmar también dejaba al técnico sin opción de "esperar mientras coordino con el supervisor antes de comprometer la OT".
+
+Adicionalmente: la decisión confirma que **toda la gestión vive dentro de la app** — no hay camino paralelo en la web del ERP MYE para aprobar OTs. La capability gate es el único mecanismo de autorización.
+
+### Decisión
+
+**La firma de inspección no genera OT automáticamente.** Para inspecciones con ≥1 hallazgo `RequiereIntervencion`, el flujo se divide en dos pasos:
+
+1. **Firma** — el técnico firma. La inspección queda en estado `Firmada`. La proyección `BandejaInspeccionesPendientesOTView` (§15.12.5) la lista como `EstadoOT=EsperandoAprobacion`.
+2. **Aprobación de OT** — un usuario con capability `generar-ot` ejecuta el comando `GenerarOT(InspeccionId)`. El handler valida I-F4 (§15.7) y emite `OTSolicitada_v1`. La saga `EjecutarOTSaga` reacciona y dispara el POST a MYE vía outbox (ADR-006). En éxito → `InspeccionCerrada_v1`. En fallo → `OTGeneracionFallida_v1` + estado `CierrePendienteOT`.
+
+Para inspecciones sin hallazgos `RequiereIntervencion`, **no cambia nada**: la saga `CerrarInspeccionSaga` emite `InspeccionCerradaSinOT_v1` automáticamente al firmar (igual que en §15.6 histórico).
+
+#### State machine actualizada
+
+```
+EnEjecucion
+   │
+   ├─ FirmarInspeccion ──┬─ sin RequiereIntervencion ─→ CerradaSinOT (terminal)
+   │                     │
+   │                     └─ con RequiereIntervencion ─→ Firmada
+   │                                                       │
+   │                                                       │ (estado derivado:
+   │                                                       │  EsperandoAprobacionOT
+   │                                                       │  mientras !OTSolicitada)
+   │                                                       │
+   │                                                       ↓
+   │                                              GenerarOT (capability `generar-ot`)
+   │                                                       │
+   │                                                       ↓
+   │                                                  OTSolicitada_v1
+   │                                                       │
+   │                                                       ↓ saga EjecutarOTSaga → POST MYE (outbox)
+   │                                                       │
+   │                                                       ├─ éxito → Cerrada (terminal)
+   │                                                       └─ fallo → CierrePendienteOT
+   │                                                                      │
+   │                                                                      └─ retry GenerarOT → ...
+   │
+   └─ CancelarInspeccion ─→ Cancelada (terminal)
+```
+
+#### Eventos nuevos (Δ §15.4)
+
+```csharp
+public sealed record OTSolicitada_v1(
+    Guid InspeccionId,
+    string SolicitadaPor,        // user id del aprobador con capability generar-ot
+    DateTime SolicitadaEn);
+```
+
+`InspeccionCerrada_v1`, `InspeccionCerradaSinOT_v1`, `OTGeneracionFallida_v1` mantienen su shape — solo cambia **quién/cuándo** los emite.
+
+#### Comando nuevo
+
+```csharp
+public sealed record GenerarOT(
+    Guid InspeccionId,
+    string SolicitadaPor,
+    IReadOnlyCollection<string> Capabilities);   // del contexto del host PWA
+```
+
+Validaciones del handler (todas bloqueantes — ver I-F4):
+- `Capabilities` contiene `generar-ot`.
+- Aggregate en estado `Firmada`.
+- ≥1 hallazgo no eliminado con `AccionRequerida = RequiereIntervencion`.
+- `!OTSolicitada` (no se aceptan dos solicitudes sobre el mismo stream).
+
+#### Sagas
+
+| Saga | Trigger | Acción |
+|---|---|---|
+| `CerrarInspeccionSaga` (existente, simplificada) | `InspeccionFirmada_v1` | Si **no** hay `RequiereIntervencion` → emite `InspeccionCerradaSinOT_v1`. Si **sí** hay → no-op (espera comando humano). |
+| `EjecutarOTSaga` (nueva) | `OTSolicitada_v1` | POST `/api/v1/mye/ot-correctivas` vía outbox (ADR-006). En éxito → `InspeccionCerrada_v1`. En fallo permanente o agotado retry → `OTGeneracionFallida_v1`. |
+| `AbrirSeguimientosSaga` (existente, sin cambio) | `InspeccionFirmada_v1` | Para hallazgos `RequiereSeguimiento` abre aggregates `SeguimientoHallazgo` (§15.8). Independiente del flujo OT. |
+
+#### Aggregate — estado interno
+
+```csharp
+public sealed class InspeccionTecnica
+{
+    // ... campos existentes ...
+    public bool OTSolicitada { get; private set; }      // setea Apply(OTSolicitada_v1) → true
+}
+
+public void Apply(OTSolicitada_v1 e)
+{
+    OTSolicitada = true;
+}
+```
+
+`Apply` es puro (consistente con regla dura de CLAUDE.md). Las precondiciones I-F4 viven en el método de decisión `GenerarOT(...)`.
+
+#### Capabilities
+
+| Capability | Quién la otorga | Para qué |
+|---|---|---|
+| `ejecutar-inspeccion` | Host PWA (mapping de perfiles ERP → capabilities, paso 2.5 roadmap) | Iniciar, registrar hallazgos, firmar |
+| `generar-ot` (NUEVA) | Host PWA | Ejecutar comando `GenerarOT` |
+| `auditar-inspecciones` | Host PWA | Ver `AuditoriaInspeccionesView`, acceder cross-inspección |
+| `recibir-alertas-ot-fallida` | Host PWA | Notificación cuando integración MYE falla |
+
+`generar-ot` es **independiente** de `ejecutar-inspeccion`: un usuario puede tener una, ambas, o ninguna. Un técnico puede firmar pero no aprobar; un supervisor puede aprobar pero (típicamente) no ejecuta inspecciones él mismo. La matriz concreta de mapping ERP → capabilities la define el host PWA, no este módulo.
+
+### Implicaciones para read models
+
+- **`DetalleInspeccionView` (§15.12.1)** — debe exponer:
+  - `EstadoOT` derivado: `NoAplica` (sin RequiereIntervencion), `EsperandoAprobacion`, `EnProceso` (post-OTSolicitada, pre-confirmación MYE), `Generada` (post-Cerrada con OT), `Fallida` (post-OTGeneracionFallida).
+  - Capability del usuario consultante (proveniente del host PWA) para que el frontend muestre/oculte botón "Generar OT".
+- **`BandejaInspeccionesPendientesOTView` (§15.12.5, NUEVA)** — cola de trabajo del aprobador. Detalle en §15.12.5.
+
+### Implicaciones para roadmap
+
+| Paso | Cambio |
+|---|---|
+| 3.27 | `CerrarInspeccionSaga` — dividir en dos sagas (`CerrarInspeccionSaga` simplificada + `EjecutarOTSaga` nueva). |
+| 3.42 | `POST /inspecciones/{id}/firmar` — semántica reducida: ya no implica POST a MYE. |
+| 3.42b (NUEVO) | Comando + endpoint `POST /inspecciones/{id}/generar-ot`. Capability gate `generar-ot`. |
+| 3.45 | `GET /inspecciones/{id}` — exponer `EstadoOT` y capabilities del usuario consultante. |
+| 3.45b (NUEVO) | Bandeja `GET /inspecciones/pendientes-ot?...` sirviendo §15.12.5. |
+| 2.5 | Mapping de perfiles ERP → capabilities — agregar `generar-ot` a la matriz. |
+
+### Implicaciones para UI (frontend)
+
+- **Pantalla 7** (post-firma): ya no muestra "Generando OT en MYE..." automáticamente. Si el firmante tiene capability `generar-ot`, ve botón "Generar OT" disponible. Si no, ve mensaje "Inspección firmada. Esperando aprobación de OT por usuario autorizado."
+- **Bandeja del aprobador** (nueva pantalla, fase 5): lista de inspecciones pendientes con conteos, dictamen, antigüedad. Click → detalle → botón "Generar OT".
+- **SignalR push (ADR-005)**: el aprobador ve en tiempo real el resultado del POST MYE (`OTGenerada` o `OTGeneracionFallida`). El firmante también recibe el push si está suscrito al stream.
+
+### Trade-offs
+
+**Pros:**
+- Modelo de autorización alineado con la operación real (jefe de campo aprueba, técnico ejecuta).
+- Auditoría explícita: `OTSolicitada_v1` registra quién/cuándo autorizó la OT, separado del firmante.
+- Permite "firmar y coordinar antes de comprometer OT" (caso de uso real de campo).
+- Mantiene la regla "una OT por inspección con intervención" — la diferencia es el momento de disparo, no la lógica.
+- No introduce caminos paralelos en MYE web — toda la gestión vive en la app.
+
+**Cons:**
+- Estado nuevo (derivado `EsperandoAprobacionOT`) — requiere proyección dedicada.
+- Latencia operacional: una inspección puede quedar firmada sin OT por horas/días si nadie con capability la aprueba. Sin SLA explícito en MVP — followup si emerge.
+- Nueva capability a mapear en el host PWA. Coordinación con paso 2.5.
+- Wolverine debe orquestar dos sagas distintas con triggers diferentes.
+
+### Referencias
+
+- §15.4 — catálogo de eventos (incluye `OTSolicitada_v1`).
+- §15.6 — flujo previo (superseded), conservado como histórico.
+- §15.7 — invariantes I-F4 e I-F5 introducidas por este ADR.
+- §15.12.1 — `DetalleInspeccionView` con `EstadoOT`.
+- §15.12.5 — `BandejaInspeccionesPendientesOTView` (cola del aprobador).
+- ADR-006 (§16) — outbox para el POST a MYE desde `EjecutarOTSaga`.
+- `roadmap.md` — pasos 3.24, 3.24b, 3.25, 3.27, 3.42, 3.42b, 3.45, 3.45b, 2.5.
+- Notas de la reunión de diseño 2026-04-29 (`Inspecciones/docs/llamada diseño.mp4` — origen de la decisión).

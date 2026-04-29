@@ -19,11 +19,52 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** ≥3 supervisores reportan en feedback de piloto que necesitan filtrar/agrupar seguimientos por tipo de falla, o que falta de clasificación impide priorizar revisión de seguimientos vencidos.
 **Notas:** Este followup queda congelado hasta tener datos del piloto (Fase 9). No abrir slice hasta entonces.
 
+### #2 — Semántica de "cambiar fecha" en pantalla inicial de inspecciones 🟢
+
+**Origen:** notas reunión diseño 2026-04-29 — Daniel mencionó "permitiendo cambiar la fecha y siguiendo la lógica del preoperacional" en pantalla 1.
+**Fecha:** 2026-04-29
+**Tipo:** clarificación de alcance · UX
+**Descripción:** Confirmar con Daniel si "cambiar la fecha" es: (a) **filtro de bandeja** ("ver inspecciones de la fecha X"), o (b) **input al iniciar inspección** que setearía `IniciadaEn` retroactivo. El caso (b) viola la regla dura "TimeProvider en handler — prohibido `DateTime.UtcNow` en dominio" y requeriría un evento separado tipo `InspeccionRetroactiva_v1` con auditoría especial; el caso (a) es UX puro sin impacto en el modelo.
+**Disparador para abrir slice:** respuesta de Daniel. Si es (a), cerrar con nota a wireframe. Si es (b), abrir ADR + amendment a §15.4 antes de cualquier slice de iniciar/firmar.
+**Notas:** Bloqueante de slice 3.36 (`POST /inspecciones`) si la respuesta es (b). Resolver antes de Santiago abrir ese slice.
+
+### #3 — Equipos con múltiples medidores (medidor 1 + medidor 2) 🟢
+
+**Origen:** notas reunión diseño 2026-04-29 — pantalla 1 muestra "medidor uno" y "medidor dos". `EquipoLocal.HorometroActual` actual es singular (`decimal?`).
+**Fecha:** 2026-04-29
+**Tipo:** domain extension
+**Descripción:** Confirmar con David (en su investigación inicial de volúmenes con clientes ERP) si los equipos en producción tienen 2 medidores (típico: horómetro + odómetro, o dos horómetros independientes en equipos con motores duales). Si sí: extender `EquipoLocal` a `MedidorPrimario` + `MedidorSecundario?` (o `Dictionary<string, decimal> Medidores` si hay equipos con N medidores). Afecta también captura: ¿qué medidor se reporta al iniciar inspección? ¿ambos? ¿el ERP necesita ambos al cierre de OT?
+**Disparador para abrir slice:** respuesta de David. Si confirma 2 medidores como caso normal, amendment a §12.7 (`EquipoLocal`) + §15.4 (evento `InspeccionIniciada_v1` puede llevar lecturas de medidores) + slice de captura.
+**Notas:** Bloqueante para slice 3.36. La investigación de David ya está agendada — incluir esta pregunta explícitamente.
+
+### #4 — "Proyecto" vs "Obra" — naming y posible redundancia 🟢
+
+**Origen:** notas reunión diseño 2026-04-29 — Jaime/Sergio sugirieron "el campo 'proyecto' se mantendría solo si es relevante". Modelo usa `ObraId` / `ObraLocal`.
+**Fecha:** 2026-04-29
+**Tipo:** clarificación de modelo
+**Descripción:** Confirmar con Sergio (consultor producto) y David (lado ERP) si en MYE/Sinco existen ambos conceptos `Proyecto` y `Obra` como entidades distintas, o si `Proyecto` es sinónimo coloquial de `Obra` para ciertos clientes. Resolver una de tres formas: (a) son sinónimos → quitar "proyecto" de wireframes y unificar a "obra"; (b) son distintos → agregar `ProyectoId` + `ProyectoLocal` al modelo y al sync de catálogos (ADR-004); (c) `Proyecto` es atributo de `Obra` → agregar campo `ProyectoNombre` a `ObraLocal` sin proyección dedicada.
+**Disparador para abrir slice:** respuesta de Sergio + David. Si (b), amendment a §4 / §12.7 + nuevo paso de sync.
+**Notas:** Bajo riesgo de bloqueo — afecta más wireframes que código de dominio. Resolver antes de finalizar pantallas (viernes según Daniel).
+
+### #5 — Endpoints de listado de hallazgos importables con filtros 🟢
+
+**Origen:** notas reunión diseño 2026-04-29 — "filtros para importar hallazgos deben estar disponibles antes de mostrar el listado, permitiendo filtrar por parte, fecha y usuario".
+**Fecha:** 2026-04-29
+**Tipo:** API · doc
+**Descripción:** Definir y agregar al roadmap dos endpoints (o variantes filtrables de los existentes): `GET /inspecciones/{id}/importables-preop?parte=&desde=&hasta=&usuario=` (lista novedades preop verificables del equipo, filtrable) y `GET /equipos/{equipoId}/seguimientos-importables?parte=&desde=&hasta=&usuario=` (lista seguimientos abiertos importables a la inspección actual). El segundo puede ser la misma proyección de §15.12.4 con filtros adicionales. El primero requiere proyección lateral del catálogo de novedades preop pendientes — confirmar si es lectura directa al ERP (`GET /api/v1/preop/novedades?...`) o read model local.
+**Disparador para abrir slice:** previo al slice del wizard de hallazgo (paso 3.37 `POST /hallazgos`). Resolver con David si es lectura directa o local antes de codear el adapter.
+**Notas:** No bloqueante hasta que Santiago llegue al slice de importación. Daniel ya está iterando UX en Figma.
+
+
 
 
 ## Cerrados
 
-_(vacío)_
+### #6 — Daniel — rol formal en el equipo ✅
+
+**Origen:** notas reunión diseño 2026-04-29 — Daniel presenta wireframes y posee Figma.
+**Fecha apertura / cierre:** 2026-04-29 / 2026-04-29
+**Resolución:** Jaime confirmó que Daniel es **diseñador UX** encargado de presentar mockups en Figma. `project_equipo.md` actualizado.
 
 ---
 
