@@ -193,7 +193,7 @@ Sinco MYE ya tiene una **app móvil** con módulos de Preoperacional, Estado de 
 
 ## 7. APIs a construir / exponer
 
-Total: **17 endpoints** distribuidos en **cuatro módulos** Sinco. Lista completa en `01-modelo-dominio.md §12.9.7`.
+> ⚠️ **Fuente canónica del contrato: [`06-contrato-apis-erp.md`](06-contrato-apis-erp.md)**. Esta tabla queda como resumen ejecutivo; cualquier discrepancia se resuelve a favor del archivo 06. Total real reconciliado: **25 endpoints** (14 obligatorios MVP + 3 condicionales + 8 diferidos al post-MVP), no 17 como decía la versión anterior.
 
 | Endpoint | Módulo dueño | Estado |
 |---|---|---|
@@ -251,6 +251,10 @@ Catálogos (causas/tipos de falla, partes, ubicaciones, obras, equipos, rutinas,
 ### ADR-005 — SignalR para notificación push del cierre
 
 **Azure SignalR Service** para empujar al cliente la confirmación de cierre cuando MYE responde async. Hub `InspeccionesHub` con `JoinInspeccion(id)` autenticado por JWT y validado contra `TecnicosContribuyentes`. Eventos publicados: `OTGenerada` (con OTId+OTNumero), `InspeccionCerradaSinOT`, `OTGeneracionFallida`. Cliente PWA usa `@microsoft/signalr` con `withAutomaticReconnect()`. Fallback HTTP polling cada 5s si SignalR no disponible. Latencia típica: <100ms. Detalle completo en `01-modelo-dominio.md §14`.
+
+### ADR-006 — Resiliencia y outbox para integraciones ERP
+
+Todo `POST` del módulo hacia el ERP pasa por **Wolverine outbox** persistido en PostgreSQL, con retry exponencial (5s → 30s → 2m → 10m → dead-letter). Atomicidad: el evento del aggregate y el mensaje del outbox quedan en el mismo `SaveChangesAsync` — coherencia garantizada. Aplica a P-5 (verificar), P-6 (descartar), M-1 (ot-correctivas) y cualquier `POST` futuro hacia el ERP. Implicación cross-team: idempotencia real obligatoria por contrato. Detalle completo en `01-modelo-dominio.md §16`.
 
 ---
 

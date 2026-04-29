@@ -8,7 +8,7 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 - **Próximo trabajo:** primer slice de Fase 3 (backend core) cuando el usuario lo apruebe.
 - **Roadmap:** `Inspecciones/docs/roadmap.md` (fases 0..10).
 - **Modelo de dominio:** `Inspecciones/docs/01-modelo-dominio.md` §15 (fuente de verdad).
-- **ADRs:** `Inspecciones/docs/00-investigacion-mercado.md §9` (ADR-001 a ADR-005).
+- **ADRs:** ADR-001 a ADR-005 en `00-investigacion-mercado.md §9`; ADR-003 ampliado en `01-modelo-dominio.md §13`; ADR-005 en `§14`; **ADR-006 (resiliencia outbox para integraciones ERP) en `§16`**.
 
 ## Metodología (resumen — ver `METHODOLOGY.md` para detalle)
 

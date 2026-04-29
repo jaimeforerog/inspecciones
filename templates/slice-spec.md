@@ -88,7 +88,7 @@ _(Añadir tantos escenarios como precondiciones + invariantes el comando pueda v
 
 ## 7. Idempotencia / retries
 
-¿Qué pasa si el comando se reintenta? ¿Es naturalmente idempotente? ¿Requiere `IdempotencyKey`? Para comandos que cruzan a Sinco on-prem (saga MYE, adapter Preop), `Idempotency-Key=InspeccionId` por defecto (ADR-003).
+¿Qué pasa si el comando se reintenta? ¿Es naturalmente idempotente? ¿Requiere `IdempotencyKey`? Para comandos que cruzan a Sinco on-prem (saga MYE, adapter Preop), `Idempotency-Key=InspeccionId` por defecto (ADR-003). Si el slice emite un POST hacia el ERP, **debe** ejecutarse vía Wolverine outbox (ADR-006) — nunca llamada HTTP sincrónica desde el handler.
 
 ## 8. Impacto en proyecciones / read models
 

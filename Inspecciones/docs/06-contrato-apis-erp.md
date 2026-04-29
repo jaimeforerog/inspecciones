@@ -1,0 +1,719 @@
+# Contrato de APIs del ERP Sinco — fuente consolidada
+
+**Propósito:** lista canónica de todos los endpoints del ERP Sinco (módulos Preoperacional, MYE núcleo, Inventario, User master) que el módulo de Inspecciones Técnicas consume. Reemplaza la enumeración dispersa en:
+
+- `00-investigacion-mercado.md §9.13` (histórica)
+- `03-sow-consultor.md §7` (resumen, ahora apunta aquí)
+- `roadmap.md Fase 4` (mapeo por equipo dueño, ahora apunta aquí)
+
+A partir de la fecha de este documento, los slices del módulo deben referenciar **este archivo** como contrato. Los anteriores quedan como histórico.
+
+**Última revisión:** 2026-04-29
+**Estado del contrato:** propuesta del módulo, **pendiente de firma cross-team con cada equipo Sinco**.
+
+---
+
+## 1. Convenciones globales
+
+Aplican a **todos** los endpoints listados aquí, salvo que se indique excepción explícita.
+
+### 1.1 Path prefix y versionado
+
+- Prefix obligatorio: `/api/v1/...`. El versionado va en URL.
+- Cuando emerja v2 de un endpoint, conviven `/api/v1/...` y `/api/v2/...` durante ventana de migración (mínimo 6 meses).
+
+### 1.2 Autenticación
+
+- El cliente móvil llega autenticado por el host PWA Sinco MYE — propaga el token en `Authorization: Bearer {jwt}`.
+- Cada API valida el token contra el IdP que se acuerde en ADR-002 (tentativo).
+- El módulo no asume perfiles ERP fijos: razona por **capabilities** (verbos como `ejecutar-inspeccion`, `auditar-inspecciones`). Ver roadmap paso 2.5.
+
+### 1.3 Paginación
+
+- Aplica a todos los `GET` que devuelven listas.
+- Headers estándar: `X-Total-Count`, `X-Page`, `X-Page-Size`, `Link` (RFC 5988).
+- Query params: `page` (1-based), `size` (default 50, máx 200).
+
+### 1.4 Idempotencia
+
+- Todos los `POST` no-naturalmente-idempotentes deben aceptar `Idempotency-Key` como header.
+- **Idempotencia real, no solo aceptación del header**: ante una segunda llamada con la misma key, el endpoint devuelve `200 OK` con el **mismo body** de la primera respuesta exitosa, **sin** crear el recurso de nuevo y **sin** devolver `409 Conflict`. El mapeo `key → respuesta` sobrevive a reinicios y dura **≥30 días**.
+- Aplica con prioridad a `POST /api/v1/mye/ot-correctivas` (compromiso vinculante para el equipo MYE — ver ADR-003 §13).
+
+### 1.5 Error envelope
+
+Forma esperada de respuestas 4xx/5xx (a confirmar con cada equipo):
+
+```json
+{
+  "code": "string",
+  "message": "string",
+  "details": { ... opcional ... },
+  "traceId": "string"
+}
+```
+
+### 1.6 Cache (catálogos)
+
+- `GET` de catálogos sincronizados nocturnamente debe soportar `If-Modified-Since` o `ETag` y devolver `304 Not Modified` cuando aplique. Ver ADR-004.
+
+### 1.7 Convenciones de IDs
+
+- Catálogos sincronizados: IDs/códigos **inmutables**. Renombrar = cambia descripción, no ID. Descontinuar = `activo=false`, no delete (ADR-004).
+
+### 1.8 Resiliencia: outbox + retry desde el módulo
+
+> **Fuente canónica:** ADR-006 — Resiliencia y outbox para integraciones ERP (`01-modelo-dominio.md §16`). Esta sub-sección es resumen para lectores del contrato.
+
+**Regla general**: ningún `POST` al ERP se ejecuta sincrónicamente desde un handler HTTP. Todos pasan por **Wolverine outbox** persistido en PostgreSQL, con retry exponencial (5s → 30s → 2m → 10m → dead-letter).
+
+**Por qué importa para el contrato (lado ERP)**:
+
+- **Idempotencia real obligatoria** (§1.4): el mismo `Idempotency-Key` puede llegar varias veces — primera por intento original, las siguientes por reintentos de Wolverine. El ERP debe retornar la misma respuesta a todas, sin crear duplicados.
+- **Volúmenes esperados**: en operación normal ~1 llamada por evento; en degradación hasta 5 llamadas con la misma key durante una hora. Dimensionar capacidad acorde.
+- **Latencia tolerable**: hasta ~30s por llamada antes de timeout y reintentar.
+
+**Endpoints sujetos al patrón** (vigente al 2026-04-29):
+
+| Endpoint | Slice consumidor |
+|---|---|
+| P-5 `POST /preop/novedades/{id}/verificar` | Saga `CerrarInspeccionSaga` (paso 3.28) |
+| P-6 `POST /preop/novedades/{id}/descartar` | Saga (paso 3.29) |
+| M-1 `POST /mye/ot-correctivas` | Saga (paso 3.27) |
+
+**No aplica a `GET`** (lectura sincrónica). Detalle completo del patrón, atomicidad outbox + stream, observabilidad, métricas y alertas en ADR-006.
+
+---
+
+## 2. Estados (leyenda)
+
+| Estado | Significado |
+|---|---|
+| 🚧 | Bloqueado — endpoint no existe aún en el ERP, equipo Sinco no se ha comprometido |
+| 🟡 | Mock-only — el módulo trabaja contra mock (WireMock) hasta que el endpoint real esté disponible |
+| 🟢 | Disponible — endpoint existe en el ERP, validado funcionalmente |
+| 🟣 | Condicional — requerido solo si se cumple cierta condición (ej. fallback ADR-003) |
+| ⏸ | Diferido — fuera de MVP, se reactiva cuando emerja la condición que lo requiere (ej. tipo "Monitoreo") |
+
+---
+
+## 3. Endpoints por módulo dueño
+
+### 3.1 Preoperacional (equipo del preop)
+
+| # | Método | Path | Estado | Slice consumidor | Roadmap |
+|---|---|---|---|---|---|
+| P-1 | GET | `/api/v1/preop/novedades?q=&page=&size=` | 🚧 | Pantalla 2 (importar novedades) | §4.1 |
+| P-2 | GET | `/api/v1/preop/novedades/{id}` | 🚧 | Detalle de novedad cuando el técnico la expande | §4.1 (implícito) |
+| P-3 | GET | `/api/v1/preop/novedades/{id}/adjuntos` | 🚧 | Lista metadata de adjuntos de la novedad | §4.1 (implícito) |
+| P-4 | GET | `/api/v1/preop/adjuntos/{id}` | 🚧 | Descarga binario de un adjunto específico | §4.1 (implícito) |
+| P-5 | POST | `/api/v1/preop/novedades/{id}/verificar` | 🚧 | Saga de cierre (por cada novedad verificada) | §4.2 + §3.28 |
+| P-6 | POST | `/api/v1/preop/novedades/{id}/descartar` | 🚧 | Saga de cierre (por cada `NovedadPreopDescartada_v1`) | §4.3 + §3.29 |
+
+#### P-1 `GET /api/v1/preop/novedades`
+
+Lista viva de novedades **pendientes** (no snapshot). Consultada cuando el técnico abre el flujo "Importar novedades". El endpoint solo devuelve novedades en estado pendiente — los otros estados (verificada, descartada) no son consultables vía este endpoint en MVP.
+
+- **Query params**:
+  - `q` (opcional): búsqueda libre — el ERP busca el texto en código, id y descripción del equipo. Sirve para autocomplete y filtro rápido.
+  - `page` (1-based, default 1), `size` (default 50, máx 200).
+- **Sin filtro explícito de `obra`**: el ERP deriva las obras autorizadas del JWT (capability `ejecutar-inspeccion` sobre obras donde el usuario tiene permiso). Row-level security server-side. El cliente no puede pedir novedades de obras donde no tiene acceso.
+- **Sin filtro explícito de `estado`**: el endpoint siempre devuelve solo pendientes. Decisión dura del lado del ERP.
+- **Response**: array de novedades. Por cada novedad: `id`, `equipoId` (string código), `equipoDescripcion` (denormalizado), `equipoGrupo`, `obraId`, `obraDescripcion`, `parteId`, `parteDescripcion`, `operadorId` (username), `operadorNombre`, `reportadaEn` (iso-8601), `descripcion` (corta), `tieneAdjuntos: bool`, `cantidadAdjuntos: int`.
+- **Sin `adjuntos[]` ni metadata pesada en la lista**: el cliente solo sabe si la novedad **tiene** adjuntos y cuántos. La metadata completa de adjuntos se trae con P-3 únicamente cuando el técnico expande la novedad (algunas novedades nunca se procesan — no vale la pena cargarlas).
+- **Headers de paginación obligatorios**: `X-Total-Count`, `X-Page`, `X-Page-Size`.
+- **Auth**: capability `ejecutar-inspeccion`.
+- **Notas**: la lista cambia entre llamadas (otros operadores pueden haber agregado novedades). El UI refresca al volver a la pantalla.
+
+#### P-2 `GET /api/v1/preop/novedades/{id}`
+
+Detalle textual de una novedad. Se invoca cuando el técnico expande una novedad de la lista P-1. **No incluye contenido ni metadata de adjuntos** (eso es responsabilidad de P-3).
+
+- **Path param**: `{id}` = GUID de la novedad obtenido de P-1.
+- **Auth**: capability `ejecutar-inspeccion`. El ERP valida que la novedad pertenezca a una obra accesible al usuario; si no, devuelve `404` (mismo código que "no existe" — no revela existencia).
+- **Response 200**:
+  ```json
+  {
+    "id": "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
+    "equipoId": "D11T-001",
+    "equipoDescripcion": "Caterpillar D11T Bulldozer",
+    "equipoGrupo": "MAQ-PESADA",
+    "obraId": "OB-2026-CALI-001",
+    "obraDescripcion": "Vía Cali-Buenaventura tramo 3",
+    "parteId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+    "parteDescripcion": "Sistema hidráulico — bomba principal",
+    "operadorId": "joperalta",
+    "operadorNombre": "Juan Peralta",
+    "reportadaEn": "2026-04-28T06:45:23-05:00",
+    "medidores": [
+      { "numero": 1, "unidad": "horas", "valor": 4287.5 },
+      { "numero": 2, "unidad": "kilometros", "valor": 32500.0 }
+    ],
+    "descripcion": "Detecté goteo de aceite en la bomba hidráulica al iniciar turno...",
+    "observaciones": "Llené el reservorio con 2 L antes de continuar la jornada...",
+    "estado": "pendiente",
+    "rutinaPreopId": "RUT-PREOP-MAQ-001",
+    "itemRutinaId": "ITEM-HIDR-FUGAS",
+    "tieneAdjuntos": true,
+    "cantidadAdjuntos": 2
+  }
+  ```
+- **Mapping al ERP** (la API usa nombres limpios; el equipo del preop hace el mapping internamente):
+  | Campo API | Campo ERP |
+  |---|---|
+  | `descripcion` | `PODActividad` |
+  | `observaciones` | `POObservaciones` |
+  | `medidores[i].valor` | `POMedidor{i}Final` |
+  | `medidores[i].unidad` | derivada de la configuración del equipo (catálogo de unidades del ERP — ver M-15) |
+  | `itemRutinaId` | id de la actividad de la rutina preoperacional |
+- **Notas sobre `medidores`**:
+  - Array de 0, 1 o 2 elementos según cuántos medidores tenga el equipo configurado en MYE núcleo.
+  - `unidad` es un código del catálogo cerrado de unidades del ERP (ver M-15 — `horas`, `kilometros`, `m3`, `ciclos`, etc.). Catálogo extensible; cambia poco. Sincronizado nocturnamente como los demás catálogos.
+- **Errors**:
+  - `404 Not Found` — la novedad no existe O no es accesible al usuario.
+  - `401 Unauthorized` / `403 Forbidden` — token inválido o capability ausente.
+
+#### P-3 `GET /api/v1/preop/novedades/{id}/adjuntos`
+
+Lista metadata de adjuntos de una novedad. **Endpoint barato** que se invoca solo cuando el técnico decide procesar una novedad (verificar / seguimiento / descartar con evidencia visual). Si nunca se invoca P-3, el ERP no carga metadata pesada — patrón lazy.
+
+- **Path param**: `{id}` = GUID de la novedad.
+- **Auth**: capability `ejecutar-inspeccion`. ERP valida acceso a la obra (404 si no).
+- **Response 200**:
+  ```json
+  {
+    "novedadId": "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
+    "adjuntos": [
+      {
+        "id": "11111111-2222-3333-4444-555555555555",
+        "tipo": "foto",
+        "mime": "image/jpeg",
+        "tamano": 2458920,
+        "urlPreview": "https://cdn.sinco.local/preop/preview/11111111-...jpg",
+        "subidoEn": "2026-04-28T06:46:01-05:00"
+      },
+      {
+        "id": "22222222-3333-4444-5555-666666666666",
+        "tipo": "foto",
+        "mime": "image/jpeg",
+        "tamano": 1987234,
+        "urlPreview": "https://cdn.sinco.local/preop/preview/22222222-...jpg",
+        "subidoEn": "2026-04-28T06:46:34-05:00"
+      }
+    ]
+  }
+  ```
+- **`urlPreview`**: thumbnail comprimido (~50KB) servido por CDN del ERP. El binario completo se baja con P-4.
+- **Si la novedad no tiene adjuntos**: `200 OK` con `adjuntos: []`.
+
+#### P-4 `GET /api/v1/preop/adjuntos/{id}`
+
+Descarga el contenido binario de un adjunto específico (foto en resolución completa, PDF, etc.). Se invoca cuando el técnico abre un adjunto a pantalla completa.
+
+- **Path param**: `{id}` = GUID del adjunto obtenido de P-3.
+- **Auth**: capability `ejecutar-inspeccion`. ERP valida acceso a la obra de la novedad parent.
+- **Response 200**: binario con `Content-Type` apropiado (`image/jpeg`, `application/pdf`, etc.) y `Content-Disposition: inline`.
+- **Cache**: el ERP debe servir con `Cache-Control: private, max-age=86400` y `ETag` para que el cliente cachee el contenido (los adjuntos no cambian — son inmutables una vez subidos). Cliente puede revalidar con `If-None-Match` y recibir `304 Not Modified`.
+- **Topes del preop** (lado upload, documentados aquí para que el cliente los anticipe):
+  - Máximo **5 adjuntos** por novedad → `tamano` del array en P-3 nunca excede 5.
+  - Máximo **4 MB** por adjunto → `Content-Length` en P-4 nunca excede ~4 194 304 bytes.
+- **Errors**: `404` si no existe o no es accesible.
+
+#### P-5 `POST /api/v1/preop/novedades/{id}/verificar`
+
+Marca la novedad como verificada por la inspección técnica. Cierra el ciclo del operador respecto a esa novedad.
+
+- **Cuándo se invoca**: cuando el técnico **asigna** la novedad a su inspección (clic en "Verificar" del wizard o "Seguimiento" del mini-modal en variante B). **No** al firmar la inspección. La asignación dispara el outbox; la firma no necesita re-emitir.
+- **Idempotency-Key**: `{inspeccionId}-{novedadId}`. Ventana ≥30 días.
+- **Resiliencia**: invocado vía Wolverine outbox + retry exponencial (ADR-006 + §1.8). El ERP puede recibir la misma key hasta ~5 veces durante una hora en degradación.
+- **Auth**: capability `ejecutar-inspeccion`.
+- **Body**:
+  ```json
+  {
+    "inspeccionId": "5e7c9a31-4b2d-4f8a-9c1e-3d5e7f9a1b3c",
+    "accionRequerida": "RequiereIntervencion",
+    "novedadTecnica": "Confirmado: holgura en valvulería del cilindro de levante. Requiere ajuste de torque y posible cambio de empaque.",
+    "asignadoPor": "rmartinez"
+  }
+  ```
+- **Restricciones del body**:
+  - `accionRequerida ∈ {"RequiereIntervencion", "RequiereSeguimiento"}` — únicos valores válidos. `NoRequiereIntervencion` no aplica aquí (eso es descarte → P-6).
+  - `novedadTecnica`: texto plano libre, máximo **4000 caracteres**, sin markdown ni HTML.
+  - `asignadoPor`: username del técnico (string opaco; el ERP no valida nombre real).
+  - **Sin `verificadaEn` en el body**: el ERP genera el timestamp al recibir la solicitud (autoridad única de tiempo).
+- **Response 200 OK**:
+  ```json
+  {
+    "novedadId": "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
+    "estado": "verificada",
+    "inspeccionId": "5e7c9a31-4b2d-4f8a-9c1e-3d5e7f9a1b3c",
+    "accionRequerida": "RequiereIntervencion",
+    "verificadaEn": "2026-04-29T14:32:11-05:00"
+  }
+  ```
+- **Errors**:
+  - `409 Conflict` si la novedad ya fue verificada/descartada por OTRA inspección (no es replay del mismo cliente — es colisión real entre técnicos).
+  - `404 Not Found` si la novedad no existe o la obra está fuera del scope del usuario.
+  - `400 Bad Request` si `accionRequerida` es inválido o `novedadTecnica` excede 4000 chars.
+- **⚠️ Irreversibilidad**: la verificación es **vinculante**. Si la inspección se cancela posteriormente (`InspeccionCancelada_v1`), la novedad **queda como verificada** en el ERP con la `inspeccionId` cancelada como referencia. **No hay endpoint de revert**. Decisión documentada como invariante: una vez asignada, la novedad pertenece a la inspección que la asignó (vivos o cancelada).
+
+#### P-6 `POST /api/v1/preop/novedades/{id}/descartar`
+
+Cierra la novedad como **descartada** por el técnico (decisión de gobernanza — el técnico contradice al operador). Disparado por `NovedadPreopDescartada_v1`.
+
+- **Cuándo se invoca**: al asignar el descarte en el mini-modal (clic en "Descartar"). **No** al firmar la inspección.
+- **Idempotency-Key**: `{inspeccionId}-{novedadId}`. Ventana ≥30 días.
+- **Resiliencia**: invocado vía Wolverine outbox + retry exponencial (ADR-006 + §1.8).
+- **Auth**: capability `ejecutar-inspeccion`.
+- **Body**:
+  ```json
+  {
+    "inspeccionId": "5e7c9a31-4b2d-4f8a-9c1e-3d5e7f9a1b3c",
+    "motivo": "Tras inspección visual no se encontró evidencia de la falla reportada. Posible falsa alarma del operador o condición que se autorresolvió.",
+    "descartadaPor": "rmartinez"
+  }
+  ```
+- **Restricciones del body**:
+  - `motivo`: **obligatorio**, texto plano libre, máximo **4000 caracteres**, sin markdown ni HTML. Justificación visible al operador y supervisor — descartar contradice al operador y la trazabilidad es crítica.
+  - `descartadaPor`: username del técnico (string opaco).
+  - **Sin `descartadaEn` en el body**: el ERP genera el timestamp al recibir la solicitud.
+- **Response 200 OK**:
+  ```json
+  {
+    "novedadId": "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
+    "estado": "descartada",
+    "inspeccionId": "5e7c9a31-4b2d-4f8a-9c1e-3d5e7f9a1b3c",
+    "motivo": "Tras inspección visual no se encontró evidencia...",
+    "descartadaEn": "2026-04-29T14:35:42-05:00"
+  }
+  ```
+- **Errors**:
+  - `409 Conflict` si la novedad ya fue verificada/descartada por OTRA inspección.
+  - `404 Not Found` si la novedad no existe o no es accesible.
+  - `400 Bad Request` si `motivo` está vacío o excede 4000 chars.
+- **Sin precondiciones del lado ERP**: el ERP no valida que el técnico haya "inspeccionado" antes de descartar. Acepta el descarte directamente — la responsabilidad de tener evidencia recae en el técnico/módulo, no en el ERP.
+- **⚠️ Irreversibilidad**: igual que P-5. La asignación es vinculante — cancelar la inspección **no** revierte el descarte en el ERP. Una vez descartada, la novedad queda fuera del flujo del operador.
+- **Notas**: el motivo queda en el ERP para audit del operador. El módulo también lo persiste en su propio stream (`NovedadPreopDescartada_v1`) para auditoría supervisor (§15.12).
+
+---
+
+### 3.2 MYE núcleo — operaciones (equipo de MYE)
+
+| # | Método | Path | Estado | Slice consumidor | Roadmap |
+|---|---|---|---|---|---|
+| M-1 | POST | `/api/v1/mye/ot-correctivas` | 🚧 | Saga de cierre con intervención | §4.9 + §3.27 |
+| M-2 | GET | `/api/v1/mye/ot-correctivas?inspeccionId={id}` | 🟣 | Fallback ADR-003 si M-1 no es idempotente real | §4.10 |
+
+#### M-1 `POST /api/v1/mye/ot-correctivas`
+
+> **🚧 Revisión de detalle diferida (2026-04-29)**: el shape exacto del body/response, la lista final de campos y el catálogo de prioridad/unidades quedan pendientes para una iteración posterior cuando el producto esté más maduro y haya conversación con MYE núcleo. El contrato canónico **vigente** (idempotencia real, matriz 200/4xx/5xx/409, fallback GET, tests requeridos del adapter, ventana ≥30 días) ya está consolidado en **ADR-003 §13** del modelo de dominio. Este endpoint sigue siendo el más crítico del contrato, pero su detalle granular se trabaja después.
+
+Crea OT correctiva en MYE con BOM consolidado de la inspección. **Crítico** — es la integración más importante del módulo.
+
+- **Idempotency-Key**: `InspeccionId`. Ventana ≥30 días. **Idempotencia real obligatoria** (compromiso vinculante — ver ADR-003 §13).
+- **Resiliencia**: invocado vía Wolverine outbox + retry exponencial (§1.8). Detalle de matriz 200/4xx/5xx/409 en ADR-003.
+- **Body**:
+  ```json
+  {
+    "inspeccionId": "guid",
+    "equipoId": "string",
+    "prioridad": "Baja | Normal | Alta | Urgente",
+    "descripcionTrabajo": "string consolidado",
+    "hallazgosRelacionados": ["guid", ...],
+    "bom": [
+      { "skuId": "guid", "codigoSku": "string", "cantidadTotal": 0.0, "unidad": "string", "hallazgosOrigen": ["guid", ...] }
+    ],
+    "dictamen": "PuedeOperar | ConRestriccion | NoPuedeOperar",
+    "inspeccionFirmadaEn": "iso-8601",
+    "tecnicoFirmante": "username"
+  }
+  ```
+- **Response 200**:
+  ```json
+  {
+    "otCorrectivaIdSinco": "guid",
+    "otCorrectivaNumero": "OT-123456",
+    "creadaEn": "iso-8601"
+  }
+  ```
+- **Comportamiento esperado por código**:
+  - `200 OK` (fresco o replay) → adapter procede a `InspeccionCerrada_v1`
+  - `4xx` (validación: BOM inválido, equipo desconocido, etc.) → NO retry, emite `OTGeneracionFallida_v1`, estado `CierrePendienteOT`
+  - `5xx`/timeout → Wolverine retry con backoff (5s, 30s, 2m, 10m); tras agotar, `OTGeneracionFallida_v1` tipo `Transitorio`
+  - `409 Conflict` → **anti-patrón del lado MYE**, viola contrato; ver fallback M-2
+- **BOM puede ser vacío**: la intervención puede ser solo mano de obra (V-F3 §15.5).
+- **Auth**: capability `ejecutar-inspeccion`.
+
+#### M-2 `GET /api/v1/mye/ot-correctivas?inspeccionId={id}`
+
+> **🚧 Revisión de detalle diferida** — par lógico de M-1; cuando se reabra M-1 se reabre este. Contrato actual en ADR-003 §13.
+
+Fallback condicional. **Opcional si M-1 cumple idempotencia real; obligatorio si no.**
+
+- **Query**: `inspeccionId` (guid).
+- **Response 200**: misma forma que M-1 si la OT existe; `404 Not Found` si no.
+- **Uso**: el adapter llama a M-2 después de un `5xx`/`409` de M-1 para verificar si la OT ya fue creada antes de reintentar (patrón "consulta-antes-de-crear", ADR-003 §13).
+- **Auth**: capability `ejecutar-inspeccion`.
+
+---
+
+### 3.3 MYE núcleo — lecturas (equipo de MYE)
+
+| # | Método | Path | Estado | Propósito |
+|---|---|---|---|---|
+| M-3 | GET | `/api/v1/equipos?q=&page=&size=` | 🚧 | Lista de equipos filtrable (incluye detalle completo de cada item — no requiere endpoint de detalle separado) |
+| M-4 | GET | `/api/v1/equipos/{equipoCodigo}/partes` | 🚧 | Árbol de partes del equipo (incluye detalle completo de cada parte — no requiere endpoint de detalle separado) |
+| M-5 | GET | `/api/v1/equipos/{equipoCodigo}/rutinas-aplicables?tipo=tecnica` | ⏸ | **Diferido a post-MVP** — solo aplica para inspecciones con medidores (tipo "Monitoreo", roadmap §10.4). El flujo MVP es libre, sin rutina pre-cargada |
+| M-6 | GET | `/api/v1/rutinas?grupo=&tipo=&page=&size=` | ⏸ | **Diferido** — bloque rutinas-driven (junto con M-5, M-7). Reactivar con tipo "Monitoreo" post-MVP |
+| M-7 | GET | `/api/v1/rutinas/{rutinaCodigo}` | ⏸ | **Diferido** — bloque rutinas-driven (junto con M-5, M-6) |
+
+Consumidos por: pantalla de inicio de inspección (selector de equipo, carga de rutina), wizard de hallazgo (selector de parte/actividad), proyección Reporting.
+
+#### M-3 `GET /api/v1/equipos`
+
+Lista de equipos del usuario para el selector al iniciar inspección.
+
+- **Query params**:
+  - `q` (opcional): búsqueda libre por código / id / descripción del equipo.
+  - `page`, `size`: paginación estándar.
+- **Sin filtro de `obra` ni `grupo`**: el ERP filtra por las obras del usuario via JWT (row-level security, mismo patrón que P-1). `grupo` se difiere a refinamiento post-piloto si emerge necesidad.
+- **Auth**: capability `ejecutar-inspeccion`.
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      {
+        "equipoId": "D11T-001",
+        "codigo": "D11T-001",
+        "descripcion": "Caterpillar D11T Bulldozer",
+        "marca": "Caterpillar",
+        "modelo": "D11T",
+        "anio": 2018,
+        "numeroSerie": "CAT-D11T-2018-7234",
+        "numeroEconomico": "ECON-1145",
+        "grupo": "MAQ-PESADA",
+        "obraId": "OB-2026-CALI-001",
+        "obraDescripcion": "Vía Cali-Buenaventura tramo 3",
+        "estado": "operativo",
+        "medidores": [
+          { "numero": 1, "unidad": "horas", "valorActual": 4287.5 },
+          { "numero": 2, "unidad": "kilometros", "valorActual": 32500.0 }
+        ]
+      }
+    ]
+  }
+  ```
+- **Headers**: `X-Total-Count`, `X-Page`, `X-Page-Size`.
+- **Sin contadores `novedadesPreopPendientes` ni `seguimientosAbiertos`**: el módulo los calcula de sus proyecciones locales (no responsabilidad del ERP).
+- **Notas**:
+  - `estado`: catálogo cerrado del ERP — los valores reales se confirman con MYE núcleo (pendiente §8).
+  - Lista de campos del item es propuesta inicial; se refina con MYE núcleo cuando avance la integración.
+
+#### M-4 `GET /api/v1/equipos/{equipoCodigo}/partes`
+
+Árbol de partes del equipo. Consultado al iniciar inspección y al abrir el wizard de hallazgo (selector de parte).
+
+- **Path param**: `equipoCodigo` (string MYE — ej. `D11T-001`).
+- **Auth**: capability `ejecutar-inspeccion`. ERP valida acceso al equipo (404 si no).
+- **Sin paginación**: el árbol cabe completo en una respuesta. Profundidad máxima **3 niveles**.
+- **Response 200**:
+  ```json
+  {
+    "equipoId": "D11T-001",
+    "partes": [
+      {
+        "parteId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+        "codigo": "MOTOR",
+        "descripcion": "Motor — Cat C32",
+        "padreId": null,
+        "nivel": 0
+      },
+      {
+        "parteId": "a1b2c3d4-...",
+        "codigo": "MOTOR-INYECCION",
+        "descripcion": "Sistema de inyección",
+        "padreId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+        "nivel": 1
+      },
+      {
+        "parteId": "b2c3d4e5-...",
+        "codigo": "HIDRAULICA",
+        "descripcion": "Sistema hidráulico",
+        "padreId": null,
+        "nivel": 0
+      }
+    ]
+  }
+  ```
+- **Convenciones del shape**:
+  - Estructura **plana con `padreId`**, no árbol anidado JSON. El cliente arma el árbol al renderizar (más simple para filtrar/buscar/cachear).
+  - `padreId = null` → parte raíz (nivel 0).
+  - `nivel`: profundidad en el árbol (0..2). Permite indentar visualmente sin caminar el árbol.
+- **Sin filtro de estado**: las partes en MYE no tienen estado activo/inactivo — todas las devueltas son válidas para el flujo de inspección.
+
+---
+
+### 3.4 MYE núcleo — catálogos sincronizados (equipo de MYE)
+
+Sincronizados nocturnamente vía cron + `If-Modified-Since` (ADR-004). Soporte de `304 Not Modified` obligatorio.
+
+| # | Método | Path | Estado | Sync | Catálogo local |
+|---|---|---|---|---|---|
+| M-8 | GET | `/api/v1/catalogos/partes?q=` | ⏸ | **Diferido a post-MVP** — el wizard usa el árbol de partes del equipo (M-4); no se requiere catálogo global cross-equipo en MVP | (sin proyección local en MVP) |
+| M-9 | GET | `/api/v1/catalogos/actividades?q=` | ⏸ | **Diferido** — junto con M-5..M-8. Reactivar con tipo "Monitoreo" / inspecciones con mediciones (post-MVP). En MVP el técnico escribe `ActividadDescripcion` como texto libre | (sin proyección local en MVP) |
+| M-10 | GET | `/api/v1/catalogos/causas-falla` | 🚧 | Diario nocturno | `CausaFallaLocal` |
+| M-11 | GET | `/api/v1/catalogos/tipos-falla` | 🚧 | Diario nocturno | `TipoFallaLocal` |
+| M-12 | GET | `/api/v1/catalogos/ubicaciones` | ⏸ | **Diferido** — ningún campo del modelo referencia `UbicacionId`; la ubicación física puede viajar denormalizada como string en M-3 si se requiere | (sin proyección local en MVP) |
+| M-13 | GET | `/api/v1/catalogos/obras` | 🚧 | Diario nocturno | `ObraLocal` |
+| M-14 | GET | `/api/v1/catalogos/grupos` | ⏸ | **Diferido** — filtro por grupo en M-3 ya está diferido; M-3 trae `grupo` como string denormalizado | (sin proyección local en MVP) |
+| M-15 | GET | `/api/v1/catalogos/unidades-medidor` | ⏸ | **Diferido** — ningún campo del modelo referencia `UnidadMedidorId`; en MVP `unidad` viaja como string denormalizado en `medidores[]` (P-2). Reactivar con bloque rutinas-driven | (sin proyección local en MVP) |
+
+#### M-10 `GET /api/v1/catalogos/causas-falla`
+
+Catálogo cerrado de causas de falla. **Crítico MVP** — referenciado por cada hallazgo con `RequiereIntervencion` (invariante I-H4 §15.3).
+
+- **Estructura**: catálogo **plano** (sin jerarquía padre-hijo).
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      { "causaFallaId": "f1a2b3c4-...", "codigo": "CAU-DESGASTE", "descripcion": "Desgaste normal de operación" },
+      { "causaFallaId": "f5e6d7c8-...", "codigo": "CAU-FATIGA", "descripcion": "Fatiga del material" },
+      { "causaFallaId": "f9a0b1c2-...", "codigo": "CAU-CONTAM", "descripcion": "Contaminación / suciedad" }
+    ],
+    "totalCount": 47
+  }
+  ```
+- **Solo causas activas**: el ERP filtra server-side y nunca devuelve descontinuadas. **Sin campo `activo`** en el response.
+- **Sin paginación**: volumen razonable (<500 entries esperados).
+- **Cache headers obligatorios**: `ETag` + `Last-Modified`. Cliente usa `If-None-Match` / `If-Modified-Since` → `304 Not Modified` cuando no hay cambios.
+- **Sync local**: job nocturno puebla `CausaFallaLocal` (Wolverine scheduled task). Stale-while-revalidate hasta 24h si VPN caída (ADR-004).
+- **Causas históricas descontinuadas**: el ERP no las devuelve en sync, pero `CausaFallaLocal` **conserva** los items previamente sincronizados (no se eliminan al desaparecer del response). Los hallazgos históricos siguen resolviendo el `causaFallaId` contra la copia local. Esto cumple ADR-004: IDs son inmutables, descontinuar no rompe audit histórico.
+
+#### M-11 `GET /api/v1/catalogos/tipos-falla`
+
+Catálogo cerrado de tipos de falla. **Crítico MVP** — referenciado por cada hallazgo con `RequiereIntervencion` (invariante I-H4 §15.3). Ortogonal a M-10: causa = *por qué* falló; tipo = *qué tipo* de falla (mecánica, hidráulica, eléctrica, etc.).
+
+- **Estructura**: catálogo **plano** (sin jerarquía).
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      { "tipoFallaId": "t1a2b3c4-...", "codigo": "TIP-MECANICA", "descripcion": "Mecánica" },
+      { "tipoFallaId": "t5e6d7c8-...", "codigo": "TIP-HIDRAULICA", "descripcion": "Hidráulica" },
+      { "tipoFallaId": "t9a0b1c2-...", "codigo": "TIP-ELECTRICA", "descripcion": "Eléctrica" }
+    ],
+    "totalCount": 8
+  }
+  ```
+- **Solo tipos activos**, sin paginación, cache headers, sync nocturno → `TipoFallaLocal`. Mismas reglas que M-10 (incluyendo conservación de descontinuados en proyección local para audit histórico — ADR-004).
+
+#### M-13 `GET /api/v1/catalogos/obras`
+
+Catálogo de obras. **Crítico MVP** — `ObraId` aparece en cada inspección, hallazgo, novedad preop, equipo.
+
+- **Estructura**: catálogo plano.
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      {
+        "obraId": "OB-2026-CALI-001",
+        "codigo": "OB-2026-CALI-001",
+        "descripcion": "Vía Cali-Buenaventura tramo 3",
+        "tipo": "Carretera"
+      }
+    ],
+    "totalCount": 47
+  }
+  ```
+- **`tipo`**: texto libre (no enum cerrado del ERP).
+- **Solo obras activas**, sin paginación, cache headers, **sync diario nocturno** → `ObraLocal`.
+- **Sin filtrado por usuario en la sync**: el ERP devuelve **todas las obras** de Sinco. La proyección local `ObraLocal` es completa para resolver `obraId` en historial cross-usuario (auditoría de inspecciones de obras donde el usuario actual ya no tiene permiso). El filtrado por capability del usuario ocurre **en runtime** del cliente cuando se muestra una lista interactiva.
+- **Conserva descontinuadas en proyección local** (ADR-004): hallazgos / inspecciones históricas siguen resolviendo `obraId` aunque la obra ya haya cerrado.
+
+#### M-15 `GET /api/v1/catalogos/unidades-medidor`
+
+Catálogo cerrado de unidades para los medidores de equipos (referenciado por P-2 `medidores[i].unidad`).
+
+- **Response**: array de unidades con `codigo`, `descripcion`, `activo: bool`.
+  ```json
+  [
+    { "codigo": "horas", "descripcion": "Horas de operación", "activo": true },
+    { "codigo": "kilometros", "descripcion": "Kilómetros recorridos", "activo": true },
+    { "codigo": "m3", "descripcion": "Metros cúbicos", "activo": true },
+    { "codigo": "ciclos", "descripcion": "Ciclos completos", "activo": true }
+  ]
+  ```
+- **Notas**: igual que el catálogo de partes — el ERP puede agregar unidades pero los códigos existentes son inmutables (ADR-004). Ventana de staleness aceptada: 24h.
+- **Sync**: nocturna + `If-Modified-Since`/`ETag` con `304 Not Modified` cuando aplique.
+
+---
+
+### 3.5 Inventario / Almacén (equipo de inventario)
+
+| # | Método | Path | Estado | Slice consumidor | Roadmap |
+|---|---|---|---|---|---|
+| I-1 | GET | `/api/v1/insumos?q=&page=&size=` | 🚧 | Wizard hallazgo paso 2 (selector de repuestos) — incluye detalle completo de cada item, no requiere endpoint de detalle separado | §4.15 |
+| I-2 | GET | `/api/v1/catalogos/insumos` | 🚧 | Sync nocturno (ADR-004) — alimenta `InsumoLocal` | §4.17 |
+
+#### I-1 `GET /api/v1/insumos`
+
+Búsqueda interactiva durante el wizard de hallazgo. **Critical UX** — latencia debe ser <500ms para autocomplete (preferiblemente atendida por proyección local `InsumoLocal` poblada por I-3).
+
+- **Query params**:
+  - `q`: búsqueda libre por código / descripción del insumo. **Required en práctica** — sin `q` la lista completa puede ser enorme.
+  - `page`, `size`: paginación obligatoria.
+- **Sin filtro `parteId`**: en MYE los insumos **no tienen amarre a partes**. La búsqueda es por texto libre cross-catálogo.
+- **Auth**: capability `ejecutar-inspeccion`.
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      {
+        "insumoId": "ins-3333-4444",
+        "codigoSku": "EMP-HID-D11T-001",
+        "descripcion": "Empaque bomba hidráulica D11T",
+        "unidad": "unidad"
+      },
+      {
+        "insumoId": "ins-5555-6666",
+        "codigoSku": "ACE-HID-15W40",
+        "descripcion": "Aceite hidráulico 15W40",
+        "unidad": "litros"
+      }
+    ],
+    "totalCount": 28
+  }
+  ```
+- **Headers**: `X-Total-Count`, `X-Page`, `X-Page-Size`.
+- **`unidad`**: string libre denormalizado (catálogo M-15 está diferido — el módulo no resuelve `UnidadMedidorId`).
+- **Sin campo `aplicaMye`**: aunque MYE tiene este flag internamente, no viaja en el response — el módulo no toma decisiones sobre él (decisión §1.4 del modelo).
+- **Sin `partesCompatibles`**: insumos no se vinculan a partes en MYE.
+- **Notas**: el módulo originalmente usaba `/repuestos`; consolidado a `/insumos` siguiendo nomenclatura del ERP.
+
+#### I-2 `GET /api/v1/catalogos/insumos`
+
+Sync nocturno del catálogo completo de insumos. Alimenta la proyección local `InsumoLocal` que sirve la búsqueda I-1 con baja latencia.
+
+- **Frecuencia**: diaria nocturna (Wolverine scheduled task).
+- **Auth**: capability `ejecutar-inspeccion` o equivalente para el sync (job-level).
+- **Sin filtro por usuario**: trae el catálogo completo de Sinco (mismo razonamiento que M-13 obras).
+- **Solo activos**: el ERP filtra server-side y nunca devuelve descontinuados. Módulo conserva descontinuados en `InsumoLocal` (no los borra al desaparecer del response) para resolver hallazgos históricos — ADR-004.
+- **Paginación obligatoria**: volumen esperado ~miles. Cliente itera todas las páginas durante el sync.
+- **Cache headers obligatorios**: `ETag` + `Last-Modified` → `304 Not Modified` cuando no hay cambios.
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      { "insumoId": "ins-3333-4444", "codigoSku": "EMP-HID-D11T-001", "descripcion": "Empaque bomba hidráulica D11T", "unidad": "unidad" },
+      { "insumoId": "ins-5555-6666", "codigoSku": "ACE-HID-15W40", "descripcion": "Aceite hidráulico 15W40", "unidad": "litros" }
+    ],
+    "totalCount": 8472,
+    "ultimaModificacion": "2026-04-29T03:14:00-05:00"
+  }
+  ```
+- **Headers de paginación**: `X-Total-Count`, `X-Page`, `X-Page-Size`. Mismo shape de item que I-1.
+
+---
+
+### 3.6 User master / RRHH (equipo de seguridad/IT Sinco)
+
+**Condicional al ADR-002**: estos endpoints aplican solo si se confirma que el módulo necesita su propio sync de usuarios. Si el host PWA ya gestiona identidad y propaga claims al módulo, **estos endpoints no son necesarios para MVP**.
+
+| # | Método | Path | Estado | Slice consumidor | Roadmap |
+|---|---|---|---|---|---|
+| U-1 | GET | `/api/v1/admin/usuarios?desde={lastSync}&page=&size=` | 🟣 | Sync delta (job nocturno) | §4.18 |
+| U-2 | GET | `/api/v1/admin/usuarios/{userId}` | 🟣 | Detalle con obras asignadas | §4.19 |
+
+---
+
+## 4. Resumen ejecutivo
+
+| Módulo | Endpoints | Equipo Sinco dueño | Estado |
+|---|---|---|---|
+| Preoperacional | 6 (P-1..P-6) | Equipo del preop | 🚧 todos bloqueados |
+| MYE núcleo (operaciones) | 2 (M-1, M-2) | Equipo MYE | 🚧 + 🟣 fallback |
+| MYE núcleo (lecturas) | 5 (M-3..M-7) | Equipo MYE | M-3, M-4 activos (🚧); M-5, M-6, M-7 ⏸ diferidos al bloque rutinas-driven (post-MVP) |
+| MYE núcleo (catálogos) | 8 (M-8..M-15) | Equipo MYE | M-10, M-11, M-13 activos (🚧); M-8, M-9, M-12, M-14, M-15 ⏸ diferidos |
+| Inventario | 2 (I-1, I-2) | Equipo inventario | 🚧 todos bloqueados |
+| User master / RRHH | 2 (U-1, U-2) | Equipo seguridad/IT | 🟣 condicional ADR-002 |
+
+**Total:** 25 endpoints — 14 obligatorios MVP + 3 condicionales (M-2 fallback ADR-003; U-1, U-2 según ADR-002) + 8 diferidos al post-MVP (M-5, M-6, M-7 — bloque rutinas-driven; M-8, M-9 — catálogos globales de partes/actividades; M-12 — ubicaciones; M-14 — grupos; M-15 — unidades-medidor).
+
+**Cuellos de botella esperados:**
+
+1. **Equipo MYE**: 15 endpoints (M-1..M-15). Probable cuello principal — concentra el grueso del trabajo.
+2. **POST /mye/ot-correctivas (M-1)**: idempotencia real es compromiso crítico. Sin ella, el módulo entra en patrón degradado con M-2.
+3. **DDL del preoperacional**: bloquea P-1..P-5 hasta que el equipo del preop comparta el shape de la novedad (paso 0.18 del roadmap).
+
+---
+
+## 5. Discrepancias resueltas con docs anteriores
+
+Este archivo unifica versiones contradictorias previas:
+
+| Discrepancia | Resolución |
+|---|---|
+| `/repuestos` (roadmap §4.15) vs `/insumos` (00-investigacion-mercado §1380, SOW §213) | **Canónico: `/insumos`**. Decisión del 2026-04-27 — ERP unificó nomenclatura en "insumos". |
+| `/admin/usuarios` (00-investigacion-mercado §1045) vs `/usuarios` (roadmap §4.18) | **Canónico: `/admin/usuarios`** — el prefix `/admin/` señala que es endpoint administrativo. |
+| `/preop/novedades/{id}/descartar` (roadmap §4.3) ausente en SOW §7 | **Canónico: existe** — emergió con `NovedadPreopDescartada_v1` (§15.4 del modelo). |
+| `/equipos/{id}/rutinas-aplicables` (modelo §1349) ausente en roadmap §4 | **Canónico: existe** — necesario para cargar rutinas técnicas al iniciar inspección. |
+| `/catalogos/grupos` (roadmap §4.13) ausente en otros docs | **Canónico: existe** — usado para filtrar equipos por grupo. |
+| `Idempotency-Key` opcional vs idempotencia real obligatoria | **Canónico: idempotencia real obligatoria** para `POST` no-naturalmente-idempotentes. Ver §1.4. |
+
+---
+
+## 6. Riesgos y deuda técnica
+
+| # | Riesgo | Mitigación |
+|---|---|---|
+| R-API-1 | 17 endpoints activos para MVP en 4 equipos cross-Sinco (14 obligatorios + 3 condicionales). Coordinación es bloqueante. | SOW interno con cada equipo; escalación a CTO si bloqueos persisten >2 semanas |
+| R-API-1b | VPN inestable o ERP momentáneamente caído rompe sagas en curso | Wolverine outbox + retry exponencial (§1.8); idempotencia real obligatoria por contrato |
+| R-API-2 | Equipo MYE no compromete idempotencia real en M-1 | Activar fallback degradado con M-2; followup post-piloto para migrar |
+| R-API-3 | DDL del preop bloqueado | Mock con WireMock contra shape inferido; validar contra DDL real al desbloquearse |
+| R-API-4 | Catálogos cambian IDs en Sinco rompiendo audit histórico | Reglas operativas vinculantes (ADR-004): IDs inmutables, descontinuar = `activo=false` |
+| R-API-5 | Latencia de I-1 (búsqueda de insumos) >500ms degrada UX del wizard | Catálogo local sincronizado nocturno + búsqueda local; on-demand solo si miss |
+| R-API-6 | Endpoints U-1/U-2 se construyen y luego no se necesitan (ADR-002 los descarta) | NO arrancar U-1/U-2 hasta cerrar ADR-002 |
+
+---
+
+## 7. Histórico de cambios al contrato
+
+| Fecha | Cambio | Disparador |
+|---|---|---|
+| 2026-04-29 | Documento creado consolidando enumeraciones previas | Solicitud del usuario |
+| 2026-04-29 | Idempotencia real exigida en §1.4 + M-1 | Review consultor sobre ADR-003 |
+| 2026-04-29 | M-2 marcado 🟣 condicional (fallback) | Review consultor sobre ADR-003 |
+| 2026-04-27 | Consolidación `/repuestos` → `/insumos` | Decisión del 2026-04-27 (modelo §1.4) |
+| 2026-04-28 | P-5 (`/preop/novedades/{id}/descartar`) emerge | Refactor §15: `NovedadPreopDescartada_v1` evento dedicado |
+
+---
+
+## 8. Pendientes para cerrar el contrato
+
+Lista de cosas que faltan acordar con cada equipo Sinco antes de implementar:
+
+- [ ] **MYE**: confirmar que M-1 implementará idempotencia real con ventana ≥30 días y persistencia.
+- [ ] **MYE**: validar shape exacto del response de M-1 (`OTCorrectivaIdSinco` vs `Numero` — ¿ambos campos? ¿solo número humano?).
+- [ ] **Preop**: compartir DDL/shape de la novedad para definir P-1 response shape.
+- [ ] **Preop**: confirmar que P-5 y P-6 aceptan el `Idempotency-Key` propuesto.
+- [ ] **Preop**: confirmar catálogo cerrado de `tipo` en P-3 (asumido: `foto | pdf`; podría incluir `video`, `audio`, `documento`).
+- [ ] **Preop**: confirmar que P-3 expone `urlPreview` (thumbnail) o solo guarda binario completo.
+- [ ] **Preop**: confirmar campos adicionales por adjunto en P-3 (GPS de la foto, dispositivo, hash de integridad).
+- [ ] **MYE núcleo**: confirmar valores del catálogo cerrado de `estado` en M-3 (asumido `operativo | en-mantenimiento | fuera-de-servicio | inactivo` — adivinanza).
+- [ ] **MYE núcleo**: refinar lista de campos del item de M-3 (`marca`, `modelo`, `anio`, `numeroSerie`, `numeroEconomico` propuestos — pueden faltar o sobrar).
+- [ ] **Inventario**: validar que I-1 soporta filtrado por `parteId` (compatibilidad).
+- [ ] **Inventario**: cuál es el catálogo cerrado de unidades (`Unidad` field).
+- [ ] **Seguridad/IT**: confirmar si U-1/U-2 son necesarios o el host PWA ya propaga lo requerido.
+- [ ] **Todos**: convenciones de paginación y error envelope unificadas (§1.3, §1.5).
+- [ ] **Todos**: shape del `Authorization` header y formato del JWT (cierre ADR-002).
+
+---
+
+## Referencias cruzadas
+
+- **Modelo de dominio**: `01-modelo-dominio.md` §15 (fuente de verdad del comportamiento).
+- **ADRs aplicables**: ADR-001 (REST sobre VPN), ADR-002 (auth heredada del host PWA, tentativo), ADR-003 (idempotencia OT correctiva), ADR-004 (sincronización de catálogos), ADR-005 (SignalR, no afecta este contrato).
+- **Slices que dependen**: ver columna "Roadmap" de cada endpoint.
+- **SOW interno**: `03-sow-consultor.md` §7 (referencia este archivo como fuente).

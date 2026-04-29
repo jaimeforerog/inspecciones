@@ -65,7 +65,7 @@ Exactamente uno de tres:
 ### Coherencia con decisiones previas
 
 - [ ] El slice es consistente con `01-modelo-dominio.md §15` (fuente de verdad).
-- [ ] Alineado con ADRs aplicables: ADR-001 (REST/VPN), ADR-002 (auth — tentativo, módulo hereda del host PWA Sinco MYE), ADR-003 (OT correctiva), ADR-004 (catálogos), ADR-005 (SignalR).
+- [ ] Alineado con ADRs aplicables: ADR-001 (REST/VPN), ADR-002 (auth — tentativo, módulo hereda del host PWA Sinco MYE), ADR-003 (OT correctiva), ADR-004 (catálogos), ADR-005 (SignalR), ADR-006 (outbox + retry para POSTs hacia ERP).
 - [ ] Si el slice contradice una decisión previa, o se ajusta la decisión vía ADR nuevo (lo mandas como **followup**), o el slice se rechaza (**blocker**).
 
 ### Integración cross-team Sinco (si aplica)

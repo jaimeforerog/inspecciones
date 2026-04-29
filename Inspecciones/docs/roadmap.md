@@ -198,7 +198,9 @@
 
 ## Fase 4 — APIs en Sinco (cross-team, paralelo)
 
-> **Riesgo de programa**: 17 endpoints en 3-4 módulos diferentes de Sinco con 3-4 equipos distintos. Coordinación cross-team es bloqueante.
+> **Fuente canónica del contrato**: [`Inspecciones/docs/06-contrato-apis-erp.md`](Inspecciones/docs/06-contrato-apis-erp.md). Las tablas debajo son mapeo de pasos del roadmap a endpoints; el detalle de request/response/idempotencia/shape vive en el archivo 06.
+
+> **Riesgo de programa**: 25 endpoints reconciliados (14 obligatorios MVP + 3 condicionales + 8 diferidos al post-MVP) en 4 módulos diferentes de Sinco con 4 equipos distintos. Coordinación cross-team es bloqueante.
 
 ### 4.A Equipo del Preoperacional
 
@@ -378,7 +380,7 @@
 
 | # | Riesgo | Mitigación |
 |---|---|---|
-| R1 | Coordinación cross-team Sinco para 17 endpoints en 3-4 módulos | SOW interno + escalación a CTO si bloqueos persisten |
+| R1 | Coordinación cross-team Sinco para 17 endpoints activos (14 obligatorios MVP + 3 condicionales) en 4 módulos diferentes; 8 diferidos al post-MVP | SOW interno + escalación a CTO si bloqueos persisten |
 | R2 | Primer Azure de Sinco — landing zone "lite" como deuda técnica | ADR-001 documenta divergencias EDA, plan de migración aditivo |
 | R3 | DDL preop bloqueado del lado del equipo del preop | Workstream paralelo, mock del DTO mientras tanto |
 | R4 | Conectividad VPN inestable | Stale-while-revalidate en catálogos (ADR-004) + degradación graceful |

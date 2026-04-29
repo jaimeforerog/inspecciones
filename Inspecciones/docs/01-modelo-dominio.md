@@ -3557,3 +3557,118 @@ Métricas agregadas (tasa de descarte por usuario firmante, por operador que rep
 - Las proyecciones son **stale-while-revalidate-friendly**: tolerar lag de segundos respecto al stream.
 - Marten reconstruye proyecciones desde stream cuando cambia su shape — no asumir migraciones tipo SQL.
 - Los read models nunca son fuente de verdad. Si un read model contradice el stream, el stream gana y se reproyecta.
+
+---
+
+## 16. ADR-006 — Resiliencia y outbox para integraciones ERP (2026-04-29)
+
+**Estado:** Aceptada.
+
+### Contexto
+
+El módulo cloud integra con el ERP Sinco on-prem vía REST sobre VPN (ADR-001). La VPN puede tener intermitencias, el ERP puede estar en mantenimiento programado, los endpoints pueden devolver `5xx` transitorios. Sin un patrón uniforme de resiliencia, cada llamada fallida desde una saga implica:
+
+- Dato perdido (la saga termina sin completar la integración).
+- Estado del aggregate inconsistente (firmamos la inspección pero la OT no se creó).
+- Imposibilidad de retomar el trabajo automáticamente — requiere intervención humana.
+
+ADR-003 §13 ya documenta el patrón de retry para `POST /mye/ot-correctivas` (M-1). Pero el problema es general: aplica a **todo** `POST` que el módulo emita hacia el ERP. Esta ADR generaliza la solución y la convierte en regla arquitectónica del módulo.
+
+### Decisión
+
+**Todo `POST` del módulo hacia el ERP se ejecuta a través del outbox de Wolverine, no como llamada HTTP sincrónica desde un handler.**
+
+#### Patrón de invocación
+
+1. El handler / saga emite un mensaje al outbox **dentro de la misma transacción** que persiste eventos al stream del aggregate. Atomicidad por `IDocumentSession.SaveChangesAsync()` único: el evento queda guardado **si y solo si** el mensaje del outbox queda guardado. Esto se alinea con la regla dura de "atomicidad de eventos" en `CLAUDE.md`.
+2. Wolverine consume el outbox de forma asíncrona y ejecuta la llamada HTTP al ERP.
+3. Ante fallo (timeout, `5xx`), Wolverine reintenta con backoff exponencial: **5s → 30s → 2m → 10m**.
+4. Tras agotar reintentos, el mensaje va a **dead-letter queue**. Se emite un evento de observabilidad específico al dominio (ej. `OTGeneracionFallida_v1` para M-1) y el aggregate transiciona a un estado que refleja el bloqueo (ej. `CierrePendienteOT`). Notificación a destinatarios con capability `recibir-alertas-ot-fallida` (o equivalente).
+
+#### Tabla de respuesta del adapter (general)
+
+| Respuesta del ERP | Acción del adapter |
+|---|---|
+| `200 OK` (o `201 Created`) | Marca el outbox como completado. Aggregate avanza al siguiente estado |
+| `4xx` (validación, autz, recurso no existe) | NO retry — error permanente. Marca outbox como fallido. Emite evento de dominio específico (`OTGeneracionFallida_v1`, etc.). Notifica destinatarios |
+| `5xx` / timeout / error de red | Retry con backoff. Tras agotar política → dead-letter + evento de fallo + notificación |
+
+#### Implicaciones para el ERP (lado contrato)
+
+- **Idempotencia real obligatoria** sobre `Idempotency-Key` (ver `06-contrato-apis-erp.md §1.4`). El ERP recibirá la misma key múltiples veces durante reintentos — debe responder igual a todas, sin crear duplicados.
+- **Volúmenes esperados**: en operación normal ~1 llamada por evento; en degradación hasta 5 llamadas con la misma key dentro de una hora. Dimensionar capacidad y rate limiting.
+- **Latencia tolerable**: hasta ~30s por llamada antes de timeout y reintentar. Si una operación requiere procesamiento más largo, considerar patrón async con polling o webhook (caso por caso).
+
+#### Excepciones (lo que NO va por outbox)
+
+- **`GET` (lectura)**: invocados sincrónicamente desde frontend o desde sync nocturno de catálogos. Patrón distinto: stale-while-revalidate (ADR-004). Si el GET falla, el cliente lo reintenta manualmente o el cron espera al siguiente ciclo.
+- **Llamadas no transaccionales**: emails, métricas, telemetría. Tienen su propio canal y no requieren outbox del aggregate.
+
+### Atomicidad outbox + stream del aggregate
+
+```csharp
+public sealed class CerrarInspeccionSaga
+{
+    public async Task Handle(InspeccionFirmada_v1 evt, IDocumentSession session, IMessageBus bus)
+    {
+        // ... lógica ...
+
+        // 1. Persistir eventos al stream del aggregate
+        session.Events.Append(evt.InspeccionId, /* eventos */);
+
+        // 2. Encolar mensaje al outbox (Wolverine lo persiste en la misma transacción)
+        await bus.PublishAsync(new CrearOTCorrectivaCommand(/* ... */));
+
+        // 3. Único SaveChangesAsync — atomicidad garantizada
+        await session.SaveChangesAsync();
+
+        // Si el SaveChanges falla, ni el evento ni el mensaje del outbox quedan. Coherencia preservada.
+    }
+}
+```
+
+Wolverine procesa el outbox después de que la transacción committea. Aunque el handler retorne exitosamente, la llamada HTTP al ERP puede tomar minutos o horas en completarse. El cliente del frontend recibe el resultado vía SignalR push (ADR-005) cuando el outbox entrega.
+
+### Endpoints sujetos al patrón (vigente al 2026-04-29)
+
+| Endpoint | Slice consumidor |
+|---|---|
+| `POST /api/v1/preop/novedades/{id}/verificar` (P-5) | `CerrarInspeccionSaga` (paso 3.28) |
+| `POST /api/v1/preop/novedades/{id}/descartar` (P-6) | `CerrarInspeccionSaga` (paso 3.29) |
+| `POST /api/v1/mye/ot-correctivas` (M-1) | `CerrarInspeccionSaga` (paso 3.27) — detalle exhaustivo en ADR-003 |
+
+**La regla es general**: cualquier `POST` futuro hacia el ERP debe seguir este patrón sin excepción.
+
+### Observabilidad
+
+- **Métricas por endpoint** (App Insights):
+  - `outbox.attempts{endpoint}` — total de intentos
+  - `outbox.success_after_n_retries{endpoint, n}` — éxito tras n reintentos
+  - `outbox.dead_letter_count{endpoint}` — mensajes a dead-letter
+  - `outbox.duration_ms{endpoint, p50|p95|p99}` — distribución de latencia
+- **Logs estructurados**: cada intento registra `inspeccionId`, `idempotencyKey`, `attemptNumber`, `responseCode`, `durationMs`, `errorMessage` (si aplica).
+- **Alertas**:
+  - `outbox.dead_letter_count > 0` → notificación inmediata al equipo de operaciones.
+  - `outbox.retry_rate > 10%` sostenida 1h → warning (sospecha de degradación del ERP o VPN).
+
+### Consecuencias y trade-offs
+
+**Pros:**
+- Resiliencia uniforme: ningún `POST` se pierde por fallo transitorio.
+- Atomicidad de aggregate state + intent-to-publish: el evento de dominio se emite **si y solo si** el outbox queda registrado.
+- Operacional: dead-letter visible, notificación automática, replay manual posible desde panel admin.
+- Desacopla latencia del cliente: el frontend ve "Inspección firmada" inmediatamente; la integración con ERP corre en background.
+
+**Cons:**
+- Latencia mayor para el técnico: ve "OT generada" minutos después de firmar, no instantáneamente. Mitigado con SignalR push (ADR-005).
+- Complejidad operacional: requiere monitoreo del outbox, alertas, panel de dead-letter.
+- Acoplamiento al stack Wolverine: si en el futuro se reemplaza el mediator, el patrón debe migrarse manualmente.
+
+### Referencias
+
+- `CLAUDE.md` — regla dura de atomicidad de eventos.
+- ADR-001 — REST sobre VPN (`00-investigacion-mercado.md §9.11`).
+- ADR-003 — instancia específica para M-1 (§13 de este documento).
+- ADR-005 — SignalR push para feedback al cliente (§14).
+- `06-contrato-apis-erp.md §1.8` — convención del contrato que apunta a este ADR.
+- Wolverine docs — outbox + retry policy.
