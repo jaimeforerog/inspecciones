@@ -2753,6 +2753,55 @@ public sealed class CerrarInspeccionSaga
 - **Wolverine (recomendado)** maneja el reintento con backoff exponencial: 5s, 30s, 2m, 10m. Después de N reintentos el mensaje va a dead-letter y se alerta al equipo de operaciones.
 - **El stream del aggregate no se cierra hasta confirmar el POST**: `InspeccionFirmada_v1` se emite, pero `InspeccionCerrada_v1` (con `OTCorrectivaIdSinco`) solo se emite cuando MYE confirma. Si MYE está caído, la inspección queda en estado **Firmada (pendiente de OT)** y se reintenta.
 
+#### Contrato exigido al equipo MYE
+
+Lo siguiente NO es opcional para el adaptador — es **requisito del endpoint MYE** y debe quedar firmado en el SOW interno antes de implementar la saga (§3.D del roadmap):
+
+1. **Idempotencia real, no solo aceptación del header**: ante una segunda llamada con la misma `Idempotency-Key`, MYE devuelve `200 OK` con el **mismo** `OTCorrectivaIdSinco` y `OTCorrectivaNumero` que devolvió la primera vez. No crea OT duplicada. No devuelve `409 Conflict`.
+2. **Persistencia del mapeo key → respuesta**: el mapeo sobrevive a reinicios del proceso MYE. No es cache en memoria.
+3. **Ventana de idempotencia ≥ 30 días** (mínimo MVP). `InspeccionId` es permanente, así que reintentos desde dead-letter o replay manual de la saga deben converger al mismo OT incluso días después del cierre.
+4. **Determinismo de la respuesta**: si la primera llamada devolvió `200 OK`, la segunda devuelve `200 OK` con el mismo body. Si la primera devolvió `4xx`, la segunda devuelve el mismo `4xx`. Las claves "envenenadas" no se reciclan.
+
+#### Matriz de respuesta del adaptador MYE
+
+El adaptador es **agnóstico al replay**: trata `200 OK` igual sea creación fresca o respuesta cacheada por idempotencia. La saga no necesita saber cuál fue.
+
+| Respuesta de MYE | Acción del adaptador | Evento emitido | Estado de la inspección |
+|---|---|---|---|
+| `200 OK` con `OTCorrectivaIdSinco` (fresco o replay) | Devuelve el ID a la saga | `InspeccionCerrada_v1` | `Cerrada` |
+| `4xx` (validación: BOM inválido, equipo desconocido, dictamen incompatible) | NO reintenta — error permanente | `OTGeneracionFallida_v1` con detalle del 4xx | `CierrePendienteOT` (queda para resolución manual) |
+| `5xx` o timeout | Wolverine reintenta con backoff (5s, 30s, 2m, 10m) | tras agotar reintentos: `OTGeneracionFallida_v1` con tipo `Transitorio` | `CierrePendienteOT` hasta replay manual desde panel admin |
+| `409 Conflict` ("ya existe") | **Anti-patrón del lado MYE** — viola contrato §13. Ver fallback abajo. | — | — |
+
+#### Fallback si MYE no implementa idempotencia real (degradación graceful)
+
+Si en pre-implementación se descubre que el equipo MYE no puede entregar el contrato anterior en el cronograma del MVP, el adaptador degrada a un patrón "consulta-antes-de-crear" usando `GET /api/v1/mye/ot-correctivas?inspeccionId={id}` (paso 4.10 del roadmap, deja de ser opcional):
+
+```
+intentar POST /mye/ot-correctivas
+  ├─ 200 OK                 → procede normal (caso ideal)
+  ├─ 5xx / timeout / 409    → GET /mye/ot-correctivas?inspeccionId={id}
+  │                           ├─ encuentra OT → tratar como 200 OK con ese ID
+  │                           └─ no encuentra  → reintenta POST (Wolverine)
+  └─ 4xx                    → OTGeneracionFallida_v1 (sin retry)
+```
+
+Este fallback es feo, suma un round-trip por reintento y es vulnerable a ventana de carrera (dos POST simultáneos crean dos OTs si MYE no detecta el conflicto). Solo se acepta como **deuda técnica explícita** durante MVP, con followup para migrar a idempotencia real post-piloto.
+
+#### Tests requeridos del adapter MYE (slice del paso 3.27)
+
+El slice del adapter incluye, como mínimo, tres tests con WireMock cubriendo los escenarios críticos:
+
+- `Crear_OT_con_replay_devuelve_misma_OT_ID` — segundo POST con la misma `Idempotency-Key` devuelve `200 OK` con el `OTCorrectivaIdSinco` original; el adaptador no distingue replay de creación fresca.
+- `Crear_OT_con_BOM_invalido_emite_OTGeneracionFallida_sin_retry` — `4xx` no dispara reintento; el evento `OTGeneracionFallida_v1` lleva el detalle del error.
+- `Crear_OT_con_timeout_reintenta_y_eventualmente_falla_si_agota` — `5xx`/timeout disparan Wolverine retry con backoff; tras agotar política, `OTGeneracionFallida_v1` con tipo `Transitorio`.
+
+Si se adopta el fallback degradado (sección anterior), se añade un cuarto test:
+
+- `Crear_OT_tras_409_consulta_GET_y_recupera_OT_existente` — `409` redirige al `GET`, encuentra OT, saga procede como si hubiera sido `200 OK`.
+
+Test de saga complementario (en el slice de la saga, no del adapter): `Saga_es_agnostica_a_replay_o_creacion_fresca` — el mismo `OTGenerada(otId=12345)` produce la misma transición a `InspeccionCerrada_v1` independiente de si el adaptador devolvió respuesta fresca o cacheada.
+
 ### Retroalimentación al técnico
 
 - Al firmar, el técnico ve un toast "Inspección firmada. Generando OT…" y se cierra la pantalla de cierre.
@@ -2809,12 +2858,7 @@ public sealed record CrearOTCorrectivaResponse_v1(
 
 ### Flujo de error
 
-| Escenario | Comportamiento |
-|---|---|
-| MYE responde 4xx (validación, equipo no existe) | Saga marca `OTGeneracionFallida_v1` con detalle. Inspección queda Firmada-pendiente. Notificación a supervisor. No reintenta automático. |
-| MYE responde 5xx o timeout | Wolverine reintenta con backoff. Tras N intentos, dead-letter. |
-| MYE responde 200 con `OTCorrectivaId` | Saga emite `InspeccionCerrada_v1`. Inspección pasa a estado `Cerrada`. Notificación al técnico. |
-| Idempotency hit (segunda llamada con misma key) | MYE responde con la OT existente. Saga procede normal. |
+Ver **"Matriz de respuesta del adaptador MYE"** arriba en este mismo ADR para el detalle canónico (200/4xx/5xx/409). La matriz aplica tanto en saga como en replay manual desde panel admin.
 
 ### Casos especiales
 
@@ -3074,7 +3118,7 @@ El cliente actualiza la pantalla 7 en vivo cuando recibe el push de SignalR, sin
 | `NovedadPreopDescartada_v1` evento dedicado | +1 evento (descarte ya no crea hallazgo) |
 | `ParteEquipoId` ahora obligatorio (no nullable) | invariante I-H1 |
 | Tipo y causa de falla obligatorios si AccionRequerida≠NoRequiereIntervencion | invariante I-H4 |
-| Adjuntos y repuestos obligatorios para hallazgos con intervención | validaciones V-F3 |
+| Adjuntos obligatorios para hallazgos con intervención; repuestos opcionales | validaciones V-F3 (intervención puede ser solo mano de obra) |
 | Validaciones pre-firma V-F1 a V-F7 explícitas | bloqueo del botón firmar |
 | Regla automática de cierre con/sin OT | la saga decide, técnico no override |
 | Inmutabilidad post-firma | no editable, no cancelable, no re-firma |
@@ -3096,8 +3140,9 @@ public sealed class Hallazgo
     public string ActividadDescripcion  { get; set; } = default!;
 
     // Origen
-    public OrigenHallazgo Origen        { get; set; }   // PreOperacional | Manual
+    public OrigenHallazgo Origen        { get; set; }   // PreOperacional | Manual | Seguimiento
     public Guid? NovedadPreopOrigenId   { get; set; }   // inmutable; sólo si Origen=PreOperacional
+    public Guid? SeguimientoOrigenId    { get; set; }   // inmutable; sólo si Origen=Seguimiento — apunta al SeguimientoHallazgo escalado (trazabilidad cross-inspección)
 
     // Catálogos cerrados de Sinco MYE
     public Guid? TipoFallaId            { get; set; }   // obligatorio si AccionRequerida ≠ NoRequiereIntervencion
@@ -3116,7 +3161,8 @@ public sealed class Hallazgo
 public enum OrigenHallazgo
 {
     PreOperacional,    // viene de novedad reportada por el operador
-    Manual             // detectado por el técnico durante la inspección
+    Manual,            // detectado por el técnico durante la inspección
+    Seguimiento        // escalado desde un SeguimientoHallazgo previo (cross-inspección)
 }
 
 public enum AccionRequerida
@@ -3134,17 +3180,30 @@ public enum AccionRequerida
 ### 15.3 Invariantes del Hallazgo
 
 ```
-I-H1  ParteEquipoId siempre presente (no nullable)
-I-H2  Si Origen = PreOperacional → NovedadPreopOrigenId obligatorio e inmutable
-I-H3  Si Origen = Manual → NovedadPreopOrigenId debe ser null
-I-H4  Si AccionRequerida ∈ {RequiereSeguimiento, RequiereIntervencion}
-        → TipoFallaId y CausaFallaId obligatorios
-I-H5  Si AccionRequerida = NoRequiereIntervencion
-        → TipoFallaId y CausaFallaId pueden ser null (opcionales)
-I-H6  Múltiples hallazgos sobre la misma ParteEquipoId permitidos
-I-H7  Editable solo si la inspección está en estado EnEjecucion
-I-H8  HallazgoActualizado_v1 NO puede modificar: Origen, NovedadPreopOrigenId, ParteEquipoId
-I-H9  Eliminar hallazgo bloqueado si tiene hijos (repuestos o adjuntos)
+I-H1   ParteEquipoId siempre presente (no nullable)
+I-H2   Si Origen = PreOperacional → NovedadPreopOrigenId obligatorio e inmutable
+                                  → SeguimientoOrigenId debe ser null
+I-H3   Si Origen = Manual → NovedadPreopOrigenId debe ser null
+                          → SeguimientoOrigenId debe ser null
+I-H4   Si AccionRequerida = RequiereIntervencion
+         → TipoFallaId y CausaFallaId obligatorios
+         (alineado con V-F3 §15.5; tipo/causa se capturan en paso 2 del wizard,
+          surface de "análisis técnico" — no en paso 1 de "registro inicial")
+I-H5   Si AccionRequerida ∈ {NoRequiereIntervencion, RequiereSeguimiento}
+         → TipoFallaId y CausaFallaId pueden ser null (opcionales)
+         (un seguimiento es estado transitorio: cuando se escala a RequiereIntervencion,
+          el hallazgo nuevo SÍ captura tipo/causa por I-H4 + I-H11. Reportería específica
+          de seguimientos sin tipo/causa: followup #1.)
+I-H6   Múltiples hallazgos sobre la misma ParteEquipoId permitidos
+I-H7   Editable solo si la inspección está en estado EnEjecucion
+I-H8   HallazgoActualizado_v1 NO puede modificar: Origen, NovedadPreopOrigenId,
+       SeguimientoOrigenId, ParteEquipoId
+I-H9   Eliminar hallazgo bloqueado si tiene hijos (repuestos o adjuntos)
+I-H10  Si Origen = Seguimiento → SeguimientoOrigenId obligatorio e inmutable
+                               → NovedadPreopOrigenId debe ser null
+I-H11  Si Origen = Seguimiento → AccionRequerida debe ser RequiereIntervencion
+       (los seguimientos sólo se escalan a OT, no se reabren como otro seguimiento;
+        ver también I-S1 en §15.8.7)
 ```
 
 ### 15.4 Catálogo final del MVP — 20 eventos
@@ -3206,7 +3265,10 @@ V-F3  Para cada hallazgo con AccionRequerida = RequiereIntervencion:
         - TipoFallaId presente
         - CausaFallaId presente
         - ≥1 adjunto evidencia
-        - ≥1 repuesto estimado
+        - Repuestos: 0 o más (NO obligatorio — la intervención puede ser solo
+          mano de obra, ajuste, calibración o limpieza). El BOM consolidado
+          que se envía a MYE puede ser lista vacía; MYE acepta OT correctiva
+          sin repuestos.
 V-F4  Dictamen seleccionado (Apto / AptoConRestricciones / NoApto)
 V-F5  Firma manuscrita capturada (FirmaUri no vacío)
 V-F6  UbicacionFirma capturada (GPS obligatorio, no bloquea si difiere de UbicacionInicio)
@@ -3336,12 +3398,14 @@ public sealed record SeguimientoResuelto_v1(
 
 public sealed record SeguimientoEscalado_v1(
     Guid SeguimientoId,
-    Guid InspeccionCierreId,
+    Guid InspeccionCierreId,         // inspección donde se decide la escalación = donde nace el nuevo hallazgo
     Guid HallazgoEscaladoId,         // ref al nuevo hallazgo creado en la inspección actual
     string EscaladoPor,
     DateTime EscaladoEn
 );
 ```
+
+> **Trazabilidad bidireccional**: este evento (en el stream de `SeguimientoHallazgo`) apunta hacia adelante con `HallazgoEscaladoId` + `InspeccionCierreId`. El hallazgo nuevo (en el stream de `InspeccionTecnica`) apunta hacia atrás con `Origen=Seguimiento` + `SeguimientoOrigenId` (ver §15.2). La cadena completa permite reconstruir "este hallazgo viene del seguimiento S, que se abrió en la inspección X meses atrás" sin proyecciones laterales.
 
 #### 15.8.5 Decisiones operativas (aprobadas 2026-04-28)
 
@@ -3349,7 +3413,7 @@ public sealed record SeguimientoEscalado_v1(
 |---|---|---|
 | 1 | ¿Quién puede cerrar? | Cualquier técnico que inspeccione el equipo posteriormente |
 | 2 | ¿"Seguimiento" emite evento? | **No** — es no-op silencioso. Solo feedback visual al técnico (toast + card resaltada). Si más adelante se requiere reportería de "¿hace cuánto nadie revisa?", se agrega `SeguimientoRevisadoSinCambio_v1` como cambio aditivo. |
-| 3 | SLA de seguimientos viejos | Alerta visual progresiva + email diario al supervisor a partir de 90 días. Sin bloqueo de inspección. Sin OT automática. |
+| 3 | SLA de seguimientos viejos | Alerta visual progresiva + email diario a usuarios con capability `recibir-alertas-sla` configurados como destinatarios para el equipo, a partir de 90 días. Sin bloqueo de inspección. Sin OT automática. |
 | 4 | Visibilidad cross-obra | El seguimiento sigue al equipo, no a la obra. Se ve desde cualquier obra a la que el equipo se mueva. |
 
 #### 15.8.6 SLA visual y notificación
@@ -3357,15 +3421,43 @@ public sealed record SeguimientoEscalado_v1(
 ```
 0–30 días:    badge azul "Abierto"
 30–90 días:   badge naranja "Atención" 
-+90 días:     badge rojo "Vencido" + email diario al supervisor del equipo
-              hasta que alguien lo cierre o escale
++90 días:     badge rojo "Vencido" + email diario a destinatarios SLA del equipo
+              (usuarios con capability `recibir-alertas-sla` configurados para
+              ese equipo en el catálogo) hasta que alguien lo cierre o escale
 
 NO se genera OT automáticamente (faltan datos: TipoFalla, CausaFalla, repuestos)
 NO se bloquea la inspección si hay seguimientos vencidos
 NO se "escala" el aggregate solo; siempre requiere acción humana
 ```
 
-Implementación: job nocturno (Wolverine scheduled task) que escanea seguimientos `Estado=Abierto AND AbiertoEn < now-90d` y dispara correo al `SupervisorEquipo` (proyección leída del catálogo).
+Implementación: job nocturno (Wolverine scheduled task) que escanea seguimientos `Estado=Abierto AND AbiertoEn < now-90d` y dispara correo a la lista `DestinatariosAlertasSlaPorEquipo` (proyección leída del catálogo de obras/equipos sincronizado desde MYE — el contenido de la lista es data, no código). Si la lista está vacía para un equipo, el job emite `AlertaSlaSinDestinatario_v1` (evento de observabilidad) en lugar de fallar silenciosamente.
+
+#### 15.8.7 Invariantes del aggregate `SeguimientoHallazgo`
+
+```
+I-S1  SeguimientoEscalado_v1 sólo es válido si el HallazgoEscaladoId referencia
+      un hallazgo con AccionRequerida = RequiereIntervencion
+      (la escalación implica intervención por definición — no se "escala" a otro
+       seguimiento; ver simétrica I-H11 en §15.3)
+
+I-S2  Cross-aggregate (enforzada en el handler de EscalarSeguimiento, no en Apply):
+      el HallazgoEscaladoId del evento debe coincidir con el HallazgoId del
+      HallazgoRegistrado_v1 emitido en el mismo SaveChangesAsync sobre
+      InspeccionCierreId. Es decir: el handler emite atómicamente
+      SeguimientoEscalado_v1 (stream del seguimiento) + HallazgoRegistrado_v1
+      (stream de la inspección), con HallazgoId compartido y SeguimientoOrigenId
+      apuntando al SeguimientoId. Marten lo persiste en una sola transacción.
+
+I-S3  Estado terminal: una vez Resuelto o Escalado, el SeguimientoHallazgo no
+      acepta más eventos. Re-emisión de SeguimientoResuelto_v1 o
+      SeguimientoEscalado_v1 sobre Estado ≠ Abierto debe lanzar excepción de
+      dominio en el método de decisión (no en Apply — ver convención de capa
+      en CLAUDE.md)
+
+I-S4  El "↻ Seguimiento" (no-op silencioso) NO emite evento. Si el read model
+      necesita reportar "revisado sin cambio", se introduce
+      SeguimientoRevisadoSinCambio_v1 como cambio aditivo, no se reabre I-S3.
+```
 
 ### 15.9 Patrón unificado — las mismas 3 opciones en todo el sistema
 
@@ -3416,3 +3508,52 @@ Las secciones §2.1 a §14 quedan como histórico. Las siguientes referencias de
 | §12.10.x decisiones operativas | Algunas usaron `ResultadoVerificacion` | Ahora se decide vía botón en lista (variante B) — el evento emitido depende del botón, no de un selector dentro del wizard |
 
 > ✅ **Limpieza completada (2026-04-28).** Las secciones §2.1, §3, §6, §7, §7.4.5, §12.10.8, §12.10.9, §12.10.10 y la fila I7 de la tabla de invariantes ahora llevan banner de obsolescencia (`⚠️ SECCIÓN HISTÓRICA`) o nota inline (`⚠️ OBSOLETO`) apuntando a la subsección de §15 que define el contrato vigente. El histórico se preserva porque documenta la evolución del modelo; los lectores nuevos quedan dirigidos siempre a §15 antes de actuar sobre código antiguo. La tabla de arriba se conserva como índice de referencia rápida.
+
+### 15.12 Read models y proyecciones (audiencias y campos requeridos)
+
+Los aggregates son fuente de verdad; las proyecciones son vistas materializadas que sirven a audiencias específicas. Esta sección documenta qué proyecciones existen, qué eventos consumen y qué campos exponen, para que las decisiones de read model no queden implícitas en endpoints.
+
+#### 15.12.1 `DetalleInspeccionView` — vista de detalle de inspección
+
+Audiencia (por capability, no por perfil ERP):
+
+- **Auto-consulta**: usuario contribuyente del stream (registró ≥1 evento) con capability `ejecutar-inspeccion`.
+- **Auditoría puntual**: usuario con capability `auditar-inspecciones` sobre la obra a la que pertenece la inspección.
+
+El mapping de perfiles ERP (jefe de campo, mecánico líder, ingeniero residente, contralor, etc.) → capabilities lo define el host PWA, no este módulo. Ver ADR-002 + paso 2.5 del roadmap.
+
+Materializada por proyección Marten que consume todos los eventos del stream `InspeccionTecnica`.
+
+Endpoint que la sirve: `GET /inspecciones/{id}` (paso 3.45 del roadmap).
+
+Campos clave que **debe** exponer:
+
+- Lifecycle: estado actual, timestamps de cada transición, contribuyentes del stream, OT correctiva (id + número MYE) si aplica.
+- Hallazgos no eliminados: id, parte, descripción, AccionRequerida, tipo/causa de falla, adjuntos, repuestos, Origen y trazabilidad (`NovedadPreopOrigenId` o `SeguimientoOrigenId` según I-H2/I-H10/I-H3).
+- Hallazgos eliminados (soft-delete): se incluyen con flag `Eliminado=true` y `MotivoEliminacion`. El flujo de auditoría requiere ver qué se eliminó y por qué.
+- **Novedades preop descartadas**: por cada `NovedadPreopDescartada_v1` en el stream, exponer `NovedadPreopId` + `MotivoDescarte` + `DescartadaPor` + `DescartadaEn`. Sin esto, una decisión de gobernanza (la decisión técnica contradice lo reportado por el operador) queda invisible. **Requisito explícito** — no opcional.
+- Diagnóstico final + dictamen.
+- Firma: usuario firmante, GPS de firma, FirmaUri.
+
+#### 15.12.2 `AuditoriaInspeccionesView` — vista cross-inspección por obra
+
+Audiencia: usuarios con capability `auditar-inspecciones`. Distinto de `DetalleInspeccionView` porque cruza múltiples inspecciones en una bandeja filtrable, no detalla una inspección individual. Read model materializado por proyección Marten que consume eventos de aggregates `InspeccionTecnica` y `SeguimientoHallazgo` y los catálogos locales (obra, usuarios autores).
+
+Endpoint que la sirve: `GET /auditoria/inspecciones?obra=&desde=&hasta=&autor=` (paso 3.H del roadmap, nuevo).
+
+Por cada inspección cerrada del rango: fila resumen con
+
+- Equipo, fecha de cierre, usuario firmante, OT generada (sí/no).
+- Conteo de hallazgos por `AccionRequerida`.
+- Conteo de novedades preop verificadas vs. descartadas.
+- **Indicador `DecisionContradiceReporteOperador: bool`**: true si hay ≥1 `NovedadPreopDescartada_v1` en el stream, o si hay ≥1 hallazgo donde el usuario firmante bajó la urgencia respecto a lo reportado por el operador (regla derivada — definir cuando se implemente). Sirve como filtro/orden en el flujo de auditoría.
+- Acceso al detalle (`DetalleInspeccionView`) con motivos completos de cada decisión.
+
+Métricas agregadas (tasa de descarte por usuario firmante, por operador que reportó) son **diferidas a Fase 10** — útiles cuando hay volumen suficiente, no en MVP.
+
+#### 15.12.3 Convenciones para proyecciones futuras
+
+- Cada proyección declara explícitamente: audiencia, eventos consumidos, endpoint que la sirve.
+- Las proyecciones son **stale-while-revalidate-friendly**: tolerar lag de segundos respecto al stream.
+- Marten reconstruye proyecciones desde stream cuando cambia su shape — no asumir migraciones tipo SQL.
+- Los read models nunca son fuente de verdad. Si un read model contradice el stream, el stream gana y se reproyecta.

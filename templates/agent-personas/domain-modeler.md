@@ -31,6 +31,8 @@ Producir una **spec de slice** que sirva de contrato para los roles `red` y `gre
 - **Versionado de eventos**: sufijo `_v1` cuando emerja una segunda versión (p. ej. `HallazgoRegistrado_v2`). Por defecto los eventos son `v1` implícito.
 - **Soft delete**: hallazgos y repuestos se "eliminan" emitiendo eventos `*Eliminado` que mantienen el histórico; el agregado los marca como inactivos al hacer fold.
 - **Estados de la inspección**: `Iniciada → Firmada → (Cerrada | CerradaSinOT | CierrePendienteOT)`. `Cancelada` es estado terminal alternativo desde `Iniciada`.
+- **Capa de validación**: las pre-condiciones (estado, invariantes I-*) viven en el **método de decisión** del agregado, nunca en `Apply(Evt)`. En la spec, §4 Precondiciones describe las reglas; §6 incluye un escenario de rebuild desde stream cuando el comando emite ≥1 evento, para garantizar que los `Apply` son puros y los eventos están en orden causal.
+- **Orden causal de eventos**: cuando un comando emite varios eventos al mismo stream (p. ej. `FirmarInspeccion` → `Diagnostico`, `Dictamen`, `Firmada`), el orden de la lista refleja la causalidad lógica. La atomicidad la da Marten al hacer un único `SaveChangesAsync` — el modelador no especifica nada sobre transacciones.
 
 ## Calidad del output
 

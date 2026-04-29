@@ -38,6 +38,8 @@ Condiciones que deben cumplirse **antes** de ejecutar el comando. Si no se cumpl
 - `{PRE-1}`: {condición} — excepción: `{Tipo}`.
 - `{PRE-2}`: …
 
+> **Capa donde viven**: las pre-condiciones se evalúan en el **método de decisión** del agregado (el que produce los eventos), nunca en los `Apply(Evt)`. Los `Apply` son mutaciones puras de estado y deben ejecutarse sin lanzar sobre cualquier historial de eventos válido — incluido el rebuild desde stream.
+
 ## 5. Invariantes tocadas
 
 Invariantes del agregado que este comando debe preservar. Referenciar por código del modelo:
@@ -75,6 +77,14 @@ Cada escenario se convierte en **un test** en la fase red. Todos los escenarios 
 **Then** lanza `{Tipo}`.
 
 _(Añadir tantos escenarios como precondiciones + invariantes el comando pueda violar.)_
+
+### 6.X Rebuild desde stream (obligatorio si el comando emite ≥1 evento)
+
+**Given** el agregado en estado inicial (sin eventos)
+**When** se reproyectan los eventos emitidos por el happy path en orden causal
+**Then** el estado resultante es idéntico al obtenido tras ejecutar el comando — y ningún `Apply` lanza.
+
+> Justificación: garantiza que los `Apply` son puros y que el orden de los eventos respeta la causalidad (p. ej. `Diagnostico → Dictamen → Firmada`, no al revés).
 
 ## 7. Idempotencia / retries
 
@@ -121,5 +131,6 @@ Lista de dudas que el domain-modeler no resolvió y requieren decisión del usua
 - [ ] Todas las precondiciones mapean a un escenario Then.
 - [ ] Todas las invariantes tocadas mapean a un escenario Then.
 - [ ] El happy path está presente.
+- [ ] Si el comando emite ≥1 evento, el escenario de rebuild desde stream (§6.X) está presente.
 - [ ] Preguntas abiertas están todas respondidas o marcadas como asunción con justificación.
 - [ ] Si el slice toca un endpoint Sinco no disponible aún, está marcado `🟡 mock-only` y se acordó el contrato del mock.

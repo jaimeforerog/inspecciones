@@ -404,7 +404,7 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
 
 <div class="page-header">
   <h1>Inspecciones Técnicas — Wireframes (alineados a Sinco MYE)</h1>
-  <p>Revisión 3: refinamientos finales del modelo de hallazgo (severidad eliminada, parte obligatoria, tipo+causa+adjuntos+repuestos obligatorios para intervención) y del flujo de firma (validaciones pre-firma estrictas, dictamen sugerido editable, inmutabilidad post-firma). Paleta y patrones tomados de los mockups reales de la app de Sinco MYE.</p>
+  <p>Revisión 3: refinamientos finales del modelo de hallazgo (severidad eliminada, parte obligatoria, tipo+causa+adjuntos obligatorios para intervención, repuestos opcionales) y del flujo de firma (validaciones pre-firma estrictas, dictamen sugerido editable, inmutabilidad post-firma). Paleta y patrones tomados de los mockups reales de la app de Sinco MYE.</p>
   <div class="meta">
     <span>Stack visual: React + MUI</span>
     <span>Color primario: #0D47A1</span>
@@ -748,7 +748,7 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
 
         <div style="margin: 0 16px 12px; padding: 10px 12px; background: var(--action-high-bg); border-radius: 6px; font-size: 11px; color: var(--action-high); display: flex; gap: 8px; align-items: flex-start;">
           <span style="font-size:14px;">→</span>
-          <span><strong>Continúa al paso 2</strong> para registrar tipo de falla, causa de falla y repuestos requeridos (todos obligatorios para hallazgos con intervención).</span>
+          <span><strong>Continúa al paso 2</strong> para registrar tipo de falla y causa de falla (obligatorios para hallazgos con intervención) y repuestos (opcionales — la intervención puede ser solo mano de obra).</span>
         </div>
 
       </div>
@@ -859,7 +859,7 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
 
         <div style="margin: 0 16px 12px; padding: 10px 12px; background: var(--action-high-bg); border-radius: 6px; font-size: 11px; color: var(--action-high); display: flex; gap: 8px; align-items: flex-start;">
           <span style="font-size:14px;">⚠</span>
-          <span><strong>Para hallazgos con intervención:</strong> tipo de falla, causa de falla y ≥1 repuesto son obligatorios. La OT correctiva no se puede generar sin estos datos.</span>
+          <span><strong>Para hallazgos con intervención:</strong> tipo de falla y causa de falla son obligatorios. Repuestos: opcionales — si la intervención requiere materiales, agrégalos; si es solo mano de obra (ajuste, calibración, limpieza), deja la lista vacía.</span>
         </div>
 
         <div class="form-card">
@@ -963,7 +963,7 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
               <span>✓</span><span style="color:var(--text);">Tipo y causa de falla en hallazgos con intervención</span>
             </div>
             <div style="display:flex;gap:6px;align-items:center;color:var(--action-low);">
-              <span>✓</span><span style="color:var(--text);">≥1 adjunto y ≥1 repuesto por hallazgo con intervención</span>
+              <span>✓</span><span style="color:var(--text);">≥1 adjunto por hallazgo con intervención (repuestos opcionales)</span>
             </div>
             <div style="display:flex;gap:6px;align-items:center;color:var(--action-low);">
               <span>✓</span><span style="color:var(--text);">Dictamen seleccionado</span>
@@ -1247,12 +1247,12 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
   <h3 style="margin-top:20px;">Decisiones de modelo reflejadas en estos wireframes</h3>
   <ul>
     <li><strong>Severidad eliminada del modelo</strong> → reemplazada por <strong>AccionRequerida</strong> (3 valores accionables). No existe en la OT de Sinco MYE — alcanza con tipo y causa de falla.</li>
-    <li><strong>Catálogos cerrados</strong>: CausaFalla, TipoFalla. Obligatorios cuando AccionRequerida ≠ NoRequiereIntervencion (invariante I-H4).</li>
+    <li><strong>Catálogos cerrados</strong>: CausaFalla, TipoFalla. Obligatorios cuando AccionRequerida = RequiereIntervencion (invariante I-H4 actualizada).</li>
     <li><strong>Wizard condicional (1 o 2 pasos)</strong>: el paso 2 solo se activa cuando se elige "Sí requiere intervención". Las otras dos opciones cierran en paso 1 sin pedir tipo/causa de falla ni repuestos.</li>
     <li><strong>Adjuntos en paso 1</strong>: ≥1 foto obligatoria si AccionRequerida = RequiereIntervencion (validación V-F3). Para los demás modos los adjuntos son opcionales.</li>
-    <li><strong>≥1 repuesto obligatorio</strong> en paso 2 para hallazgos con intervención — sin repuesto, MYE no puede generar OT con BOM válido.</li>
+    <li><strong>Repuestos opcionales</strong> en paso 2: la intervención puede ser solo mano de obra (ajuste, calibración, limpieza). MYE acepta OT correctiva con BOM vacío.</li>
     <li><strong>ParteEquipoId siempre obligatorio</strong> (invariante I-H1). No hay hallazgo "global" sin parte.</li>
-    <li><strong>Cierre — validaciones bloqueantes</strong> (V-F1 a V-F7): ≥1 hallazgo, todas las novedades preop procesadas, tipo+causa+adjuntos+repuestos en hallazgos con intervención, dictamen, firma, GPS.</li>
+    <li><strong>Cierre — validaciones bloqueantes</strong> (V-F1 a V-F7): ≥1 hallazgo, todas las novedades preop procesadas, tipo+causa+adjuntos en hallazgos con intervención (repuestos opcionales), dictamen, firma, GPS.</li>
     <li><strong>Diagnóstico final opcional</strong>: el técnico puede agregarlo o no — los hallazgos individuales son la fuente principal de información.</li>
     <li><strong>Dictamen sugerido pero editable</strong>: la UI sugiere según hallazgos pero el técnico mantiene libertad de override.</li>
     <li><strong>GPS al firmar capturado</strong>: visible bajo el pad de firma, no bloquea si difiere de UbicacionInicio.</li>

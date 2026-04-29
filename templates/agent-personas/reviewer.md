@@ -43,6 +43,9 @@ Exactamente uno de tres:
 - [ ] Sin `DateTime.UtcNow`, `Guid.NewGuid()`, `Environment.MachineName`, ni acceso directo a APIs del navegador (GPS, firma, blob) dentro del dominio. **Blocker** si hay.
 - [ ] `UbicacionGps`, `Hallazgo`, `Repuesto`, `BlobUri` y demás value objects en sus campos respectivos. **Blocker** si hay primitivos pelados (`double` para coords, `string` para causa de falla, etc.).
 - [ ] Records inmutables para eventos/comandos. **Blocker** si hay setters públicos en eventos.
+- [ ] `Apply(Evt)` puro: ningún `Apply` lanza excepciones, valida estado o re-aplica invariantes. Las pre-condiciones viven en el método de decisión. **Blocker** si hay validación en `Apply` (rompe el rebuild desde stream).
+- [ ] Test de rebuild desde stream presente si el slice emite ≥1 evento. **Blocker** si falta.
+- [ ] Handler con un único `IDocumentSession.SaveChangesAsync()` por comando. **Blocker** si está partido en dos saves (rompe atomicidad).
 
 ### Cobertura
 

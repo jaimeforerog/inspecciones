@@ -222,6 +222,7 @@ Total: **17 endpoints** distribuidos en **cuatro módulos** Sinco. Lista complet
 - Versionado en URL (`/api/v1/...`).
 - OpenAPI/Swagger publicado por cada endpoint.
 - Idempotency-Key en POSTs no-idempotentes.
+- **Idempotencia real (no solo aceptación del header)**: ante una segunda llamada con la misma `Idempotency-Key`, el endpoint devuelve `200 OK` con el mismo body de la primera respuesta exitosa, **sin** crear el recurso de nuevo y **sin** devolver `409`. El mapeo key→respuesta sobrevive a reinicios y dura ≥30 días. Aplica con prioridad a `POST /api/v1/mye/ot-correctivas` (compromiso vinculante para el equipo MYE — ver ADR-003).
 
 ---
 
@@ -239,7 +240,9 @@ El módulo Inspecciones es **componente embebido en la PWA Sinco MYE móvil exis
 
 ### ADR-003 — Generación de OT correctiva en MYE
 
-Generación **automática** vía saga `CerrarInspeccionSaga` al recibir `InspeccionFirmada_v1`, **solo** si la inspección tiene al menos un hallazgo con `AccionRequerida = RequiereIntervencion`. Idempotency-Key = InspeccionId. Wolverine maneja reintento con backoff exponencial. Errores 4xx → notificación a supervisor; 5xx → reintento. Detalle completo en `01-modelo-dominio.md §13`.
+Generación **automática** vía saga `CerrarInspeccionSaga` al recibir `InspeccionFirmada_v1`, **solo** si la inspección tiene al menos un hallazgo con `AccionRequerida = RequiereIntervencion`. Idempotency-Key = InspeccionId. Wolverine maneja reintento con backoff exponencial. Errores 4xx → notificación a supervisor; 5xx → reintento.
+
+**Compromiso del equipo MYE (vinculante antes de Fase 3.D)**: el endpoint `POST /api/v1/mye/ot-correctivas` implementa idempotencia real — misma key devuelve `200 OK` con mismo `OTCorrectivaIdSinco`, persistente a reinicios, ventana ≥30 días. Si el equipo MYE no puede comprometer este contrato en cronograma MVP, se activa el fallback degradado con `GET /api/v1/mye/ot-correctivas?inspeccionId={id}` (paso 4.10 del roadmap deja de ser opcional). Matriz completa de respuesta (200/4xx/5xx/409) y tests requeridos del adapter en `01-modelo-dominio.md §13`.
 
 ### ADR-004 — Sincronización de catálogos de referencia
 
@@ -291,9 +294,9 @@ Las mismas 3 opciones se usan en hallazgos manuales, novedades preop y seguimien
 
 **Captura UX como wizard condicional:**
 - Paso 1 siempre: parte, novedad técnica, acción requerida, adjuntos (≥1 obligatorio para intervención).
-- Paso 2 solo si `AccionRequerida = RequiereIntervencion`: acción correctiva, causa de falla, tipo de falla, repuestos (≥1 obligatorio).
+- Paso 2 solo si `AccionRequerida = RequiereIntervencion`: acción correctiva, causa de falla, tipo de falla, repuestos (opcionales — la intervención puede ser solo mano de obra/ajuste/calibración; el BOM enviado a MYE puede ser vacío).
 
-**Invariantes** (I-H1 a I-H9 del Hallazgo + I-F1 a I-F3 de inmutabilidad post-firma + V-F1 a V-F7 de validaciones pre-firma) — ver `01-modelo-dominio.md` §15 para detalle completo.
+**Invariantes** (I-H1 a I-H11 del Hallazgo + I-F1 a I-F3 de inmutabilidad post-firma + I-S1 a I-S4 del aggregate `SeguimientoHallazgo` + V-F1 a V-F7 de validaciones pre-firma) — ver `01-modelo-dominio.md` §15 para detalle completo.
 
 **Modelo completo en `01-modelo-dominio.md` §15** (fuente de verdad; las secciones §2.1 a §14 quedan como histórico de evolución).
 

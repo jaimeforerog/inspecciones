@@ -15,6 +15,7 @@ Listar cada test nuevo o modificado, con el escenario de la spec al que correspo
 | `RegistrarHallazgo_en_inspeccion_iniciada_emite_HallazgoRegistrado` | 6.1 happy path | `tests/…/RegistrarHallazgoTests.cs` |
 | `RegistrarHallazgo_en_inspeccion_firmada_lanza_EstadoInvalido` | 6.2 PRE-1 | ídem |
 | `RegistrarHallazgo_sin_GPS_lanza_GpsRequeridoException` | 6.3 I-H4 | ídem |
+| `RegistrarHallazgo_rebuild_desde_stream_reproduce_estado` | 6.X rebuild | ídem |
 | … | | |
 
 ## 2. Verificación de estado rojo

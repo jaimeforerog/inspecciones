@@ -46,6 +46,9 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 - Cobertura de ramas del agregado afectado **≥ 85 %** por slice.
 - Eventos versionados con sufijo `_v1`, `_v2` cuando emerja segunda versión.
 - Soft delete: hallazgos y repuestos emiten `*Eliminado`; nunca borran del stream.
+- **`Apply` puro:** los métodos `Apply(Evt)` del agregado son mutaciones puras de estado — sin validaciones, sin lanzar excepciones. Las pre-condiciones (estado actual, "ya firmado", invariantes I-*) viven en los métodos de decisión que producen los eventos. Re-validar en `Apply` rompe el rebuild desde stream.
+- **Rebuild test obligatorio:** todo slice que toque comportamiento del agregado incluye un test que reproyecta los eventos emitidos sobre un agregado vacío y verifica que el estado resultante es el mismo que tras la decisión original. Atrapa validaciones intrusas en `Apply` y eventos fuera de orden causal.
+- **Atomicidad de eventos:** múltiples eventos al mismo stream en el mismo handler son atómicos por construcción (un único `IDocumentSession.SaveChangesAsync()`). Prohibido partir un comando en dos `SaveChangesAsync`. Orden de los eventos = orden causal (p. ej. `Diagnostico → Dictamen → Firmada`).
 
 ## Convenciones de tests
 

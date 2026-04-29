@@ -57,6 +57,31 @@ public void {Accion}_{contextoInvalido}_lanza_{TipoExcepcion}()
 }
 ```
 
+Para el escenario obligatorio de **rebuild desde stream** (cuando el comando emite ≥1 evento):
+
+```csharp
+[Fact]
+public void {Accion}_rebuild_desde_stream_reproduce_estado()
+{
+    // Given: historial previo + comando happy path
+    var dados = new object[] { /* ... */ };
+    var cmd = new {NombreComando}(/* ... */);
+    var emitidos = CasoDeUso.Decidir(dados, cmd, ahora);
+
+    // When: reproyectar el stream completo (previos + emitidos) sobre un agregado vacío
+    var stream = dados.Concat(emitidos).ToArray();
+    var act = () => {Agregado}.Reconstruir(stream);
+
+    // Then: el rebuild no lanza y el estado resultante es coherente
+    var agregado = act.Should().NotThrow().Subject;
+    agregado.{propiedadClave}.Should().Be({esperado});
+}
+```
+
+Este test es **obligatorio** por slice que emita eventos. Detecta dos anti-patrones:
+- Validaciones intrusas en `Apply(Evt)` (las pre-condiciones viven en el método de decisión, no en `Apply`).
+- Eventos emitidos fuera de orden causal (p. ej. `Firmada` antes de `Diagnostico`).
+
 ## Naming de tests
 
 El nombre del método es una **frase completa en español** que describe el comportamiento. Idealmente referencia la invariante violada por su código:

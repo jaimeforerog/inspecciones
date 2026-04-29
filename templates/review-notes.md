@@ -32,6 +32,9 @@ Dos o tres frases con el estado del slice y el veredicto. Si es `request-changes
 - [ ] No hay `DateTime.UtcNow`, `Guid.NewGuid()`, ni acceso directo a APIs del navegador (GPS, firma) dentro del dominio.
 - [ ] Los eventos son `record` inmutables.
 - [ ] `UbicacionGps`, `Hallazgo`, `Repuesto` y demás value objects del dominio se usan en sus campos respectivos; nunca primitivos pelados (`double` para coords, `string` para causa de falla, etc.).
+- [ ] **`Apply(Evt)` puro**: ningún `Apply` lanza excepciones, valida estado o re-aplica invariantes. Las pre-condiciones viven en el método de decisión del agregado. **Blocker** si hay validación en `Apply`.
+- [ ] **Rebuild test presente** si el slice emite ≥1 evento: existe un test que reproyecta los eventos emitidos sobre un agregado vacío y verifica el estado resultante. **Blocker** si falta.
+- [ ] **Atomicidad del handler**: un único `IDocumentSession.SaveChangesAsync()` por comando. **Blocker** si el handler hace múltiples saves.
 
 ### 2.4 Cobertura
 
