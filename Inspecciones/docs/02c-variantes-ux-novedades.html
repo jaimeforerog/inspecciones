@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparación de variantes UX — Novedades del preoperacional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #0D47A1;
+  --primary-dark: #062B66;
+  --primary-light: #E3F2FD;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #5F6368;
+  --text-muted: #9AA0A6;
+  --divider: #E0E4E9;
+  --action-low: #2E7D32;
+  --action-low-bg: #E8F5E9;
+  --action-mid: #EF6C00;
+  --action-mid-bg: #FFF3E0;
+  --action-high: #C62828;
+  --action-high-bg: #FFEBEE;
+  --shadow-card: 0 1px 3px rgba(0,0,0,.04);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #ECEFF1; color: var(--text);
+  padding: 32px 24px 64px; min-height: 100vh;
+}
+
+.page-header { max-width: 1280px; margin: 0 auto 32px; text-align: center; }
+.page-header h1 { font-weight: 500; font-size: 28px; margin-bottom: 8px; color: #263238; }
+.page-header p { color: var(--text-secondary); font-size: 14px; max-width: 720px; margin: 0 auto; line-height: 1.5; }
+.page-header .meta { display: inline-flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; justify-content: center; font-size: 12px; }
+.page-header .meta span { background: rgba(13,71,161,.08); padding: 4px 10px; border-radius: 12px; color: var(--primary-dark); }
+
+.flow {
+  display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; align-items: flex-start;
+  max-width: 1700px; margin: 0 auto;
+}
+
+.variant-block {
+  display: flex; flex-direction: column; align-items: center; max-width: 380px;
+}
+.variant-title {
+  font-weight: 500; font-size: 18px; color: var(--primary-dark);
+  margin-bottom: 4px; text-align: center;
+}
+.variant-subtitle {
+  font-size: 12px; color: var(--text-secondary); text-align: center;
+  margin-bottom: 16px; max-width: 320px; line-height: 1.4;
+}
+.variant-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
+  background: var(--primary); color: white; font-size: 11px;
+  font-weight: 500; margin-bottom: 12px;
+}
+.variant-tag.recommended { background: var(--action-low); }
+
+.phone {
+  width: 360px; height: 760px;
+  background: var(--bg); border-radius: 36px; border: 10px solid #1c1c1c;
+  box-shadow: 0 16px 40px rgba(0,0,0,.18);
+  overflow: hidden; position: relative; display: flex; flex-direction: column;
+}
+.phone::before {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 110px; height: 22px; background: #1c1c1c;
+  border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; z-index: 100;
+}
+
+.status-bar {
+  height: 26px; padding: 4px 18px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--primary); color: rgba(255,255,255,.95);
+  font-size: 11px; font-weight: 500;
+}
+
+.app-bar {
+  background: var(--primary); color: white;
+  padding: 14px 16px; display: flex; align-items: center; gap: 16px;
+  font-size: 17px; font-weight: 500; min-height: 56px;
+}
+.app-bar .icon { font-size: 22px; }
+.app-bar .title { flex: 1; }
+.app-bar.bulk { background: #455A64; }
+
+.equip-strip {
+  background: linear-gradient(180deg, #BBDEFB 0%, #FFFFFF 100%);
+  padding: 12px 16px;
+}
+.equip-card {
+  background: white; border: 1px solid var(--divider);
+  border-radius: 8px; padding: 8px 12px;
+}
+.equip-name { font-size: 14px; font-weight: 500; }
+.equip-meta { font-size: 11px; color: var(--text-secondary); }
+
+.body { flex: 1; overflow-y: auto; }
+.body::-webkit-scrollbar { width: 0; }
+
+.summary-bar {
+  display: flex; gap: 8px; padding: 8px 16px; background: rgba(13,71,161,.04);
+  font-size: 11px; align-items: center;
+}
+.summary-bar .pill {
+  padding: 3px 8px; border-radius: 10px; font-weight: 500;
+}
+.summary-bar .pill.verify { background: var(--action-low-bg); color: var(--action-low); }
+.summary-bar .pill.discard { background: var(--action-high-bg); color: var(--action-high); }
+.summary-bar .pill.unmarked { background: var(--divider); color: var(--text-secondary); }
+
+/* CARD COMÚN */
+.card {
+  background: var(--surface); border: 1px solid var(--divider);
+  border-radius: 10px; margin: 0 16px 8px; padding: 10px 12px;
+  display: flex; gap: 10px; align-items: flex-start;
+  box-shadow: var(--shadow-card);
+}
+.card-content { flex: 1; min-width: 0; }
+.card-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+}
+.parte {
+  font-size: 10px; font-weight: 500; color: var(--primary-dark);
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.fecha { font-size: 10px; color: var(--text-muted); }
+.titulo {
+  font-size: 13px; font-weight: 500; color: var(--text);
+  line-height: 1.3; margin-bottom: 3px;
+}
+.desc {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.meta-row {
+  display: flex; gap: 8px; font-size: 10px; color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* VARIANTE A — Dos checkboxes mutuamente excluyentes */
+.dual-check {
+  display: flex; flex-direction: column; gap: 4px; padding-top: 4px;
+}
+.dual-check .cb {
+  width: 26px; height: 26px; border: 2px solid var(--divider);
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; background: var(--surface);
+  color: var(--text-muted);
+}
+.dual-check .cb.verify.checked {
+  background: var(--action-low); border-color: var(--action-low); color: white;
+}
+.dual-check .cb.verify.checked::after { content: '✓'; }
+.dual-check .cb.discard.checked {
+  background: var(--action-high); border-color: var(--action-high); color: white;
+}
+.dual-check .cb.discard.checked::after { content: '✗'; }
+.dual-check .cb.verify { color: var(--action-low); }
+.dual-check .cb.discard { color: var(--action-high); }
+.dual-check .cb.verify::before { content: '✓'; opacity: .35; }
+.dual-check .cb.discard::before { content: '✗'; opacity: .35; }
+.dual-check .cb.verify.checked::before, .dual-check .cb.discard.checked::before { display: none; }
+
+.card.va-verify { border-left: 3px solid var(--action-low); background: var(--action-low-bg); }
+.card.va-discard { border-left: 3px solid var(--action-high); background: var(--action-high-bg); }
+
+/* VARIANTE B — Tres botones inline */
+.action-buttons-inline {
+  display: flex; gap: 6px; margin-top: 8px;
+}
+.btn-mini {
+  flex: 1; padding: 7px 8px; border-radius: 6px;
+  font-size: 11px; font-weight: 500; text-align: center;
+  border: 1.5px solid; display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.btn-mini.verify { background: var(--action-low-bg); border-color: var(--action-low); color: var(--action-low); }
+.btn-mini.followup { background: var(--action-mid-bg); border-color: var(--action-mid); color: var(--action-mid); }
+.btn-mini.discard { background: var(--action-high-bg); border-color: var(--action-high); color: var(--action-high); }
+
+/* VARIANTE C — Botón seleccionar varias */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 18px; border-radius: 8px;
+  font-weight: 500; font-size: 14px;
+}
+.btn-primary  { background: var(--primary); color: white; box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06); }
+.btn-outline  { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-block    { display: flex; width: 100%; }
+
+.bottom-bar {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--surface); border-top: 1px solid var(--divider);
+  padding: 12px 16px; display: flex; gap: 8px; z-index: 5;
+}
+.bottom-bar .btn { flex: 1; }
+.bottom-bar.compact { padding: 10px 16px; }
+
+.note {
+  background: #FFF8E1; border-left: 3px solid #FBC02D;
+  padding: 8px 12px; margin: 8px 16px; font-size: 11px;
+  color: #5D4037; line-height: 1.4; border-radius: 0 6px 6px 0;
+}
+
+footer {
+  max-width: 1280px; margin: 64px auto 0; padding: 24px;
+  background: var(--surface); border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+}
+footer h3 { font-size: 14px; font-weight: 500; margin-bottom: 12px; color: #37474F; }
+footer p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-top: 12px; }
+footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-left: 20px; margin-top: 8px; }
+footer table { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 12px; }
+footer table th, footer table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--divider); }
+footer table th { font-weight: 500; color: var(--text); background: rgba(13,71,161,.04); }
+footer table td.center { text-align: center; }
+footer .yes { color: var(--action-low); font-weight: 500; }
+footer .no { color: var(--action-high); font-weight: 500; }
+footer .partial { color: var(--action-mid); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Comparación de variantes UX — Novedades del preoperacional</h1>
+  <p>Tres patrones distintos para que el técnico procese múltiples novedades pendientes. Mismo dataset (5 novedades del bulldozer Caterpillar D11T) en cada variante para comparación directa. Decisión pendiente — escoge una para aplicar al wireframe definitivo en <code>02b-wireframes-novedades-preop.html</code>.</p>
+  <div class="meta">
+    <span>Stack visual: React + MUI</span>
+    <span>5 novedades de muestra (3 motor, 1 transmisión, 1 hidráulico)</span>
+    <span>Decisión pendiente</span>
+  </div>
+</div>
+
+<div class="flow">
+
+  <!-- VARIANTE A -->
+  <div class="variant-block">
+    <span class="variant-tag">Variante A</span>
+    <div class="variant-title">Dos checkboxes mutuamente excluyentes</div>
+    <div class="variant-subtitle">Cada novedad tiene dos checkboxes en columna: ✓ verde "Verificar" / ✗ rojo "Descartar". Solo uno marcado a la vez por novedad. Procesamiento batch al final.</div>
+
+    <div class="phone">
+      <div class="status-bar"><span>10:02</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Importar desde preop</span>
+      </div>
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109 · BULLDOZER</div>
+        </div>
+      </div>
+      <div class="summary-bar">
+        <span class="pill verify">✓ 2 a verificar</span>
+        <span class="pill discard">✗ 2 a descartar</span>
+        <span class="pill unmarked">1 sin marcar</span>
+      </div>
+
+      <div class="body" style="padding-top:8px; padding-bottom:80px;">
+        <div class="card va-verify">
+          <div class="dual-check">
+            <div class="cb verify checked"></div>
+            <div class="cb discard"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">27 abr · 6:15</span></div>
+            <div class="titulo">Verificación estado · Ruido al arranque</div>
+            <div class="desc">"Ruido extraño al arranque en frío, parece valvulería."</div>
+            <div class="meta-row"><span>👤 Andrés P.</span><span>📷 2</span></div>
+          </div>
+        </div>
+
+        <div class="card va-discard">
+          <div class="dual-check">
+            <div class="cb verify"></div>
+            <div class="cb discard checked"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">26 abr · 6:08</span></div>
+            <div class="titulo">Verificación estado · Ruido raro motor</div>
+            <div class="desc">"Sonido extraño al prender. No sé si es normal."</div>
+            <div class="meta-row"><span>👤 Carlos M.</span><span>📷 1</span></div>
+          </div>
+        </div>
+
+        <div class="card va-verify">
+          <div class="dual-check">
+            <div class="cb verify checked"></div>
+            <div class="cb discard"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">24 abr · 6:00</span></div>
+            <div class="titulo">Cambio de repuesto · Filtro saturado</div>
+            <div class="desc">"Filtro de aceite saturado, requiere cambio."</div>
+            <div class="meta-row"><span>👤 Andrés P.</span><span>📷 1</span></div>
+          </div>
+        </div>
+
+        <div class="card va-discard">
+          <div class="dual-check">
+            <div class="cb verify"></div>
+            <div class="cb discard checked"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">TRANSMISIÓN</span><span class="fecha">25 abr · 6:12</span></div>
+            <div class="titulo">Verificar fuga · Goteo en cárter</div>
+            <div class="desc">"Pequeño goteo en zona del cárter. No afecta nivel."</div>
+            <div class="meta-row"><span>👤 Andrés P.</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="dual-check">
+            <div class="cb verify"></div>
+            <div class="cb discard"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">HIDRÁULICO</span><span class="fecha">25 abr · 6:14</span></div>
+            <div class="titulo">Verificación estado · Presión irregular</div>
+            <div class="desc">"La presión hidráulica varía durante la operación."</div>
+            <div class="meta-row"><span>👤 Carlos M.</span><span>📷 1</span></div>
+          </div>
+        </div>
+
+        <div class="note">
+          <strong>Procesamiento secuencial al tap "Procesar":</strong>
+          1) modal de descarte masivo con motivo común para las 2 marcadas como ✗ →
+          2) wizard individual para cada una de las 2 marcadas como ✓ →
+          regresa a lista actualizada.
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="btn btn-outline">Cancelar</div>
+        <div class="btn btn-primary btn-block">Procesar (4)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIANTE B -->
+  <div class="variant-block">
+    <span class="variant-tag">Variante B</span>
+    <div class="variant-title">Tres botones inline por card</div>
+    <div class="variant-subtitle">Sin "modo selección". Cada card muestra tres botones: 🟢 Verificar / 🟠 Seguimiento / 🔴 Descartar. Tap directo procesa esa novedad sola.</div>
+
+    <div class="phone">
+      <div class="status-bar"><span>10:02</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Importar desde preop</span>
+      </div>
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109 · BULLDOZER</div>
+        </div>
+      </div>
+
+      <div class="body" style="padding-top:12px;">
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">27 abr · 6:15</span></div>
+          <div class="titulo">Verificación estado · Ruido al arranque</div>
+          <div class="desc">"Ruido extraño al arranque en frío, parece valvulería."</div>
+          <div class="meta-row"><span>👤 Andrés P.</span><span>📷 2</span></div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini verify">✓ Verificar</div>
+            <div class="btn-mini followup">↻ Seguimiento</div>
+            <div class="btn-mini discard">✗ Descartar</div>
+          </div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">26 abr · 6:08</span></div>
+          <div class="titulo">Verificación estado · Ruido raro motor</div>
+          <div class="desc">"Sonido extraño al prender. No sé si es normal."</div>
+          <div class="meta-row"><span>👤 Carlos M.</span><span>📷 1</span></div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini verify">✓ Verificar</div>
+            <div class="btn-mini followup">↻ Seguimiento</div>
+            <div class="btn-mini discard">✗ Descartar</div>
+          </div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">24 abr · 6:00</span></div>
+          <div class="titulo">Cambio de repuesto · Filtro saturado</div>
+          <div class="desc">"Filtro de aceite saturado, requiere cambio."</div>
+          <div class="meta-row"><span>👤 Andrés P.</span><span>📷 1</span></div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini verify">✓ Verificar</div>
+            <div class="btn-mini followup">↻ Seguimiento</div>
+            <div class="btn-mini discard">✗ Descartar</div>
+          </div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">TRANSMISIÓN</span><span class="fecha">25 abr · 6:12</span></div>
+          <div class="titulo">Verificar fuga · Goteo en cárter</div>
+          <div class="desc">"Pequeño goteo en zona del cárter. No afecta nivel."</div>
+          <div class="meta-row"><span>👤 Andrés P.</span></div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini verify">✓ Verificar</div>
+            <div class="btn-mini followup">↻ Seguimiento</div>
+            <div class="btn-mini discard">✗ Descartar</div>
+          </div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">HIDRÁULICO</span><span class="fecha">25 abr · 6:14</span></div>
+          <div class="titulo">Verificación estado · Presión irregular</div>
+          <div class="desc">"La presión hidráulica varía durante la operación."</div>
+          <div class="meta-row"><span>👤 Carlos M.</span><span>📷 1</span></div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini verify">✓ Verificar</div>
+            <div class="btn-mini followup">↻ Seguimiento</div>
+            <div class="btn-mini discard">✗ Descartar</div>
+          </div>
+        </div>
+
+        <div class="note">
+          <strong>Cada acción es inmediata:</strong>
+          ✓ Verificar → abre wizard. ↻ Seguimiento → mini-modal con motivo. ✗ Descartar → mini-modal con motivo.
+          <strong>No hay descarte bulk</strong> — N descartes son N modales.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIANTE C — Híbrido (lista normal + entrar a modo bulk) -->
+  <div class="variant-block">
+    <span class="variant-tag recommended">Variante C — Recomendada</span>
+    <div class="variant-title">Híbrido: tap directo + modo bulk opcional</div>
+    <div class="variant-subtitle">Lista normal con tap para abrir wizard. Botón "Seleccionar varias" entra a modo bulk con dos checkboxes mutuamente excluyentes (como variante A).</div>
+
+    <div class="phone">
+      <div class="status-bar"><span>10:02</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Importar desde preop</span>
+      </div>
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109 · BULLDOZER</div>
+        </div>
+      </div>
+
+      <div class="body" style="padding-top:12px; padding-bottom:80px;">
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">27 abr · 6:15</span></div>
+          <div class="titulo">Verificación estado · Ruido al arranque</div>
+          <div class="desc">"Ruido extraño al arranque en frío, parece valvulería."</div>
+          <div class="meta-row"><span>👤 Andrés P.</span><span>📷 2</span></div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">26 abr · 6:08</span></div>
+          <div class="titulo">Verificación estado · Ruido raro motor</div>
+          <div class="desc">"Sonido extraño al prender. No sé si es normal."</div>
+          <div class="meta-row"><span>👤 Carlos M.</span><span>📷 1</span></div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">24 abr · 6:00</span></div>
+          <div class="titulo">Cambio de repuesto · Filtro saturado</div>
+          <div class="desc">"Filtro de aceite saturado, requiere cambio."</div>
+          <div class="meta-row"><span>👤 Andrés P.</span><span>📷 1</span></div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">TRANSMISIÓN</span><span class="fecha">25 abr · 6:12</span></div>
+          <div class="titulo">Verificar fuga · Goteo en cárter</div>
+          <div class="desc">"Pequeño goteo en zona del cárter. No afecta nivel."</div>
+          <div class="meta-row"><span>👤 Andrés P.</span></div>
+        </div>
+
+        <div class="card" style="display:block;">
+          <div class="card-head"><span class="parte">HIDRÁULICO</span><span class="fecha">25 abr · 6:14</span></div>
+          <div class="titulo">Verificación estado · Presión irregular</div>
+          <div class="desc">"La presión hidráulica varía durante la operación."</div>
+          <div class="meta-row"><span>👤 Carlos M.</span><span>📷 1</span></div>
+        </div>
+
+        <div class="note">
+          <strong>Tap directo en una novedad</strong> → abre wizard de verificación individual.
+          <strong>Botón "Seleccionar varias"</strong> → entra al modo bulk (siguiente pantalla).
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="btn btn-outline btn-block">☑ Seleccionar varias</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIANTE C - Modo bulk activado -->
+  <div class="variant-block">
+    <span class="variant-tag recommended">Variante C — Modo bulk</span>
+    <div class="variant-title">Tras tap "Seleccionar varias"</div>
+    <div class="variant-subtitle">Dos checkboxes por card como en A. Header oscuro con contadores. Botón "Procesar" en barra inferior. Procesamiento secuencial: descarte bulk + wizards uno a uno.</div>
+
+    <div class="phone">
+      <div class="status-bar"><span>10:03</span><span>● ● ● ●</span></div>
+      <div class="app-bar bulk">
+        <span class="icon">×</span>
+        <span class="title">4 marcadas</span>
+      </div>
+      <div class="summary-bar">
+        <span class="pill verify">✓ 2 a verificar</span>
+        <span class="pill discard">✗ 2 a descartar</span>
+        <span class="pill unmarked">1 sin marcar</span>
+      </div>
+
+      <div class="body" style="padding-top:8px; padding-bottom:80px;">
+        <div class="card va-verify">
+          <div class="dual-check">
+            <div class="cb verify checked"></div>
+            <div class="cb discard"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">27 abr</span></div>
+            <div class="titulo">Verificación estado · Ruido al arranque</div>
+            <div class="desc">"Ruido extraño al arranque en frío..."</div>
+          </div>
+        </div>
+
+        <div class="card va-discard">
+          <div class="dual-check">
+            <div class="cb verify"></div>
+            <div class="cb discard checked"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">26 abr</span></div>
+            <div class="titulo">Verificación estado · Ruido raro motor</div>
+            <div class="desc">"Sonido extraño al prender..."</div>
+          </div>
+        </div>
+
+        <div class="card va-verify">
+          <div class="dual-check">
+            <div class="cb verify checked"></div>
+            <div class="cb discard"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">MOTOR</span><span class="fecha">24 abr</span></div>
+            <div class="titulo">Cambio de repuesto · Filtro saturado</div>
+            <div class="desc">"Filtro de aceite saturado..."</div>
+          </div>
+        </div>
+
+        <div class="card va-discard">
+          <div class="dual-check">
+            <div class="cb verify"></div>
+            <div class="cb discard checked"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">TRANSMISIÓN</span><span class="fecha">25 abr</span></div>
+            <div class="titulo">Verificar fuga · Goteo en cárter</div>
+            <div class="desc">"Pequeño goteo en cárter..."</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="dual-check">
+            <div class="cb verify"></div>
+            <div class="cb discard"></div>
+          </div>
+          <div class="card-content">
+            <div class="card-head"><span class="parte">HIDRÁULICO</span><span class="fecha">25 abr</span></div>
+            <div class="titulo">Verificación estado · Presión irregular</div>
+            <div class="desc">"La presión hidráulica varía..."</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="btn btn-outline">Cancelar</div>
+        <div class="btn btn-primary btn-block">Procesar (4)</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <h3>Comparación rápida</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Criterio</th>
+        <th class="center">A · Dos checkboxes</th>
+        <th class="center">B · Tres botones inline</th>
+        <th class="center">C · Híbrido (recomendada)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Procesar 1 novedad rápidamente</td>
+        <td class="center partial">Hay que marcar + procesar</td>
+        <td class="center yes">1 tap directo</td>
+        <td class="center yes">1 tap → wizard</td>
+      </tr>
+      <tr>
+        <td>Descarte masivo con motivo común</td>
+        <td class="center yes">Sí, en el batch</td>
+        <td class="center no">No, N modales</td>
+        <td class="center yes">Sí, en modo bulk</td>
+      </tr>
+      <tr>
+        <td>Verificar una y descartar otras en una tanda</td>
+        <td class="center yes">Sí, lo natural</td>
+        <td class="center partial">Acción a acción, sin batch</td>
+        <td class="center yes">Sí, en modo bulk</td>
+      </tr>
+      <tr>
+        <td>Densidad visual</td>
+        <td class="center partial">Alta (2 checkboxes por card)</td>
+        <td class="center partial">Alta (3 botones por card)</td>
+        <td class="center yes">Baja en modo normal, alta solo en bulk</td>
+      </tr>
+      <tr>
+        <td>Curva de aprendizaje</td>
+        <td class="center partial">Requiere entender los dos checkboxes</td>
+        <td class="center yes">Inmediata — botones explícitos</td>
+        <td class="center partial">Modo normal inmediato, modo bulk requiere conocer el botón</td>
+      </tr>
+      <tr>
+        <td>Operación dominante (1-2 novedades)</td>
+        <td class="center partial">Fricción innecesaria</td>
+        <td class="center yes">Óptima</td>
+        <td class="center yes">Óptima (modo normal)</td>
+      </tr>
+      <tr>
+        <td>Operación dominante (5+ novedades, muchas duplicadas)</td>
+        <td class="center yes">Óptima</td>
+        <td class="center no">Penosa — N modales</td>
+        <td class="center yes">Óptima (modo bulk)</td>
+      </tr>
+      <tr>
+        <td>Implementación</td>
+        <td class="center partial">Media — un solo modo</td>
+        <td class="center yes">Simple — sin modo bulk</td>
+        <td class="center partial">Media-alta — dos modos</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:24px;">Cuándo escoger cada una</h3>
+  <ul>
+    <li><strong>Variante A</strong> si los técnicos típicamente procesan muchas novedades de una vez (5+) y prefieren ver toda la lista clasificada antes de procesar. Útil si hay "ritual de revisión" formal.</li>
+    <li><strong>Variante B</strong> si los técnicos típicamente atienden 1-3 novedades por inspección y duplicados son raros. Más rápido para el caso normal pero penoso si hay 10 duplicadas.</li>
+    <li><strong>Variante C</strong> si el patrón varía: a veces 1 novedad, a veces 10. Cubre ambos casos pero requiere más implementación.</li>
+  </ul>
+
+  <p><strong>Mi recomendación:</strong> Variante C porque la realidad es que el patrón varía por equipo y por cliente. Un equipo bien mantenido genera 1-2 novedades por inspección; un equipo poco inspeccionado puede acumular 20. La C cubre ambos casos sin penalizar a ninguno. La complejidad adicional (dos modos) está justificada por el rango operativo real.</p>
+
+  <p><strong>Pregunta para validar con el técnico/ingeniero del consultor de producto:</strong> en operación real, ¿cuántas novedades atiende un técnico promedio en una inspección? Si la respuesta es "casi siempre 1-3, raramente más", la variante B es suficiente. Si es "depende del equipo, varía mucho", la variante C es la apuesta correcta.</p>
+</footer>
+
+</body>
+</html>

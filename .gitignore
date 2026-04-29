@@ -1,0 +1,19 @@
+# Claude Code local settings (per-user)
+.claude/settings.local.json
+
+# Office lock files
+~$*
+
+# Rider / JetBrains
+.idea/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build / IDE caches
+bin/
+obj/
+.vs/

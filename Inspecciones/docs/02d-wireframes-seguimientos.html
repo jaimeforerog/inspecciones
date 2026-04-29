@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wireframes — Flujo de seguimientos del equipo (propuesta)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #0D47A1;
+  --primary-dark: #062B66;
+  --primary-light: #E3F2FD;
+  --header-grad-from: #BBDEFB;
+  --header-grad-to: #FFFFFF;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #5F6368;
+  --text-muted: #9AA0A6;
+  --divider: #E0E4E9;
+  --required: #D32F2F;
+  --action-low: #2E7D32;
+  --action-low-bg: #E8F5E9;
+  --action-mid: #EF6C00;
+  --action-mid-bg: #FFF3E0;
+  --action-high: #C62828;
+  --action-high-bg: #FFEBEE;
+  --info: #1565C0;
+  --info-bg: #E3F2FD;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-card: 0 1px 3px rgba(0,0,0,.04);
+  --overlay: rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #ECEFF1;
+  color: var(--text);
+  padding: 32px 24px 64px;
+  min-height: 100vh;
+}
+
+.page-header { max-width: 1280px; margin: 0 auto 32px; text-align: center; }
+.page-header h1 { font-weight: 500; font-size: 28px; margin-bottom: 8px; color: #263238; }
+.page-header p { color: var(--text-secondary); font-size: 14px; max-width: 760px; margin: 0 auto; line-height: 1.5; }
+.page-header .meta {
+  display: inline-flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; justify-content: center;
+  font-size: 12px; color: #455A64;
+}
+.page-header .meta span {
+  background: rgba(13,71,161,.08); padding: 4px 10px; border-radius: 12px; color: var(--primary-dark);
+}
+.tag-proposal {
+  display: inline-block; background: var(--action-mid); color: white;
+  padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 500;
+  margin-top: 8px;
+}
+.entrypoint {
+  max-width: 800px; margin: 16px auto 0; padding: 12px 18px;
+  background: #FFF8E1; border-left: 3px solid #FBC02D;
+  font-size: 13px; color: #5D4037; line-height: 1.5;
+  text-align: left; border-radius: 0 6px 6px 0;
+}
+
+.flow {
+  display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; align-items: flex-start;
+  max-width: 1700px; margin: 0 auto;
+}
+
+.screen-wrapper { display: flex; flex-direction: column; align-items: center; width: 360px; }
+
+.screen-label {
+  font-weight: 500; margin-bottom: 8px; font-size: 13px; color: #37474F;
+  display: flex; align-items: center; gap: 8px;
+}
+.screen-label .num {
+  background: var(--primary); color: white; width: 24px; height: 24px;
+  border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
+.screen-caption {
+  font-size: 11px; color: var(--text-secondary); text-align: center;
+  margin-bottom: 12px; line-height: 1.4; max-width: 340px;
+}
+
+.phone {
+  width: 360px; height: 760px;
+  background: var(--bg);
+  border-radius: 36px; border: 10px solid #1c1c1c;
+  box-shadow: 0 16px 40px rgba(0,0,0,.18);
+  overflow: hidden; position: relative; display: flex; flex-direction: column;
+}
+.phone::before {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 110px; height: 22px; background: #1c1c1c;
+  border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; z-index: 100;
+}
+
+.status-bar {
+  height: 26px; padding: 4px 18px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--primary); color: rgba(255,255,255,.95);
+  font-size: 11px; font-weight: 500;
+}
+
+.app-bar {
+  background: var(--primary); color: white;
+  padding: 14px 16px; display: flex; align-items: center; gap: 16px;
+  font-size: 17px; font-weight: 500; min-height: 56px;
+}
+.app-bar .icon { font-size: 22px; }
+.app-bar .title { flex: 1; }
+.app-bar .actions { display: flex; gap: 14px; font-size: 20px; opacity: .95; }
+
+.body { flex: 1; overflow-y: auto; }
+.body::-webkit-scrollbar { width: 0; }
+
+.equip-strip {
+  background: linear-gradient(180deg, var(--header-grad-from) 0%, var(--header-grad-to) 100%);
+  padding: 12px 16px;
+}
+.equip-card {
+  background: white; border: 1px solid var(--divider);
+  border-radius: 8px; padding: 10px 12px;
+}
+.equip-name { font-size: 14px; font-weight: 500; }
+.equip-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+.banner {
+  padding: 10px 14px; font-size: 12px;
+  border-left: 3px solid; border-radius: 0 6px 6px 0;
+  margin: 0 16px 8px; display: flex; align-items: center; gap: 10px; line-height: 1.4;
+}
+.banner.preop { background: var(--action-mid-bg); color: var(--action-mid); border-left-color: var(--action-mid); }
+.banner.followup { background: var(--info-bg); color: var(--info); border-left-color: var(--info); }
+.banner-link {
+  margin-left: auto; background: white; padding: 4px 10px;
+  border-radius: 12px; font-size: 11px; font-weight: 500;
+}
+
+.section-title {
+  padding: 14px 16px 6px; font-size: 11px; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: .4px;
+}
+
+.search {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); padding: 10px 14px;
+  border-radius: 24px; box-shadow: var(--shadow-card);
+  margin: 12px 16px;
+}
+.search .icon { color: var(--text-secondary); }
+.search .placeholder { color: var(--text-secondary); font-size: 14px; flex: 1; }
+
+.filter-row {
+  display: flex; gap: 6px; padding: 0 16px 8px; overflow-x: auto;
+}
+.filter-row .chip-filter {
+  background: var(--surface); border: 1px solid var(--divider);
+  padding: 4px 10px; border-radius: 14px; font-size: 11px;
+  color: var(--text-secondary); white-space: nowrap;
+}
+.filter-row .chip-filter.active {
+  background: var(--primary); color: white; border-color: var(--primary);
+}
+
+/* Card de seguimiento */
+.followup-card {
+  background: var(--surface); border: 1px solid var(--divider);
+  border-left: 3px solid var(--info);
+  border-radius: 10px; padding: 12px 14px; margin: 0 16px 10px;
+  box-shadow: var(--shadow-card);
+}
+.followup-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+}
+.followup-parte {
+  font-size: 11px; font-weight: 500; color: var(--primary-dark);
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.age-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 500;
+  background: var(--info-bg); color: var(--info);
+}
+.age-badge.warn { background: var(--action-mid-bg); color: var(--action-mid); }
+.age-badge.alert { background: var(--action-high-bg); color: var(--action-high); }
+.followup-titulo {
+  font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px;
+  line-height: 1.3;
+}
+.followup-desc {
+  font-size: 12px; color: var(--text-secondary); line-height: 1.4;
+  margin-bottom: 6px;
+}
+.followup-meta {
+  display: flex; gap: 12px; font-size: 11px; color: var(--text-muted);
+  flex-wrap: wrap; margin-bottom: 10px;
+}
+.followup-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+.action-buttons-inline {
+  display: flex; gap: 6px; margin-top: 8px;
+}
+.btn-mini {
+  flex: 1; padding: 8px 4px; border-radius: 6px;
+  font-size: 11px; font-weight: 500; text-align: center;
+  border: 1.5px solid; display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.btn-mini.resolve {
+  background: var(--action-low-bg); border-color: var(--action-low); color: var(--action-low);
+}
+.btn-mini.keep {
+  background: var(--action-mid-bg); border-color: var(--action-mid); color: var(--action-mid);
+}
+.btn-mini.escalate {
+  background: var(--action-high-bg); border-color: var(--action-high); color: var(--action-high);
+}
+
+/* Card procesado (atenuado) */
+.followup-card.processed {
+  opacity: .65; background: #fafafa;
+}
+.processed-tag {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 500;
+}
+.processed-tag.resolved { background: var(--action-low-bg); color: var(--action-low); }
+.processed-tag.kept { background: var(--action-mid-bg); color: var(--action-mid); }
+.processed-tag.escalated { background: var(--action-high-bg); color: var(--action-high); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 18px; border-radius: 8px;
+  font-weight: 500; font-size: 14px;
+}
+.btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-1); }
+.btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-block   { display: flex; width: 100%; }
+.btn-error   { background: var(--action-high); color: white; }
+.btn-warning { background: var(--action-mid); color: white; }
+.btn-success { background: var(--action-low); color: white; }
+.btn-text    { background: transparent; color: var(--primary); padding: 10px; }
+
+.bottom-bar {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--surface); border-top: 1px solid var(--divider);
+  padding: 12px 16px; display: flex; gap: 8px; z-index: 5;
+}
+.bottom-bar .btn { flex: 1; }
+
+/* Modal */
+.modal-backdrop {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  background: var(--overlay); display: flex; align-items: flex-end;
+  z-index: 200;
+}
+.modal {
+  background: var(--surface);
+  border-top-left-radius: 16px; border-top-right-radius: 16px;
+  padding: 20px 16px 24px; width: 100%;
+  max-height: 86%; overflow-y: auto;
+}
+.modal h3 {
+  font-size: 17px; font-weight: 500; color: var(--text); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 8px;
+}
+.modal h3 .icon-pill {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.modal h3 .icon-pill.resolve { background: var(--action-low-bg); color: var(--action-low); }
+.modal h3 .icon-pill.keep    { background: var(--action-mid-bg); color: var(--action-mid); }
+.modal .subtitle {
+  font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; margin-left: 36px;
+}
+.modal .followup-preview {
+  background: #fafafa; border: 1px solid var(--divider);
+  border-radius: 6px; padding: 10px 12px; margin-bottom: 14px;
+  font-size: 12px; line-height: 1.4;
+}
+.modal .followup-preview .label-mini {
+  font-size: 10px; font-weight: 500; color: var(--primary-dark);
+  text-transform: uppercase; letter-spacing: .3px; margin-bottom: 2px;
+}
+.modal .followup-preview .reportado-por {
+  font-size: 10px; color: var(--text-muted); margin-top: 4px;
+}
+
+.input {
+  border: 1px solid var(--divider); border-radius: 6px;
+  padding: 10px 12px; margin-top: 4px; margin-bottom: 4px;
+  position: relative; background: var(--surface);
+}
+.input.focused { border-color: var(--primary); }
+.input.focused .label { color: var(--primary); }
+.input .label {
+  position: absolute; top: -7px; left: 10px;
+  background: var(--surface); padding: 0 6px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.input .label .req { color: var(--required); }
+.input .value { font-size: 14px; color: var(--text); padding: 2px 0; min-height: 18px; }
+.input .value.placeholder { color: var(--text-muted); }
+.input.multiline .value { white-space: pre-wrap; min-height: 60px; line-height: 1.4; }
+.input.with-arrow::after {
+  content: '▾'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 12px;
+}
+
+.form-card {
+  background: var(--surface); border: 1px solid var(--divider);
+  border-radius: 10px; padding: 14px; margin: 0 16px 12px;
+  box-shadow: var(--shadow-card);
+}
+.form-card-title {
+  font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 10px;
+}
+.action-option {
+  border: 1px solid var(--divider); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px;
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.action-option.high.selected { background: var(--action-high-bg); border-color: var(--action-high); }
+.action-option .radio {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--divider); flex-shrink: 0; margin-top: 1px;
+}
+.action-option.high.selected .radio::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--action-high);
+}
+.action-option.high.selected .radio { border-color: var(--action-high); position: relative; }
+.action-option .body-content { flex: 1; }
+.action-option .opt-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px;
+}
+.action-option .opt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--action-high); display: inline-block; }
+.action-option .opt-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.35; }
+
+.step-header {
+  background: var(--surface); padding: 10px 16px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 13px; color: var(--text-secondary);
+}
+.step-header strong { color: var(--text); }
+
+.toast {
+  position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+  background: var(--action-mid); color: white;
+  padding: 10px 18px; border-radius: 24px;
+  font-size: 13px; font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+  display: flex; align-items: center; gap: 8px;
+}
+
+footer {
+  max-width: 1280px; margin: 64px auto 0; padding: 24px;
+  background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-1);
+}
+footer h3 { font-size: 14px; font-weight: 500; margin-bottom: 12px; color: #37474F; }
+footer p { font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin-top: 12px; }
+footer p strong { color: var(--text); }
+footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-left: 20px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Seguimientos del equipo — propuesta de flujo</h1>
+  <p>Mock para validar la propuesta de cierre de hallazgos en seguimiento. Funcionalmente paralelo al flujo de novedades preop, pero los seguimientos los <strong>abre el técnico</strong> al firmar inspección con AccionRequerida=RequiereSeguimiento, y los cierra otro técnico (o el mismo) en una inspección posterior del mismo equipo. <strong>Las 3 opciones por seguimiento son las mismas que para hallazgos manuales y novedades preop</strong>: Sin intervención / Seguimiento / Intervención — un solo mental model en todo el sistema.</p>
+  <div class="meta">
+    <span>Stack visual: React + MUI</span>
+    <span>Color primario: #0D47A1</span>
+    <span>Audiencia: técnico/ingeniero</span>
+  </div>
+  <div class="tag-proposal" style="background:var(--action-low);">✓ Aprobado 2026-04-28 — 3 eventos nuevos, catálogo MVP 17 → 20</div>
+  <div class="entrypoint">
+    <strong>Entry point:</strong> al iniciar inspección de un equipo, si tiene seguimientos abiertos en inspecciones previas, aparece un segundo banner azul "X seguimientos previos del equipo" en la pantalla principal de inspección, junto al banner naranja de novedades preop. Tap en el banner abre la lista de seguimientos.
+  </div>
+</div>
+
+<div class="flow">
+
+  <!-- 1. Inspección del equipo con dos banners -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">1</span> Inspección del equipo (entry)</div>
+    <div class="screen-caption">Pantalla del flujo principal con DOS banners: novedades preop pendientes (naranja) + <strong>seguimientos previos del equipo</strong> (azul, propuesta nueva). El técnico decide cuál revisar primero.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:55</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Inspección de equipo</span>
+      </div>
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109</div>
+        </div>
+      </div>
+
+      <div class="body" style="padding-top:8px;padding-bottom:96px;">
+
+        <div class="banner preop">
+          <span style="font-size:16px;">⚠</span>
+          <span><strong>5 novedades preop</strong> pendientes</span>
+        </div>
+
+        <div class="banner followup">
+          <span style="font-size:16px;">ℹ</span>
+          <span><strong>2 seguimientos previos</strong> del equipo</span>
+        </div>
+
+        <div class="section-title">Hallazgos de esta inspección</div>
+
+        <div style="background: var(--surface); border: 1px solid var(--divider); border-left: 3px solid var(--action-mid); border-radius: 8px; padding: 12px 14px; margin: 0 16px 10px; box-shadow: var(--shadow-card);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:500;">HIDRÁULICO · Empaquetadura</span>
+            <span class="processed-tag kept">Seguimiento</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.4;">Empaquetadura con desgaste leve, monitorear en próxima inspección.</div>
+        </div>
+
+        <div style="background: var(--surface); border: 1px solid var(--divider); border-left: 3px solid var(--action-high); border-radius: 8px; padding: 12px 14px; margin: 0 16px 10px; box-shadow: var(--shadow-card);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:500;">FRENOS · Desgaste pastillas</span>
+            <span class="processed-tag escalated">Intervención</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.4;">Pastillas delanteras al 15% — bajo umbral de seguridad.</div>
+        </div>
+
+      </div>
+      <div class="bottom-bar" style="flex-direction:column;gap:8px;">
+        <div class="btn btn-primary btn-block">+ Agregar hallazgo</div>
+        <div class="btn btn-outline btn-block" style="position:relative;">
+          📁 Importar desde preoperacional
+          <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:var(--action-mid-bg);color:var(--action-mid);font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;">5</span>
+        </div>
+        <div class="btn btn-outline btn-block" style="position:relative;">
+          ↻ Traer de seguimiento
+          <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:var(--info-bg);color:var(--info);font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;">2</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Lista de seguimientos -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">2</span> Lista de seguimientos</div>
+    <div class="screen-caption">Mismas 3 opciones que en hallazgos manuales y novedades preop: <strong>Sin intervención</strong> (cierra) / <strong>Seguimiento</strong> (continúa abierto) / <strong>Intervención</strong> (escala a hallazgo con OT). Un mental model uniforme en todo el sistema.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:57</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Seguimientos del equipo</span>
+        <span class="actions">⋮</span>
+      </div>
+
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109 · BULLDOZER</div>
+        </div>
+      </div>
+
+      <div class="body" style="padding-bottom: 16px;">
+        <div class="filter-row">
+          <div class="chip-filter active">Abiertos (2)</div>
+          <div class="chip-filter">Cerrados (8)</div>
+          <div class="chip-filter">Todos</div>
+        </div>
+
+        <div class="banner followup">
+          <span style="font-size:14px;">ℹ</span>
+          <span><strong>2 seguimientos abiertos</strong> de inspecciones previas</span>
+        </div>
+
+        <!-- Seguimiento 1 (reciente) -->
+        <div class="followup-card">
+          <div class="followup-head">
+            <span class="followup-parte">TRANSMISIÓN</span>
+            <span class="age-badge">12 días abierto</span>
+          </div>
+          <div class="followup-titulo">Goteo controlado en cárter</div>
+          <div class="followup-desc">"Pequeño goteo en zona del cárter. Nivel estable. Monitorear en próxima inspección."</div>
+          <div class="followup-meta">
+            <span>📋 Insp #2104 · 15 abr</span>
+            <span>👤 Andrés P.</span>
+            <span>📷 1 foto</span>
+          </div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini resolve">✓ Sin intervención</div>
+            <div class="btn-mini keep">↻ Seguimiento</div>
+            <div class="btn-mini escalate">⚠ Intervención</div>
+          </div>
+        </div>
+
+        <!-- Seguimiento 2 (más viejo - alert) -->
+        <div class="followup-card">
+          <div class="followup-head">
+            <span class="followup-parte">MOTOR</span>
+            <span class="age-badge alert">42 días abierto</span>
+          </div>
+          <div class="followup-titulo">Vibración leve a 1800 RPM</div>
+          <div class="followup-desc">"Vibración leve al sostener 1800 RPM bajo carga. No causa pérdida de potencia. Reinspeccionar en 30 días."</div>
+          <div class="followup-meta">
+            <span>📋 Insp #2087 · 16 mar</span>
+            <span>👤 Carlos M.</span>
+          </div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini resolve">✓ Sin intervención</div>
+            <div class="btn-mini keep">↻ Seguimiento</div>
+            <div class="btn-mini escalate">⚠ Intervención</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Modal Resolver -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">3</span> Modal · Sin intervención</div>
+    <div class="screen-caption">Tap "✓ Sin intervención" abre modal con motivo del cierre obligatorio. Emite <code>SeguimientoResuelto_v1</code>. La condición ya no se observa o se resolvió por mantenimiento de rutina.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:58</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Seguimientos del equipo</span>
+      </div>
+
+      <div class="body" style="position: relative; overflow: hidden;">
+        <div style="opacity: .25; pointer-events: none;">
+          <div class="equip-strip">
+            <div class="equip-card">
+              <div class="equip-name">Caterpillar D11T Custom</div>
+              <div class="equip-meta">HD-9908-TX · M-109</div>
+            </div>
+          </div>
+          <div class="followup-card">
+            <div class="followup-titulo">TRANSMISIÓN · Goteo en cárter</div>
+          </div>
+        </div>
+
+        <div class="modal-backdrop">
+          <div class="modal">
+            <h3>
+              <span class="icon-pill resolve">✓</span>
+              No requiere intervención
+            </h3>
+            <div class="subtitle">La condición ya no se observa o fue resuelta. El seguimiento queda cerrado.</div>
+
+            <div class="followup-preview">
+              <div class="label-mini">TRANSMISIÓN · Insp #2104</div>
+              <div style="font-weight:500;color:var(--text);margin-top:2px;">Goteo controlado en cárter</div>
+              <div style="margin-top:4px;color:var(--text-secondary);">"Pequeño goteo en zona del cárter. Nivel estable..."</div>
+              <div class="reportado-por">Abierto por 👤 Andrés P. · 15 abr · 12 días abierto</div>
+            </div>
+
+            <div class="input multiline focused">
+              <div class="label"><span class="req">*</span> Motivo de cierre</div>
+              <div class="value">Verifiqué el cárter en banco — el goteo cesó tras el último mantenimiento programado. La empaquetadura está íntegra.</div>
+            </div>
+
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;line-height:1.4;">
+              Emite <code>SeguimientoResuelto_v1</code> con tu motivo. Queda en el audit trail del equipo.
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:18px;">
+              <div class="btn btn-outline btn-block">Cancelar</div>
+              <div class="btn btn-success btn-block">✓ Cerrar sin intervención</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Tap "Mantener" — toast inline -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">4</span> Continúa en seguimiento</div>
+    <div class="screen-caption">Tap directo en "↻ Seguimiento" sin modal. <strong>No-op silencioso</strong> — no emite evento. Solo toast de confirmación visual y la card resalta "Revisado hoy" para evitar que el técnico lo procese dos veces.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:59</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Seguimientos del equipo</span>
+      </div>
+
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109</div>
+        </div>
+      </div>
+
+      <div class="body" style="padding-bottom: 16px; position: relative;">
+        <div class="filter-row">
+          <div class="chip-filter active">Abiertos (2)</div>
+          <div class="chip-filter">Cerrados (8)</div>
+        </div>
+
+        <!-- Card "vibración" recién marcada como continúa en seguimiento -->
+        <div class="followup-card" style="border-left-color: var(--action-mid); background: var(--action-mid-bg); opacity: .9;">
+          <div class="followup-head">
+            <span class="followup-parte">MOTOR</span>
+            <span class="age-badge warn">↻ Continúa en seguimiento</span>
+          </div>
+          <div class="followup-titulo">Vibración leve a 1800 RPM</div>
+          <div class="followup-desc">"Vibración leve al sostener 1800 RPM bajo carga..."</div>
+          <div class="followup-meta">
+            <span>📋 Insp #2087 · 16 mar</span>
+            <span>👤 Carlos M.</span>
+          </div>
+          <div style="font-size:11px;color:var(--action-mid);margin-top:4px;font-style:italic;">
+            Revisado por ti · ahora mismo
+          </div>
+        </div>
+
+        <!-- Otros seguimientos sin tocar -->
+        <div class="followup-card">
+          <div class="followup-head">
+            <span class="followup-parte">TRANSMISIÓN</span>
+            <span class="age-badge">12 días</span>
+          </div>
+          <div class="followup-titulo">Goteo controlado en cárter</div>
+          <div class="followup-desc">"Pequeño goteo en zona del cárter..."</div>
+          <div class="action-buttons-inline">
+            <div class="btn-mini resolve">✓ Sin intervención</div>
+            <div class="btn-mini keep">↻ Seguimiento</div>
+            <div class="btn-mini escalate">⚠ Intervención</div>
+          </div>
+        </div>
+
+        <div class="toast">
+          <span>↻</span>
+          <span>Continúa en seguimiento</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Wizard Escalar - Paso 1 -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">5</span> Sí requiere intervención · Paso 1</div>
+    <div class="screen-caption">Tap "⚠ Intervención" abre wizard idéntico al verificar preop, pero precarga datos del seguimiento. Parte heredada (inmutable), descripción origen como referencia readonly + nuevo diagnóstico editable. Adjuntos del hallazgo original heredados.</div>
+    <div class="phone">
+      <div class="status-bar"><span>10:00</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="title">Convertir a intervención</span>
+        <span class="actions">×</span>
+      </div>
+      <div class="step-header">
+        <strong>Paso 1 de 2</strong> · Identificación
+      </div>
+
+      <div class="body" style="padding: 12px 0 80px;">
+
+        <!-- Contexto del seguimiento original -->
+        <div class="form-card" style="background: var(--info-bg); border-color: rgba(21,101,192,.2);">
+          <div class="form-card-title" style="color: var(--info);">Seguimiento original</div>
+          <div style="font-size:12px;color:var(--info);margin-bottom:6px;">
+            <strong>Carlos M.</strong> · Insp #2087 · 16 mar · 42 días abierto
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">
+            MOTOR
+          </div>
+          <div style="font-size:13px;color:var(--text);line-height:1.4;">
+            "Vibración leve al sostener 1800 RPM bajo carga. No causa pérdida de potencia. Reinspeccionar en 30 días."
+          </div>
+        </div>
+
+        <!-- Identificación heredada -->
+        <div class="form-card">
+          <div class="form-card-title">Identificación del nuevo hallazgo</div>
+          <div class="input with-arrow" style="opacity:.7;pointer-events:none;">
+            <div class="label">Parte del equipo (heredada · inmutable)</div>
+            <div class="value">MOTOR 🔒</div>
+          </div>
+          <div class="input with-arrow">
+            <div class="label"><span class="req">*</span> Actividad</div>
+            <div class="value">VERIFICACION ESTADO</div>
+          </div>
+          <div class="input multiline">
+            <div class="label"><span class="req">*</span> Diagnóstico actual</div>
+            <div class="value">La vibración aumentó de 1800 a 1500 RPM y ahora se siente en cabina. Confirmado con vibrómetro: 4.2 mm/s en eje X. Requiere intervención.</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">Describe lo que observas hoy. La descripción original queda como referencia.</div>
+          </div>
+        </div>
+
+        <!-- Evidencias -->
+        <div class="form-card">
+          <div class="form-card-title">
+            Evidencias
+            <span style="float:right;font-size:11px;color:var(--action-high);font-weight:400;"><span class="req">*</span> ≥1 foto requerida</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">
+            <div style="aspect-ratio:1;border:1.5px dashed var(--primary);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:22px;">+</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);">El seguimiento original no tenía adjuntos. Captura la evidencia actual.</div>
+        </div>
+
+      </div>
+      <div class="bottom-bar">
+        <div class="btn btn-primary btn-block">Continuar →</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Wizard Escalar - Paso 2 (resumido — idéntico a verificar paso 2) -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">6</span> Sí requiere intervención · Paso 2</div>
+    <div class="screen-caption">Análisis técnico igual que el wizard de verificar paso 2. Al guardar emite <strong>2 eventos</strong>: <code>HallazgoRegistrado_v1</code> con AccionRequerida=RequiereIntervencion + <code>SeguimientoEscalado_v1</code> que cierra el seguimiento original referenciando el nuevo hallazgo.</div>
+    <div class="phone">
+      <div class="status-bar"><span>10:02</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="title">Convertir a intervención</span>
+        <span class="actions">×</span>
+      </div>
+      <div class="step-header">
+        <strong>Paso 2 de 2</strong> · Análisis técnico
+        <span style="float:right;color:var(--primary);font-weight:500;">▾ Paso previo</span>
+      </div>
+
+      <div class="body" style="padding: 12px 0 80px;">
+
+        <div style="margin: 0 16px 12px; padding: 8px 12px; background: var(--info-bg); border-radius: 6px; font-size: 11px; color: var(--info); display: flex; gap: 6px; align-items: center;">
+          <span>📋</span>
+          <span>MOTOR · Vibración (escalado de seguimiento Insp #2087)</span>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">Análisis técnico</div>
+          <div class="input multiline">
+            <div class="label"><span class="req">*</span> Acción correctiva</div>
+            <div class="value">Reemplazar soportes de motor y rebalancear ejes. Verificar holgura en cigüeñal post-intervención.</div>
+          </div>
+          <div class="input with-arrow">
+            <div class="label"><span class="req">*</span> Causa de la falla</div>
+            <div class="value">Desgaste por uso normal</div>
+          </div>
+          <div class="input with-arrow">
+            <div class="label"><span class="req">*</span> Tipo de falla</div>
+            <div class="value">Mecánica</div>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-title">
+            Repuestos requeridos
+            <span style="float:right;font-size:11px;color:var(--action-high);font-weight:400;"><span class="req">*</span> ≥1 requerido</span>
+          </div>
+          <div style="border:1px solid var(--divider);border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div class="input with-arrow" style="margin-bottom:8px;">
+              <div class="label"><span class="req">*</span> Tipo de repuesto</div>
+              <div class="value">Soporte motor (cód. 502)</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+              <div class="input" style="flex:1;margin-bottom:0;">
+                <div class="label">Cantidad</div>
+                <div class="value">2</div>
+              </div>
+              <div style="font-size:13px;color:var(--text-secondary);padding-bottom:14px;">Und</div>
+            </div>
+          </div>
+          <div style="margin-top:4px;">
+            <span style="color:var(--primary);font-size:13px;font-weight:500;">+ Agregar otro repuesto</span>
+          </div>
+        </div>
+
+        <div style="margin: 0 16px 12px; padding: 8px 12px; background: #ECEFF1; border-radius: 6px; font-size: 11px; color: var(--text-secondary); display: flex; gap: 6px; align-items: flex-start;">
+          <span>ℹ</span>
+          <span>Al guardar se emiten <code>HallazgoRegistrado_v1</code> + <code>SeguimientoEscalado_v1</code> (cierra el seguimiento original referenciando el nuevo hallazgo).</span>
+        </div>
+
+      </div>
+      <div class="bottom-bar">
+        <div class="btn btn-primary btn-block">Guardar como hallazgo con intervención</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Lista actualizada -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">7</span> Después de procesar</div>
+    <div class="screen-caption">Tras procesar los 2 seguimientos abiertos. Las cards procesadas quedan atenuadas con su badge de resultado. Filtros permiten alternar entre Abiertos/Cerrados/Todos.</div>
+    <div class="phone">
+      <div class="status-bar"><span>10:05</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Seguimientos del equipo</span>
+      </div>
+
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109</div>
+        </div>
+      </div>
+
+      <div class="body" style="padding-bottom: 16px;">
+        <div class="filter-row">
+          <div class="chip-filter">Abiertos (0)</div>
+          <div class="chip-filter active">Cerrados (10)</div>
+          <div class="chip-filter">Todos</div>
+        </div>
+
+        <div class="banner followup">
+          <span style="font-size:14px;">✓</span>
+          <span><strong>2 seguimientos procesados</strong> · 0 abiertos</span>
+        </div>
+
+        <!-- Procesados (atenuados) -->
+        <div class="followup-card processed">
+          <div class="followup-head">
+            <span class="followup-parte">TRANSMISIÓN</span>
+            <span class="processed-tag resolved">✓ Sin intervención</span>
+          </div>
+          <div class="followup-titulo">Goteo controlado en cárter</div>
+          <div class="followup-desc" style="font-size:11px;">Tu motivo: "Verifiqué el cárter en banco — el goteo cesó..."</div>
+          <div class="followup-meta">
+            <span>Cerrado en Insp #2156 · ahora</span>
+          </div>
+        </div>
+
+        <div class="followup-card processed">
+          <div class="followup-head">
+            <span class="followup-parte">MOTOR</span>
+            <span class="processed-tag escalated">⚠ Intervención</span>
+          </div>
+          <div class="followup-titulo">Vibración leve a 1800 RPM</div>
+          <div class="followup-desc" style="font-size:11px;">Convertido en hallazgo con intervención → OT</div>
+          <div class="followup-meta">
+            <span>Escalado a Hallazgo #5012 · ahora</span>
+          </div>
+        </div>
+
+        <!-- Históricos -->
+        <div style="padding: 14px 16px 6px; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .4px;">Histórico del equipo</div>
+
+        <div class="followup-card processed">
+          <div class="followup-head">
+            <span class="followup-parte">FRENOS</span>
+            <span class="processed-tag resolved">✓ Sin intervención</span>
+          </div>
+          <div class="followup-titulo">Pedal blando intermitente</div>
+          <div class="followup-meta">
+            <span>Cerrado · 3 mar</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <h3>Mental model uniforme — las mismas 3 opciones en todo el sistema</h3>
+  <p>Los seguimientos usan exactamente las <strong>mismas 3 opciones de <code>AccionRequerida</code></strong> que el técnico ya conoce de hallazgos manuales y novedades preop. Un solo modelo mental para todo el sistema:</p>
+  <table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px;">
+    <thead>
+      <tr style="background:#f6f8fa;">
+        <th style="text-align:left;padding:8px;border-bottom:1px solid var(--divider);">Opción UI</th>
+        <th style="text-align:left;padding:8px;border-bottom:1px solid var(--divider);">AccionRequerida</th>
+        <th style="text-align:left;padding:8px;border-bottom:1px solid var(--divider);">Evento emitido</th>
+        <th style="text-align:left;padding:8px;border-bottom:1px solid var(--divider);">Estado del seguimiento</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);"><span style="color:var(--action-low);">✓</span> Sin intervención</td>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);"><code>NoRequiereIntervencion</code></td>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);"><code>SeguimientoResuelto_v1</code></td>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);">Resuelto (cerrado)</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);"><span style="color:var(--action-mid);">↻</span> Seguimiento</td>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);"><code>RequiereSeguimiento</code></td>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);"><em>no-op (sin evento)</em></td>
+        <td style="padding:8px;border-bottom:1px solid var(--divider);">Sigue Abierto</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;"><span style="color:var(--action-high);">⚠</span> Intervención</td>
+        <td style="padding:8px;"><code>RequiereIntervencion</code></td>
+        <td style="padding:8px;"><code>SeguimientoEscalado_v1</code> + <code>HallazgoRegistrado_v1</code></td>
+        <td style="padding:8px;">Escalado (cerrado)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:20px;">Lifecycle del seguimiento</h3>
+  <p>Aggregate <code>SeguimientoHallazgo</code> con identidad propia, transversal a inspecciones del mismo equipo:</p>
+  <pre style="font-size:11px;background:#f6f8fa;padding:12px;border-radius:6px;margin-top:8px;line-height:1.5;">
+[Inspección #2087 firmada con hallazgo AccionRequerida=RequiereSeguimiento]
+   └─ saga abre → SeguimientoAbierto_v1
+                    Estado = Abierto
+        ↓
+   [Pasan días/semanas]
+        ↓
+[Inspección #2156 del mismo equipo]
+   └─ Pantalla 1: banner azul + botón "↻ Traer de seguimiento [2]"
+   └─ Pantalla 2: lista con 3 acciones por seguimiento (mismo lenguaje que hallazgo)
+
+   ✓ Sin intervención  → SeguimientoResuelto_v1     (Estado = Resuelto)
+   ↻ Seguimiento       → no-op (sin evento)         (Estado sigue = Abierto)
+   ⚠ Intervención      → SeguimientoEscalado_v1     (Estado = Escalado)
+                         + HallazgoRegistrado_v1 con RequiereIntervencion
+  </pre>
+
+  <h3 style="margin-top:20px;">Eventos nuevos del catálogo</h3>
+  <ul>
+    <li><strong><code>SeguimientoAbierto_v1</code></strong> — emitido por la saga al firmar inspección con hallazgos en seguimiento. Crea el aggregate.</li>
+    <li><strong><code>SeguimientoResuelto_v1</code></strong> — técnico cierra el seguimiento porque la condición ya no se observa. Motivo obligatorio. Mapea a "Sin intervención".</li>
+    <li><strong><code>SeguimientoEscalado_v1</code></strong> — técnico convierte el seguimiento en hallazgo con intervención. Referencia al nuevo <code>HallazgoEscaladoId</code>. Mapea a "Intervención".</li>
+  </ul>
+  <p>Total: <strong>+3 eventos</strong>. Catálogo MVP pasa de 17 a <strong>20 eventos</strong>.</p>
+  <p>"Seguimiento" (mantener abierto) es <strong>no-op silencioso</strong>: no emite evento, solo da feedback visual al técnico. Decisión 2b confirmada el 2026-04-28.</p>
+
+  <h3 style="margin-top:20px;">Decisiones aprobadas (2026-04-28)</h3>
+  <ul>
+    <li><strong>Mismas 3 opciones que en hallazgos</strong>: Sin intervención / Seguimiento / Intervención. El técnico aprende un solo mental model que aplica a hallazgo manual, novedad preop y seguimiento previo.</li>
+    <li><strong>Aggregate separado</strong> de Inspeccion: el seguimiento es transversal a múltiples inspecciones del equipo, tiene su propio lifecycle.</li>
+    <li><strong>Decisión 1 — Cualquier técnico puede cerrar</strong>: cualquier técnico que inspeccione el equipo posteriormente puede resolver/escalar el seguimiento. El problema es del equipo, no de la persona que lo abrió. La identidad queda en el audit (`AbiertoPor` + `CerradoPor`).</li>
+    <li><strong>Decisión 2 — "Seguimiento" es no-op silencioso</strong>: no emite evento, solo feedback visual. Decisión deliberada para mantener el catálogo más simple — si más adelante necesitamos reportería de "¿hace cuánto nadie revisa?", se agrega el evento como cambio aditivo.</li>
+    <li><strong>Decisión 3 — SLA con alerta progresiva + email al supervisor a 90 días</strong>:
+      <ul>
+        <li>0–30 días: badge azul "Abierto"</li>
+        <li>30–90 días: badge naranja "Atención"</li>
+        <li>+90 días: badge rojo "Vencido" + email diario al supervisor del equipo hasta que alguien lo cierre/escale</li>
+        <li><strong>No</strong> se genera OT automática (faltan datos: tipo, causa, repuestos)</li>
+        <li><strong>No</strong> se bloquea la inspección si hay seguimientos vencidos</li>
+      </ul>
+    </li>
+    <li><strong>Decisión 4 — Cross-obra: el seguimiento sigue al equipo</strong>: si el equipo cambia de obra, el seguimiento sigue activo y se ve desde la nueva obra. La identidad del seguimiento es <code>EquipoId + HallazgoOrigenId</code>, independiente de la obra.</li>
+    <li><strong>"Intervención" emite 2 eventos atómicos</strong>: cierra el seguimiento original + crea el hallazgo con intervención en la inspección actual. La OT correctiva se genera al firmar esa inspección.</li>
+    <li><strong>Badge de antigüedad</strong>: refleja exactamente la regla de SLA — 0-30 azul / 30-90 naranja / +90 rojo. Ayuda a priorizar visualmente.</li>
+    <li><strong>Heredan adjuntos del hallazgo origen</strong>: si los hay. El técnico que escala puede agregar los suyos.</li>
+  </ul>
+</footer>
+
+</body>
+</html>
