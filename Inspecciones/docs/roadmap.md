@@ -35,7 +35,7 @@
 | 0.10 | Wireframes flujo seguimientos del equipo | ✅ | `02d-wireframes-seguimientos.html` |
 | 0.11 | SOW / arquitectura resumida para equipo interno | ✅ | `03-sow-consultor.md` |
 | 0.12 | ADR-001: REST sobre VPN (no CDC) | ✅ | `00-investigacion-mercado.md` §9.11 |
-| 0.13 | ADR-002: Microsoft Entra ID | ✅ | Pendiente confirmar mecanismo actual de auth Sinco |
+| 0.13 | ADR-002: estrategia de identidad | 🟡 | Tentativo. Recomendación original (Entra ID) revisada el 2026-04-29 — el módulo no elige IdP, hereda del host PWA. Pendiente confirmar mecanismo del host. |
 | 0.14 | ADR-003: Generación de OT correctiva en MYE | ✅ | `01-modelo-dominio.md` §13 |
 | 0.15 | ADR-004: Sincronización de catálogos | ✅ | `00-investigacion-mercado.md` §9.15 |
 | 0.16 | ADR-005: Azure SignalR para push del cierre | ✅ | `01-modelo-dominio.md` §14 |
@@ -74,16 +74,18 @@
 
 ## Fase 2 — Autenticación y autorización
 
+> **⚠️ Aclaración 2026-04-29:** Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente, no app standalone. El módulo NO elige IdP autónomamente — hereda el contexto del usuario del host. Los pasos abajo asumen Entra ID (recomendación original del ADR-002), pero son condicionales: si el host PWA usa otra cosa, los pasos 2.2/2.3/2.4 los implementa el host (no este módulo) y este módulo solo aporta validación cloud-side del token recibido (2.6/2.7) y autorización por claim (2.5/2.8).
+
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 2.1 | Confirmar mecanismo actual de auth en Sinco | ⏳ | Bloqueante de ADR-002 |
-| 2.2 | Diseño de sync usuarios Sinco → Entra ID | ⏳ | Pull-based, vía REST sobre VPN |
-| 2.3 | Implementar job de sync de usuarios | ⏳ | Wolverine timer trigger |
-| 2.4 | Configurar app registration en Entra ID | ⏳ | OAuth2/OIDC scopes |
-| 2.5 | Definir scopes por comando (least privilege) | ⏳ | Documentar matriz comando→scope |
-| 2.6 | Implementar JWT validation middleware | ⏳ | Backend cloud |
+| 2.1 | Confirmar mecanismo actual de auth del host PWA Sinco MYE móvil | ⏳ | **Bloqueante real de ADR-002** |
+| 2.2 | Diseño de sync usuarios Sinco → IdP del host | ⏳ | Pull-based, vía REST sobre VPN — **solo si el host no lo tiene ya** |
+| 2.3 | Implementar job de sync de usuarios | ⏳ | Wolverine timer trigger — **solo si el host no lo tiene ya** |
+| 2.4 | Configurar app registration en el IdP del host | ⏳ | OAuth2/OIDC scopes — **responsabilidad del host PWA** |
+| 2.5 | Definir matriz comando → claim/rol requerido (least privilege) | ⏳ | Independiente del IdP elegido |
+| 2.6 | Implementar JWT validation middleware en backend cloud | ⏳ | Configurable según IdP del host |
 | 2.7 | Implementar JWT validation en APIs Sinco on-prem | ⏳ | Cross-team con equipos Sinco |
-| 2.8 | Política de gestión de claims (obras del técnico) | ⏳ | `sinco_obras` claim del JWT |
+| 2.8 | Política de gestión de claims (obras del técnico) | ⏳ | Mapeo del claim que use el host (p. ej. `sinco_obras` si Entra ID) |
 | 2.9 | Tests de auth end-to-end | ⏳ | |
 
 ---
@@ -221,7 +223,7 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 4.18 | `GET /usuarios?role=tecnico` (sync hacia Entra ID) | 🚧 | ADR-002 |
+| 4.18 | `GET /usuarios?role=tecnico` (sync hacia el IdP del host) | 🚧 | Condicional al ADR-002 (tentativo). Solo aplica si el host PWA no tiene ya el sync. |
 | 4.19 | `GET /usuarios/{id}` (detalle con obras asignadas) | 🚧 | |
 
 ---

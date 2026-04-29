@@ -1527,7 +1527,7 @@ POST /api/v1/mye/ot-correctivas
        → con BOM consolidado al cerrar la inspección
 
 GET  /api/v1/admin/usuarios?desde={lastSync}
-       → para sync de identidades hacia Entra (ADR-002)
+       → para sync de identidades hacia el IdP del host PWA (condicional al ADR-002, tentativo)
 ```
 
 Total: **15 endpoints** en cuatro módulos Sinco. Pendiente actualizar §9.13 del doc principal con esta lista. **Nota:** §12.9.7 actualiza este inventario a 17 endpoints sumando catálogos de causa/tipo de falla.
@@ -2862,7 +2862,7 @@ Hay tres formas de comunicar al cliente cuando MYE responde:
 - **Latencia mínima**: tan pronto como el aggregate emite `InspeccionCerrada_v1` u `OTGeneracionFallida_v1`, el cliente recibe el push (típicamente <100ms).
 - **Eficiente en móvil**: una sola conexión persistente vs múltiples roundtrips de polling. Mejor batería.
 - **Multi-técnico**: si tres técnicos contribuyentes están viendo la inspección, los tres reciben la actualización simultáneamente.
-- **Azure managed**: SignalR Service en Azure es serverless, escala automático, integración con Entra ID.
+- **Azure managed**: SignalR Service en Azure es serverless, escala automático, integración nativa con OAuth2/OIDC (Entra ID o el IdP que se acuerde en ADR-002).
 - **PWA-friendly**: el cliente SignalR estándar funciona en navegadores modernos sin requerir Service Worker complejo.
 
 ### Arquitectura
@@ -3055,7 +3055,7 @@ El cliente actualiza la pantalla 7 en vivo cuando recibe el push de SignalR, sin
 1. Recibir DDL del preoperacional → cerrar el shape exacto del DTO `NovedadPreopDto` y el mapping a `Hallazgo` cuando se verifica.
 2. Confirmar lista de tipos de inspección del MVP (motor, hidráulica, etc.) y definir las plantillas correspondientes.
 3. Validar invariantes con un PO/operador con experiencia.
-4. Definir scopes OAuth2 que protegen cada comando (a partir del ADR-002).
+4. Definir el modelo de autorización por comando (claims/roles que cada handler exige). El mecanismo de auth lo provee el host PWA Sinco MYE móvil; ADR-002 cierra el detalle del IdP (estado tentativo).
 5. Bocetar wireframes que materialicen los flujos del §7 — Tractian como referencia visual prioritaria.
 
 ---

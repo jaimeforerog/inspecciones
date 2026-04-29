@@ -1128,6 +1128,8 @@ B-5: Integración punta a punta + ajustes          (2 sem)       ◀ todos
 
 **Estado:** Tentativamente aceptada, dependiente de confirmar el mecanismo de auth actual de Sinco.
 
+> **⚠️ Aclaración 2026-04-29 — necesita revisión:** este análisis se redactó asumiendo que el módulo cloud elegía su propio IdP de manera autónoma. La realidad operativa es distinta: **Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente** y hereda el contexto del usuario del host. La opción C ("Microsoft Entra ID") sigue siendo viable solo si el host PWA usa Entra ID (o se mueve a usarlo); de lo contrario, el módulo cloud debe validar el token que el host emita con su mecanismo actual. La decisión final depende de qué use realmente la app móvil hoy. El análisis de las 5 opciones queda como referencia válida para esa conversación; no se ejecuta nada hasta cerrar el ADR.
+
 ### Contexto
 
 - Los técnicos/ingenieros que usarán el módulo nuevo **son los mismos usuarios que ya existen en Sinco**. No es población nueva.

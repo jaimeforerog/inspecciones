@@ -15,7 +15,7 @@ Sinco construye su **primer despliegue Azure** como módulo nuevo dentro de la a
 
 El módulo permite al técnico recorrer una rutina estandarizada de revisión, verificar las novedades reportadas previamente por el operario, descubrir hallazgos propios, estimar repuestos requeridos, emitir diagnóstico y firmar. Cuando hay hallazgos que requieren intervención formal, se genera automáticamente una OT correctiva en Sinco MYE con el BOM consolidado.
 
-**Stack:** backend .NET (Marten event sourcing sobre PostgreSQL), frontend React + MUI, despliegue en Azure Container Apps. Integración con Sinco on-prem vía REST sobre VPN. Identidad federada via Microsoft Entra ID con sync desde el master de usuarios Sinco.
+**Stack:** backend .NET (Marten event sourcing sobre PostgreSQL), frontend React + MUI **embebido como módulo de la PWA Sinco MYE móvil existente** (no app standalone), despliegue en Azure Container Apps. Integración con Sinco on-prem vía REST sobre VPN. Identidad heredada del host PWA — el módulo no tiene IdP propio; los APIs cloud validan el token que el host emita. Mecanismo concreto del host: ADR-002 (estado tentativo, pendiente de confirmar).
 
 **Calendario estimado:** 16-22 semanas al MVP estable, con tres workstreams paralelos (Landing Zone Azure, APIs Sinco, módulo Inspecciones).
 
@@ -55,7 +55,7 @@ Sinco MYE ya tiene una **app móvil** con módulos de Preoperacional, Estado de 
 4. **Frontend móvil** — React + MUI integrado dentro de la app móvil existente de Sinco MYE.
 5. **Adapters** que consumen las APIs REST de Sinco (Preoperacional, MYE núcleo, Inventario, User master).
 6. **Saga de cierre** que coordina la generación de OT correctiva en MYE.
-7. **Sync de identidad** desde Sinco hacia Microsoft Entra ID (Azure Function timer-triggered).
+7. **Sync de identidad** desde Sinco hacia el IdP que use el host PWA — **alcance condicional al ADR-002**: si el host ya tiene Entra ID con sync de Sinco, este punto desaparece; si no, el módulo no es responsable de implementarlo (es decisión del host).
 8. **Pipeline CI/CD** desde el primer despliegue (Azure DevOps o GitHub Actions).
 9. **Observabilidad end-to-end** — Application Insights, Log Analytics, traces distribuidos.
 10. **Transferencia de conocimiento** al equipo Sinco con horas comprometidas.
@@ -131,7 +131,7 @@ Sinco MYE ya tiene una **app móvil** con módulos de Preoperacional, Estado de 
 - **PostgreSQL Flexible Server** — Marten requiere Postgres. Hosting gestionado, HA opcional según ambiente.
 - **Blob Storage** — fotos de evidencia de hallazgos. SAS para upload directo desde móvil.
 - **API Management** — gateway móvil con políticas, throttling, versionado.
-- **Microsoft Entra ID** — IdP del módulo. Usuarios sincronizados desde el master Sinco.
+- **IdP del host PWA Sinco MYE móvil** — el módulo no elige IdP; valida cloud-side el token que el host emite. Mecanismo concreto: ADR-002 (tentativo).
 - **VPN site-to-site** — túnel hacia los APIs on-prem.
 
 ---
@@ -174,7 +174,7 @@ Sinco MYE ya tiene una **app móvil** con módulos de Preoperacional, Estado de 
 | Real-time push | **Azure SignalR Service** | Push del backend al cliente PWA cuando MYE responde con la OT (ADR-005). Tier Standard prod, Free dev. |
 | Storage | **Blob Storage** | Fotos. SAS para upload directo. |
 | Secrets | **Key Vault** | Conexiones, certificados. Private endpoint. |
-| Identity | **Microsoft Entra ID** | Tenant dedicado al módulo. Sync desde Sinco. |
+| Identity | **Heredada del host PWA Sinco MYE móvil** | El módulo no tiene IdP propio; valida cloud-side el token que el host emita. ADR-002 (tentativo). |
 | Observability | **Application Insights + Log Analytics** | Telemetría .NET nativa, traces distribuidos. |
 | Security baseline | **Defender for Cloud** | En suscripciones prod y non-prod. |
 | Networking | **Hub-spoke + VPN Gateway** | Site-to-site hacia Sinco. |
@@ -218,7 +218,7 @@ Total: **17 endpoints** distribuidos en **cuatro módulos** Sinco. Lista complet
 
 - Paginación con headers estándar.
 - Error envelope unificado.
-- Auth OAuth2 client credentials contra Entra ID.
+- Auth: el cliente móvil ya autenticado por el host PWA propaga el token a las APIs Sinco; éstas validan el token con el IdP que se acuerde en ADR-002.
 - Versionado en URL (`/api/v1/...`).
 - OpenAPI/Swagger publicado por cada endpoint.
 - Idempotency-Key en POSTs no-idempotentes.
@@ -233,9 +233,9 @@ Estos ADRs ya están aceptados y **no son negociables sin reabrir la discusión 
 
 Toda integración cross-bounded-context entre el módulo Azure y los módulos on-prem se hace por **REST request/reply sobre VPN**. Se descartó la opción CDC + Service Bus por sobre-ingeniería para el primer despliegue cloud de Sinco. Cumplimiento parcial con la guía EDA Sinco — divergencia consciente y reversible. Detalle completo en `00-investigacion-mercado.md §9.11`.
 
-### ADR-002 — Identidad: Microsoft Entra ID con sync pull-based desde Sinco
+### ADR-002 — Identidad: heredada del host PWA Sinco MYE móvil (tentativo, pendiente de cerrar)
 
-Microsoft Entra ID como IdP del módulo cloud. Usuarios sincronizados desde el master Sinco vía Azure Function timer-triggered que llama `GET /admin/usuarios` por VPN. Token JWT estándar OAuth2/OIDC validado tanto por APIs cloud como por APIs on-prem (`Microsoft.AspNetCore.Authentication.JwtBearer` + JWKS público). Claims enrichment con `sinco_roles` y `sinco_obras` para autorización fina. Detalle completo en `00-investigacion-mercado.md §9.14`.
+El módulo Inspecciones es **componente embebido en la PWA Sinco MYE móvil existente**, no app standalone — por lo tanto no elige IdP autónomamente. El cliente móvil llega a las APIs cloud y on-prem con el token que el host PWA ya posee tras el login. Las APIs cloud y on-prem validan ese token contra el IdP que se acuerde formalmente en este ADR. La opción C originalmente recomendada (Microsoft Entra ID con sync desde Sinco) sigue siendo viable solo si el host PWA usa Entra ID o se mueve a usarlo; en caso contrario hay que adoptar lo que el host use. El análisis de las 5 opciones evaluadas y la decisión final en `00-investigacion-mercado.md §9.14`.
 
 ### ADR-003 — Generación de OT correctiva en MYE
 
