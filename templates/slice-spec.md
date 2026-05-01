@@ -109,7 +109,7 @@ Si el slice emite eventos al frontend en tiempo real (ADR-005):
 
 - Hub que emite: `{InspeccionesHub}`.
 - Evento push: `{NombreEvento}`.
-- Audiencia: `{User=tecnicoId | Group=obraId}`.
+- Audiencia: `{User=tecnicoId | Group=proyectoId}`.
 - Fallback: HTTP polling cada 5s si SignalR no disponible.
 
 ## 11. Impacto en adapters Sinco on-prem (si aplica)

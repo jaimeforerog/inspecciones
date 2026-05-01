@@ -3,7 +3,7 @@
 **Para:** ingeniero mecánico / consultor de mantenimiento que va a validar el proceso de inspección técnica
 **De:** equipo de producto Sinco MYE
 **Fecha:** 2026-04-27
-**Tu rol:** validar que el proceso modelado refleja la realidad operativa del taller y de obra. Identificar vacíos, supuestos incorrectos, oportunidades de mejora.
+**Tu rol:** validar que el proceso modelado refleja la realidad operativa del taller y de proyecto. Identificar vacíos, supuestos incorrectos, oportunidades de mejora.
 
 ---
 
@@ -34,7 +34,7 @@ El módulo **Inspecciones técnicas** es complementario:
 | Quién la hace | Operario / conductor | **Técnico o ingeniero** que conoce el equipo |
 | Frecuencia | Cada turno | Programada / a demanda |
 | Profundidad | Reporte rápido de novedades | Diagnóstico técnico, mediciones, identificación de causa raíz |
-| Dónde se hace | Pie de obra, antes de operar | Taller / centro de operaciones / pie de máquina |
+| Dónde se hace | Pie de proyecto, antes de operar | Taller / centro de operaciones / pie de máquina |
 | Output principal | "Aquí pasa algo raro" | "Esto es lo que pasa, esta es la causa, así se arregla, estos son los repuestos" |
 
 El técnico tiene **dos fuentes de hallazgos** durante su inspección:
@@ -80,8 +80,8 @@ Estos son catálogos del ERP — el técnico no inventa entradas, solo elige.
 | Causa de falla | DESGASTE_NORMAL, FALLA_LUBRICACION, FATIGA_MATERIAL, OPERACIÓN_INCORRECTA… | Sí (a confirmar contigo si los códigos cubren bien) |
 | Tipo de falla | MECÁNICA, HIDRÁULICA, ELÉCTRICA, NEUMÁTICA, ESTRUCTURAL… | Sí (a confirmar contigo) |
 | Repuestos / insumos | Filtro de aceite, ACPM, empaquetadura, etc. | Sí |
-| Ubicaciones | Patios, talleres, frentes de obra | Sí |
-| Obras | Las obras donde Sinco gestiona maquinaria | Sí |
+| Ubicaciones | Patios, talleres, frentes de proyecto | Sí |
+| Proyectos | Los proyectos donde Sinco gestiona maquinaria (el ERP los nombra "obras" — el módulo usa "proyecto" desde 2026-04-30, followup #4) | Sí |
 
 Si descubres que **falta** algo en un catálogo, no lo creas tú — escala al admin del catálogo de Sinco. En el módulo, lo que no encaja queda como **observación de campo libre**.
 
@@ -114,7 +114,7 @@ En la barra inferior hay un botón prominente **"+ Iniciar inspección"**. Lo to
 
 ### Paso 3 — Selecciona equipo
 
-Ve los equipos disponibles en sus obras (filtrados automáticamente por las obras que tiene asignadas, traídas del JWT). Los equipos con novedades preop pendientes aparecen destacados.
+Ve los equipos disponibles en sus proyectos (filtrados automáticamente por los proyectos que tiene asignados, traídos del JWT). Los equipos con novedades preop pendientes aparecen destacados.
 
 Selecciona el bulldozer Caterpillar D11T → tap en el equipo. **La rutina técnica se deriva automáticamente del grupo del equipo** (BULLDOZER tiene una sola rutina técnica que cubre todas las partes aplicables; no hay subdivisiones tipo "inspección de motor" vs "inspección hidráulica").
 
@@ -122,7 +122,7 @@ La inspección queda **en ejecución** y se le presenta el equipo con su context
 
 > **Decisión MVP**: una rutina técnica por grupo de mantenimiento. Si en el futuro aparece la necesidad de distinguir contextos (post-mantenimiento, certificación periódica, etc.), se reabre como cambio aditivo.
 
-> **Pregunta para ti**: ¿el técnico debería poder inspeccionar cualquier equipo de sus obras, o solo los que tienen novedades pendientes / vencimiento de rutina próximo? El MVP es permisivo (cualquier equipo de las obras). Si conviene restringir, lo ajustamos.
+> **Pregunta para ti**: ¿el técnico debería poder inspeccionar cualquier equipo de sus proyectos, o solo los que tienen novedades pendientes / vencimiento de rutina próximo? El MVP es permisivo (cualquier equipo de los proyectos). Si conviene restringir, lo ajustamos.
 
 ### Paso 4 — Ejecuta la rutina y/o registra hallazgos
 
@@ -218,30 +218,29 @@ Estas son las reglas internas que el sistema hace cumplir. Las llamamos "invaria
 8. **Si un hallazgo tiene "No requiere intervención" o "Requiere seguimiento":** NO se pueden cargar acción correctiva, causa, tipo de falla ni insumos. (Es prohibición, no opcional.)
 9. **Toda novedad técnica debe tener descripción no vacía.** No se puede registrar un hallazgo "fantasma".
 10. **El que firma la inspección debe ser el técnico asignado o un supervisor**. No puede firmar otro técnico distinto.
-11. **Para hallazgos críticos** (cuando hay al menos uno "Sí requiere intervención"), hoy no obligamos un dictamen específico — el técnico puede dejar "Puede operar" si así lo cree. Pero esto está en discusión.
+11. **Dictamen siempre obligatorio al firmar** (selector con 3 valores: Puede operar / Con restricción / No puede operar), independiente de si hay hallazgos con intervención o no. Sin restricción sobre cuál de los 3 valores se elige cuando hay intervención — es decisión del técnico. Adicionalmente, el dictamen se sincroniza a MYE en cada firma como "dictamen vigente del equipo", no solo cuando se genera OT. *(Confirmado por Sergio 2026-04-30. Cerraba pregunta abierta de la regla original #11.)*
+12. **Una sola inspección técnica abierta por equipo a la vez.** Si un técnico abre una inspección sobre el equipo X y otro técnico tap "Iniciar inspección" sobre el mismo equipo, el sistema lleva al segundo a la inspección ya activa para que **contribuya** (agregar hallazgos, evidencia) — NO se crea una segunda inspección. Una inspección queda en `EnEjecucion` desde su creación hasta firma o cancelación, y durante ese tiempo varios técnicos pueden colaborar sobre ella. *(Confirmado por Sergio 2026-04-30. Modelado como invariante I-I1 §15.7 + proyección con uniqueness §15.12.6.)*
+13. **Una inspección firmada con hallazgos que requieren intervención puede ser rechazada por un aprobador**, evitando que se cree la OT en el ERP. Solo es posible mientras la OT aún NO ha sido solicitada (una vez enviada al ERP, cancelar requiere coordinación cross-team y queda fuera del alcance). El motivo del rechazo es obligatorio (mínimo 10 caracteres, texto libre). La inspección queda en estado terminal `CerradaSinOT` con discriminador `RechazadaPorAprobador`, libera el equipo para nuevas inspecciones, y dispara notificación a usuarios con capability `recibir-alertas-ot-rechazada` (típicamente técnico firmante + supervisor). El aprobador que rechaza NO se notifica a sí mismo. *(Confirmado por Sergio 2026-04-30. Modelado en ADR-007 §17 — comando `RechazarGenerarOT`, evento `GeneracionOTRechazada_v1`, invariante I-F6.)*
+14. **Al firmar la inspección, el sistema genera automáticamente un PDF** (con header del equipo + proyecto, lista de hallazgos con miniaturas de fotos, repuestos estimados, diagnóstico, dictamen, firma escaneada, GPS de inicio y firma, lista de técnicos contribuyentes, hash SHA-256 al pie). El PDF se sube a Azure Blob y queda disponible para auditoría aun cuando la inspección cierre sin OT. **Cuando se genera la OT correctiva en MYE, el módulo adjunta el PDF a la OT** mediante endpoint dedicado del ERP (multipart). Si el adjunto falla, la OT queda creada igual y el PDF entra a queue manual de reintento — no se revierte la OT por falla del adjunto. *(Decisión 2026-04-30 a partir de observación Sergio. Modelado en ADR-007 §17 sub-sección "Generación de PDF de inspección y adjunto a OT".)*
+15. **No se permite iniciar inspección sobre equipos sin rutina técnica configurada en su grupo.** El sistema rechaza el inicio con un mensaje accionable: el admin del catálogo de rutinas debe activar la rutina del grupo antes de inspeccionar el equipo. *(Decisión 2026-04-30 derivada del análisis de datos de los 27 clientes ERP — varios clientes tienen equipos sin partes en el catálogo, hipótesis: esos equipos están en grupos sin rutina configurada. Modelado como invariante I-I2 §15.7.)*
 
 > **Preguntas para ti:**
 > - ¿La regla #8 (prohibición de causa/tipo en seguimiento) es razonable? ¿O en seguimiento sí conviene saber al menos la causa sospechada?
-> - ¿La regla #11 te parece correcta? ¿O cuando hay hallazgo "Sí requiere intervención" debería forzarse un dictamen al menos "Con restricción"?
 > - ¿Qué reglas operativas que tú aplicas en campo NO están en esta lista y deberían estar?
 
 ---
 
-## 7. Tipos de inspección técnica que estamos pensando para el primer release
+## 7. Cómo organizamos las rutinas técnicas en el primer release
 
-El módulo permite definir múltiples tipos de rutina técnica. Para el MVP estamos pensando en empezar con 3 rutinas, idealmente las que más volumen tengan en operación real:
+El módulo trabaja con **una rutina técnica única por grupo de equipo** (BULLDOZER, RETROEXCAVADORA, MOTONIVELADORA, etc.). La rutina lista las partes inspeccionables del grupo (motor, sistema hidráulico, transmisión, cabina, llantas, etc.) y el técnico decide qué inspeccionar en cada visita y registra los hallazgos donde corresponda. **No subdividimos en "inspección de motor" vs "inspección hidráulica"** — el técnico cubre en una sola visita lo que considera relevante.
 
-| Tipo de rutina técnica | Ejemplo de qué cubre | Frecuencia esperada |
-|---|---|---|
-| Inspección de motor | Niveles, fugas, temperatura, presión, ruidos anormales | Mensual o por horómetro |
-| Inspección hidráulica | Estado de mangueras, fugas, presión de circuitos, calidad del aceite | Mensual o por horómetro |
-| Inspección post-mantenimiento | Verificación después de un mantenimiento programado, antes de devolver el equipo a operación | Cada vez que sale de taller |
+La rutina **se deriva automáticamente** del grupo del equipo al iniciar la inspección — el técnico no la elige.
 
 > **Preguntas para ti:**
-> - ¿Estos 3 son los correctos para empezar, o cambiarías alguno?
-> - ¿Faltan rutinas obvias? Por ejemplo: inspección de llantas, inspección eléctrica, inspección estructural, certificación periódica.
-> - ¿Las rutinas técnicas se aplican igual a todos los equipos del mismo grupo, o varían entre marcas/modelos? (ej. ¿la rutina de motor de un D11T Caterpillar es la misma que la de un D65PX2 Komatsu?)
-> - ¿Cuántos items típicos lleva una rutina de motor bien diseñada? ¿20? ¿50?
+> - ¿Tiene sentido operativo una sola rutina por grupo, o en campo esperarías subdividir por enfoque (ej. visita exclusiva al sistema hidráulico)? Si subdividirías, ¿con qué criterio?
+> - ¿Las partes inspeccionables del grupo varían entre marcas/modelos? (ej. ¿la lista de partes de un D11T Caterpillar es la misma que la de un D65PX2 Komatsu, ambos del grupo BULLDOZER?)
+> - ¿Cuántas partes/sub-sistemas cabría esperar en una rutina bien diseñada de bulldozer? ¿15? ¿40?
+> - **Heads-up Fase 2 (no MVP):** en una segunda fase agregaremos un tipo distinto de inspección llamado **monitoreo**, donde sí hay actividades pre-definidas con valores esperados (ej. *batería · medir voltaje · rango 11–15 V*). Si la medición sale del rango, el sistema crea automáticamente un hallazgo de seguimiento al equipo. ¿Qué mediciones críticas esperarías ver en monitoreo de bulldozer / retroexcavadora?
 
 ---
 
@@ -252,7 +251,7 @@ Si tienes tiempo limitado, enfócate en estos cinco puntos en orden de prioridad
 1. **Las 3 acciones requeridas** (§5). ¿Cubren la realidad? ¿Las consecuencias automáticas son operativamente correctas?
 2. **Los catálogos cerrados** (§3.2). ¿La nomenclatura es la que se usa en el campo? ¿Faltan códigos críticos? ¿Sobran?
 3. **Las reglas #8 y #11** (§6). Ambas tienen tensión.
-4. **Los tipos de rutina técnica del MVP** (§7). ¿Son los correctos para empezar?
+4. **El alcance de la rutina técnica única por grupo** (§7). ¿La premisa "una rutina por grupo, sin subdividir" se sostiene en operación real?
 5. **El flujo del técnico paso a paso** (§4). ¿Hay fricciones obvias o pasos que no tienen sentido en orden mecánico real?
 
 ---
@@ -287,7 +286,7 @@ Estos archivos están disponibles si quieres profundizar en algo específico, pe
 - `Plantillas Excel/Insumos.xlsx` — formato del catálogo de repuestos.
 - `Plantillas Excel/preoperacional.xlsx` — ejemplo de cómo se define una rutina hoy.
 - `Plantillas Excel/imagenes app.docx` — capturas de pantalla del flujo actual de Inspecciones en la app móvil.
-- `02-wireframes-mobile.html` — wireframes de las pantallas del módulo nuevo (8 pantallas, abre en navegador).
+- `Plantillas Excel/mock del diseño.docx` — mock de las pantallas del módulo nuevo (13 pantallas en 4 secciones: Etapa inicial común / Hallazgo no requiere intervención / Hallazgo sí requiere intervención / Importar hallazgo). Fuente visual vigente desde 2026-04-30.
 
 ---
 

@@ -41,7 +41,7 @@
 
 ### 1. `InspeccionIniciada_v1`
 
-**Crea el aggregate.** Único evento que arranca el stream. El comando `IniciarInspeccion` lo emite tras validar que el técnico tenga acceso a la obra del equipo (claim `sinco_obras` del JWT) y que no exista otra inspección activa para ese equipo (I1b — bloqueo por equipo).
+**Crea el aggregate.** Único evento que arranca el stream. El comando `IniciarInspeccion` lo emite tras validar que el técnico tenga acceso al proyecto del equipo (claim `sinco_obras` del JWT, mantenido literal del lado ERP — el módulo lo consume como "proyectos") y que no exista otra inspección activa para ese equipo (I1b — bloqueo por equipo).
 
 ```csharp
 public sealed record InspeccionIniciada_v1(
@@ -50,12 +50,12 @@ public sealed record InspeccionIniciada_v1(
     Guid RutinaId,                 // derivada del Grupo del equipo (no la elige el técnico)
     string RutinaCodigo,           // legible para UI ("INSP. BULL.MOTOR")
     string TecnicoIniciador,
-    Guid ObraId,
+    Guid ProyectoId,
     UbicacionGps Ubicacion,        // OBLIGATORIO — GPS del teléfono al iniciar
     DateTime IniciadaEn);
 ```
 
-**Invariantes / validaciones**: I1b (no haya otra inspección `EnEjecucion` para el equipo), técnico autorizado para la obra, GPS no vacío.
+**Invariantes / validaciones**: I1b (no haya otra inspección `EnEjecucion` para el equipo), técnico autorizado para el proyecto, GPS no vacío.
 
 **Apply**: setea identidad del aggregate, estado `EnEjecucion`, agrega al técnico iniciador a `TecnicosContribuyentes`.
 
@@ -431,7 +431,7 @@ public sealed record OTGeneracionFallida_v1(
 
 ## 3. Fichas por evento — aggregate `SeguimientoHallazgo`
 
-> **Justificación del aggregate** (§15.8.1): antes del 2026-04-28, un hallazgo con `AccionRequerida=RequiereSeguimiento` quedaba enterrado en una inspección cerrada (inmutable) sin mecanismo para cerrarlo después. El aggregate `SeguimientoHallazgo` es **transversal al equipo** (sigue al equipo cross-obra) y resuelve este gap.
+> **Justificación del aggregate** (§15.8.1): antes del 2026-04-28, un hallazgo con `AccionRequerida=RequiereSeguimiento` quedaba enterrado en una inspección cerrada (inmutable) sin mecanismo para cerrarlo después. El aggregate `SeguimientoHallazgo` es **transversal al equipo** (sigue al equipo cross-proyecto) y resuelve este gap.
 
 ### 18. `SeguimientoAbierto_v1`
 
@@ -552,6 +552,6 @@ Para evitar confusión al leer commits viejos o el histórico §2.1-§14:
 - §14 de `01-modelo-dominio.md` — ADR-005 (SignalR para push real-time del cierre).
 - §9.11 de `00-investigacion-mercado.md` — ADR-001 (REST sobre VPN vs CDC + Service Bus).
 - §9.15 de `00-investigacion-mercado.md` — ADR-004 (sincronización de catálogos de referencia).
-- `02-wireframes-mobile.html` — pantalla 3 con 3 botones simétricos.
-- `02b-wireframes-novedades-preop.html` — flujo variante B con 3 acciones inline.
-- `02d-wireframes-seguimientos.html` — flujo nuevo del aggregate Seguimiento.
+- `Plantillas Excel/mock del diseño.docx` — fuente visual vigente desde 2026-04-30 (mock de Daniel, 13 pantallas en 4 secciones).
+- `02d-wireframes-seguimientos.html` — flujo nuevo del aggregate Seguimiento (sigue vigente).
+- ~~`02-wireframes-mobile.html`~~ y ~~`02b-wireframes-novedades-preop.html`~~ — eliminados el 2026-04-30 (superseded por mock de Daniel).

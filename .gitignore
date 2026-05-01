@@ -17,3 +17,7 @@ Thumbs.db
 bin/
 obj/
 .vs/
+
+# Archivos grandes (videos de reuniones, etc.) — usar Git LFS si se necesita versionar
+*.mp4
+*.mov

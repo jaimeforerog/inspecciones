@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wireframes — Inspección de monitoreo (Fase 2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #0D47A1;
+  --primary-dark: #062B66;
+  --primary-light: #E3F2FD;
+  --header-grad-from: #BBDEFB;
+  --header-grad-to: #FFFFFF;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #5F6368;
+  --text-muted: #9AA0A6;
+  --divider: #E0E4E9;
+  --required: #D32F2F;
+  --action-low: #2E7D32;
+  --action-low-bg: #E8F5E9;
+  --action-mid: #EF6C00;
+  --action-mid-bg: #FFF3E0;
+  --action-high: #C62828;
+  --action-high-bg: #FFEBEE;
+  --info: #1565C0;
+  --info-bg: #E3F2FD;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-card: 0 1px 3px rgba(0,0,0,.04);
+  --overlay: rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #ECEFF1;
+  color: var(--text);
+  padding: 32px 24px 64px;
+  min-height: 100vh;
+}
+
+.page-header { max-width: 1280px; margin: 0 auto 32px; text-align: center; }
+.page-header h1 { font-weight: 500; font-size: 28px; margin-bottom: 8px; color: #263238; }
+.page-header p { color: var(--text-secondary); font-size: 14px; max-width: 820px; margin: 0 auto; line-height: 1.5; }
+.page-header .meta {
+  display: inline-flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; justify-content: center;
+  font-size: 12px; color: #455A64;
+}
+.page-header .meta span {
+  background: rgba(13,71,161,.08); padding: 4px 10px; border-radius: 12px; color: var(--primary-dark);
+}
+.tag-proposal {
+  display: inline-block; background: var(--action-mid); color: white;
+  padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 500;
+  margin-top: 8px;
+}
+
+.flow {
+  display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; align-items: flex-start;
+  max-width: 1700px; margin: 0 auto;
+}
+
+.screen-wrapper { display: flex; flex-direction: column; align-items: center; width: 360px; }
+
+.screen-label {
+  font-weight: 500; margin-bottom: 8px; font-size: 13px; color: #37474F;
+  display: flex; align-items: center; gap: 8px;
+}
+.screen-label .num {
+  background: var(--primary); color: white; width: 24px; height: 24px;
+  border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
+.screen-caption {
+  font-size: 11px; color: var(--text-secondary); text-align: center;
+  margin-bottom: 12px; line-height: 1.4; max-width: 340px;
+}
+
+.phone {
+  width: 360px; height: 760px;
+  background: var(--bg);
+  border-radius: 36px; border: 10px solid #1c1c1c;
+  box-shadow: 0 16px 40px rgba(0,0,0,.18);
+  overflow: hidden; position: relative; display: flex; flex-direction: column;
+}
+.phone::before {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 110px; height: 22px; background: #1c1c1c;
+  border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; z-index: 100;
+}
+
+.status-bar {
+  height: 24px; padding: 4px 18px; display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--text-secondary); align-items: center;
+}
+.app-bar {
+  height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border-bottom: 1px solid var(--divider);
+}
+.app-bar .icon { font-size: 18px; color: var(--text-secondary); }
+.app-bar .title { flex: 1; font-size: 16px; font-weight: 500; }
+.app-bar .actions { font-size: 18px; color: var(--text-secondary); }
+
+.body { flex: 1; overflow-y: auto; padding: 12px 16px 80px; }
+
+.equip-strip {
+  background: linear-gradient(180deg, var(--header-grad-from), var(--header-grad-to));
+  padding: 16px;
+}
+.equip-card {
+  background: var(--surface); border-radius: 8px; padding: 12px 14px;
+  box-shadow: var(--shadow-card);
+}
+.equip-name { font-size: 16px; font-weight: 500; color: var(--text); }
+.equip-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+.banner {
+  background: var(--info-bg); padding: 10px 12px; border-radius: 6px;
+  font-size: 12px; color: var(--info); margin-bottom: 12px;
+  border-left: 3px solid var(--info);
+  display: flex; gap: 8px; align-items: flex-start;
+}
+.banner.warning { background: var(--action-mid-bg); color: var(--action-mid); border-left-color: var(--action-mid); }
+.banner.success { background: var(--action-low-bg); color: var(--action-low); border-left-color: var(--action-low); }
+.banner.error { background: var(--action-high-bg); color: var(--action-high); border-left-color: var(--action-high); }
+
+.btn {
+  padding: 12px 20px; border-radius: 6px; font-size: 14px; font-weight: 500;
+  text-align: center; cursor: pointer; display: inline-flex; align-items: center;
+  justify-content: center; gap: 8px;
+}
+.btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-1); }
+.btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-block   { display: flex; width: 100%; }
+.btn-success { background: var(--action-low); color: white; }
+.btn-text    { background: transparent; color: var(--primary); padding: 10px; }
+
+.bottom-bar {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--surface); border-top: 1px solid var(--divider);
+  padding: 12px 16px; display: flex; gap: 8px; z-index: 5;
+}
+.bottom-bar .btn { flex: 1; }
+
+/* Modal */
+.modal-backdrop {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  background: var(--overlay); display: flex; align-items: flex-end;
+  z-index: 200;
+}
+.modal {
+  background: var(--surface);
+  border-top-left-radius: 16px; border-top-right-radius: 16px;
+  padding: 20px 16px 24px; width: 100%;
+  max-height: 86%; overflow-y: auto;
+}
+.modal h3 {
+  font-size: 17px; font-weight: 500; color: var(--text); margin-bottom: 4px;
+}
+.modal .subtitle {
+  font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;
+}
+.modal .input {
+  border: 1.5px solid var(--divider); border-radius: 6px; padding: 10px 12px;
+  margin-bottom: 12px; background: var(--surface);
+}
+.modal .input.focused { border-color: var(--primary); }
+.modal .input.multiline { min-height: 80px; }
+.modal .input .label { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+.modal .input .value { font-size: 14px; color: var(--text); }
+.modal .input .req { color: var(--required); margin-right: 4px; }
+
+/* === Selector de tipo de inspección (decisión 2026-04-30) === */
+.tipo-card {
+  background: var(--surface); border: 1.5px solid var(--divider);
+  border-radius: 8px; padding: 16px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+}
+.tipo-card.selected { border-color: var(--primary); background: var(--primary-light); }
+.tipo-card .icon-circle {
+  width: 44px; height: 44px; border-radius: 50%; flex: 0 0 44px;
+  background: var(--primary-light); color: var(--primary);
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+}
+.tipo-card.selected .icon-circle { background: var(--primary); color: white; }
+.tipo-card .tipo-info { flex: 1; }
+.tipo-card .tipo-nombre { font-size: 15px; font-weight: 500; color: var(--text); }
+.tipo-card .tipo-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; line-height: 1.4; }
+
+/* === Cards de rutina de monitoreo (selector) === */
+.rutina-card {
+  background: var(--surface); border-radius: 8px; padding: 14px;
+  margin-bottom: 10px; box-shadow: var(--shadow-card); cursor: pointer;
+  border-left: 3px solid var(--primary);
+}
+.rutina-card .rutina-nombre { font-size: 15px; font-weight: 500; color: var(--text); }
+.rutina-card .rutina-meta {
+  display: flex; gap: 12px; margin-top: 4px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.rutina-card .rutina-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.rutina-card .arrow { float: right; color: var(--text-muted); font-size: 18px; margin-top: -22px; }
+
+/* === Items del checklist === */
+.item-card {
+  background: var(--surface); border-radius: 8px; padding: 12px;
+  margin-bottom: 10px; box-shadow: var(--shadow-card);
+  border-left: 3px solid var(--divider);
+}
+.item-card.in-range { border-left-color: var(--action-low); }
+.item-card.out-of-range { border-left-color: var(--action-high); background: #fff8f8; }
+.item-card.pending { border-left-color: var(--text-muted); opacity: .8; }
+.item-card.skipped { border-left-color: var(--text-muted); background: #fafafa; opacity: .7; }
+
+.item-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+}
+.item-parte {
+  font-size: 11px; font-weight: 600; color: var(--primary);
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.item-status-pill {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+}
+.item-status-pill.ok { background: var(--action-low-bg); color: var(--action-low); }
+.item-status-pill.fail { background: var(--action-high-bg); color: var(--action-high); }
+.item-status-pill.pend { background: #f1f5f9; color: var(--text-secondary); }
+.item-status-pill.skip { background: #f1f5f9; color: var(--text-secondary); }
+
+.item-actividad { font-size: 14px; font-weight: 500; color: var(--text); margin-top: 4px; }
+.item-rango { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Captura numérica inline */
+.numeric-capture {
+  display: flex; gap: 8px; align-items: center; margin-top: 10px;
+}
+.numeric-capture .input-num {
+  flex: 1; border: 1.5px solid var(--divider); border-radius: 6px;
+  padding: 10px 12px; background: var(--surface);
+  font-size: 16px; font-weight: 500; color: var(--text);
+}
+.numeric-capture .input-num.captured-ok { border-color: var(--action-low); }
+.numeric-capture .input-num.captured-fail { border-color: var(--action-high); }
+.numeric-capture .unit-label {
+  font-size: 13px; color: var(--text-secondary); padding: 0 4px;
+}
+
+/* Captura cualitativa (3 botones radio) */
+.cualitativa-capture {
+  display: flex; gap: 6px; margin-top: 10px;
+}
+.cualitativa-capture .btn-cualit {
+  flex: 1; padding: 10px 6px; border-radius: 6px;
+  font-size: 12px; font-weight: 500; text-align: center;
+  border: 1.5px solid var(--divider); background: var(--surface);
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+}
+.cualitativa-capture .btn-cualit.bueno.selected {
+  background: var(--action-low-bg); border-color: var(--action-low); color: var(--action-low); font-weight: 600;
+}
+.cualitativa-capture .btn-cualit.regular.selected {
+  background: var(--action-mid-bg); border-color: var(--action-mid); color: var(--action-mid); font-weight: 600;
+}
+.cualitativa-capture .btn-cualit.malo.selected {
+  background: var(--action-high-bg); border-color: var(--action-high); color: var(--action-high); font-weight: 600;
+}
+
+/* Observación opcional */
+.obs-input {
+  margin-top: 10px; padding: 8px 10px; background: #fafafa;
+  border: 1px solid var(--divider); border-radius: 4px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.obs-input.filled { background: #f5f5f5; color: var(--text); }
+
+/* Acciones del item (omitir, etc.) */
+.item-actions {
+  display: flex; gap: 6px; margin-top: 8px;
+}
+.btn-skip {
+  font-size: 11px; padding: 4px 10px; border-radius: 4px;
+  background: transparent; color: var(--text-secondary);
+  border: 1px solid var(--divider); cursor: pointer;
+}
+
+/* Banner de hallazgo automático generado */
+.hallazgo-auto {
+  margin-top: 8px; padding: 8px 10px;
+  background: var(--action-mid-bg); color: var(--action-mid);
+  border-radius: 4px; font-size: 11px;
+  display: flex; align-items: center; gap: 6px;
+}
+.hallazgo-auto .icon { font-size: 14px; }
+
+/* Skip motivo */
+.skip-info {
+  margin-top: 8px; padding: 8px 10px;
+  background: #f1f5f9; color: var(--text-secondary);
+  border-radius: 4px; font-size: 11px; font-style: italic;
+}
+
+/* Progress de la inspección */
+.progress-box {
+  background: var(--surface); border-radius: 8px; padding: 12px 14px;
+  margin-bottom: 12px; box-shadow: var(--shadow-card);
+}
+.progress-box .pb-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.progress-box .pb-stats {
+  display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text);
+}
+.progress-box .pb-stats span strong { color: var(--primary); }
+.progress-bar {
+  height: 6px; background: var(--divider); border-radius: 3px; margin-top: 8px; overflow: hidden;
+}
+.progress-bar .fill { height: 100%; background: var(--primary); width: 50%; }
+
+/* Dictamen radio */
+.dictamen-options {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 8px;
+}
+.dictamen-radio {
+  border: 1.5px solid var(--divider); border-radius: 6px;
+  padding: 10px 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+}
+.dictamen-radio.selected.puede { border-color: var(--action-low); background: var(--action-low-bg); }
+.dictamen-radio.selected.restricc { border-color: var(--action-mid); background: var(--action-mid-bg); }
+.dictamen-radio.selected.nopuede { border-color: var(--action-high); background: var(--action-high-bg); }
+.dictamen-radio .pill-color {
+  width: 12px; height: 12px; border-radius: 50%; flex: 0 0 12px;
+}
+.dictamen-radio.puede .pill-color { background: var(--action-low); }
+.dictamen-radio.restricc .pill-color { background: var(--action-mid); }
+.dictamen-radio.nopuede .pill-color { background: var(--action-high); }
+.dictamen-radio .dict-label { font-size: 13px; font-weight: 500; }
+
+/* Firma */
+.firma-area {
+  height: 120px; border: 1.5px dashed var(--divider); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 12px; margin-top: 8px;
+  background: #fafafa;
+}
+
+footer {
+  max-width: 1280px; margin: 60px auto 0; padding: 24px;
+  background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-card);
+}
+footer h3 { color: var(--primary); font-size: 16px; font-weight: 500; margin-bottom: 12px; }
+footer ul { padding-left: 20px; line-height: 1.6; font-size: 13px; color: var(--text); }
+footer ul li { margin-bottom: 6px; }
+footer code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Wireframes — Inspección de monitoreo</h1>
+  <p>Flujo del técnico para inspección de tipo <strong>Monitoreo</strong> (Fase 2 / roadmap 10.4). Recorre los items de una rutina (Sistema eléctrico, Transmisión, Sistema de frenos, …) capturando mediciones numéricas o evaluaciones cualitativas. Los items con resultado fuera de rango (numérico) o calificación <code>Malo</code> (cualitativo) generan automáticamente un hallazgo con seguimiento. Modelado en §12.11.5 de <code>01-modelo-dominio.md</code>.</p>
+  <span class="tag-proposal">Propuesta · Fase 2</span>
+  <div class="meta">
+    <span>Stack visual: PWA React + MUI</span>
+    <span>Decisiones 1–6 cerradas el 2026-04-30</span>
+    <span>Catálogo desde ERP (ADR-004)</span>
+    <span>Dictamen libre como en técnica</span>
+  </div>
+</div>
+
+<div class="flow">
+
+  <!-- 1. Modal selector de tipo de inspección -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">1</span> Modal · Tipo de inspección</div>
+    <div class="screen-caption">Tras seleccionar equipo (pantalla 4 del mock de Daniel — Caterpillar D11T), tap "Iniciar inspección" abre este modal con dos opciones: <strong>Técnica</strong> (flujo MVP) o <strong>Monitoreo</strong> (Fase 2). Decisión 2026-04-30: un solo entry point, modal interno para elegir tipo.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:30</span><span>● ● ● ●</span></div>
+      <div class="app-bar"><span class="title">Previsualización equipo</span><span class="actions">×</span></div>
+
+      <div class="body" style="position: relative; overflow: hidden;">
+        <div style="opacity: .25; pointer-events: none;">
+          <div class="equip-card" style="margin: 0 0 12px;">
+            <div class="equip-name">Caterpillar D11T Custom</div>
+            <div class="equip-meta">HD-9908-TX · M-109 · BULLDOZER</div>
+          </div>
+        </div>
+
+        <div class="modal-backdrop">
+          <div class="modal">
+            <h3>¿Qué tipo de inspección?</h3>
+            <div class="subtitle">Elige el flujo según lo que vas a hacer en campo.</div>
+
+            <div class="tipo-card">
+              <div class="icon-circle">🛠</div>
+              <div class="tipo-info">
+                <div class="tipo-nombre">Técnica</div>
+                <div class="tipo-desc">Inspección libre. Registras hallazgos manuales o desde preoperacional / seguimiento.</div>
+              </div>
+            </div>
+
+            <div class="tipo-card selected">
+              <div class="icon-circle">📊</div>
+              <div class="tipo-info">
+                <div class="tipo-nombre">Monitoreo</div>
+                <div class="tipo-desc">Recorres una rutina con items pre-definidos. Mediciones y evaluaciones por componente.</div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:18px;">
+              <div class="btn btn-outline btn-block">Cancelar</div>
+              <div class="btn btn-primary btn-block">Continuar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Selector de rutina de monitoreo -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">2</span> Selector de rutina</div>
+    <div class="screen-caption">Tras elegir Monitoreo, aparece la lista de rutinas disponibles para el grupo del equipo (BULLDOZER tiene 3 rutinas en este ejemplo, alineado con `inspeccion.xlsx`). Tap en card → inicia la inspección con esa rutina y recorre sus items.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:31</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Elegir rutina</span>
+      </div>
+
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109 · BULLDOZER</div>
+        </div>
+      </div>
+
+      <div class="body">
+        <div class="banner">
+          <span style="font-size:14px;">ℹ</span>
+          <span>3 rutinas de monitoreo disponibles para grupo BULLDOZER. Elige una para inspeccionar.</span>
+        </div>
+
+        <div class="rutina-card">
+          <div class="rutina-nombre">Sistema eléctrico</div>
+          <div class="rutina-meta">
+            <span>📋 7 items</span>
+            <span>3 mediciones · 4 cualitativos</span>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+
+        <div class="rutina-card">
+          <div class="rutina-nombre">Transmisión</div>
+          <div class="rutina-meta">
+            <span>📋 3 items</span>
+            <span>0 mediciones · 3 cualitativos</span>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+
+        <div class="rutina-card">
+          <div class="rutina-nombre">Sistema de frenos</div>
+          <div class="rutina-meta">
+            <span>📋 2 items</span>
+            <span>0 mediciones · 2 cualitativos</span>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Inspección en curso — checklist con items -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">3</span> Inspección en curso · Checklist</div>
+    <div class="screen-caption">Lista vertical scrolleable con todos los items de la rutina seleccionada. Cada item es una card con captura específica según <code>EvaluacionEsperada</code>: input numérico (con rango) o 3 botones radio (Bueno / Regular / Malo). Estados visuales: <strong>verde</strong> (en rango / Bueno), <strong>rojo</strong> (fuera de rango / Malo — dispara hallazgo automático), <strong>gris</strong> (pendiente). Banner inline cuando se genera hallazgo automático.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:42</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Sistema eléctrico</span>
+        <span class="actions">⋮</span>
+      </div>
+
+      <div class="body" style="padding-bottom: 80px;">
+        <div class="progress-box">
+          <div class="pb-title">Progreso de la inspección</div>
+          <div class="pb-stats">
+            <span><strong>4</strong> de 7 items</span>
+            <span>2 ✓ · 1 ❌ · 1 omitido · 3 pendientes</span>
+          </div>
+          <div class="progress-bar"><div class="fill" style="width: 57%;"></div></div>
+        </div>
+
+        <!-- Item 1: numérico, en rango -->
+        <div class="item-card in-range">
+          <div class="item-head">
+            <span class="item-parte">BATERÍA</span>
+            <span class="item-status-pill ok">✓ En rango</span>
+          </div>
+          <div class="item-actividad">Voltaje de arranque</div>
+          <div class="item-rango">Esperado: 12.2–12.3 V</div>
+          <div class="numeric-capture">
+            <input type="text" class="input-num captured-ok" value="12.25" readonly>
+            <span class="unit-label">V</span>
+          </div>
+        </div>
+
+        <!-- Item 2: numérico, FUERA de rango (dispara hallazgo) -->
+        <div class="item-card out-of-range">
+          <div class="item-head">
+            <span class="item-parte">BATERÍA</span>
+            <span class="item-status-pill fail">❌ Fuera de rango</span>
+          </div>
+          <div class="item-actividad">Medición de voltaje</div>
+          <div class="item-rango">Esperado: 12.3–12.5 V</div>
+          <div class="numeric-capture">
+            <input type="text" class="input-num captured-fail" value="10.20" readonly>
+            <span class="unit-label">V</span>
+          </div>
+          <div class="obs-input filled">📝 "Multímetro con pila baja, posible falsa lectura."</div>
+          <div class="hallazgo-auto">
+            <span class="icon">⚠</span>
+            <span><strong>Hallazgo creado:</strong> seguimiento abierto al firmar inspección.</span>
+          </div>
+        </div>
+
+        <!-- Item 3: numérico, pendiente -->
+        <div class="item-card pending">
+          <div class="item-head">
+            <span class="item-parte">ALTERNADOR</span>
+            <span class="item-status-pill pend">Pendiente</span>
+          </div>
+          <div class="item-actividad">Voltaje de carga</div>
+          <div class="item-rango">Esperado: 12.7–12.8 V</div>
+          <div class="numeric-capture">
+            <input type="text" class="input-num" placeholder="Ingresa valor">
+            <span class="unit-label">V</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="btn btn-text" style="flex:0;">← Volver</div>
+        <div class="btn btn-primary" style="flex:1;">Continuar a firma</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Inspección — items cualitativos + omitidos -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">4</span> Items cualitativos + omitidos (scroll abajo)</div>
+    <div class="screen-caption">Continuación del checklist. Items cualitativos con 3 botones radio (Bueno / Regular / Malo). El <strong>Malo</strong> dispara hallazgo automático con seguimiento (decisión 2 confirmada 2026-04-30). Items omitidos muestran motivo en lugar de captura. <strong>Regular</strong> NO dispara hallazgo — solo se registra para audit.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:46</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Sistema eléctrico</span>
+        <span class="actions">⋮</span>
+      </div>
+
+      <div class="body" style="padding-bottom: 80px;">
+
+        <!-- Item 4: cualitativo BUENO -->
+        <div class="item-card in-range">
+          <div class="item-head">
+            <span class="item-parte">CONECTORES BATERÍA</span>
+            <span class="item-status-pill ok">✓ Bueno</span>
+          </div>
+          <div class="item-actividad">Revisar estado de conectores</div>
+          <div class="cualitativa-capture">
+            <div class="btn-cualit bueno selected">Bueno</div>
+            <div class="btn-cualit regular">Regular</div>
+            <div class="btn-cualit malo">Malo</div>
+          </div>
+        </div>
+
+        <!-- Item 5: cualitativo MALO (dispara hallazgo) -->
+        <div class="item-card out-of-range">
+          <div class="item-head">
+            <span class="item-parte">CABLEADO</span>
+            <span class="item-status-pill fail">❌ Malo</span>
+          </div>
+          <div class="item-actividad">Revisar estado de cableado</div>
+          <div class="cualitativa-capture">
+            <div class="btn-cualit bueno">Bueno</div>
+            <div class="btn-cualit regular">Regular</div>
+            <div class="btn-cualit malo selected">Malo</div>
+          </div>
+          <div class="obs-input filled">📝 "Aislante quemado en cable a luces traseras. Riesgo de corto."</div>
+          <div class="hallazgo-auto">
+            <span class="icon">⚠</span>
+            <span><strong>Hallazgo creado:</strong> seguimiento abierto al firmar inspección.</span>
+          </div>
+        </div>
+
+        <!-- Item 6: cualitativo REGULAR (no dispara hallazgo) -->
+        <div class="item-card in-range" style="border-left-color: var(--action-mid);">
+          <div class="item-head">
+            <span class="item-parte">LUCES</span>
+            <span class="item-status-pill" style="background: var(--action-mid-bg); color: var(--action-mid);">⚠ Regular</span>
+          </div>
+          <div class="item-actividad">Revisar luces bajas</div>
+          <div class="cualitativa-capture">
+            <div class="btn-cualit bueno">Bueno</div>
+            <div class="btn-cualit regular selected">Regular</div>
+            <div class="btn-cualit malo">Malo</div>
+          </div>
+          <div class="obs-input filled">📝 "Una luz con halo amarillento, lente sucio."</div>
+          <div style="margin-top:6px; font-size:10px; color: var(--text-muted); font-style: italic;">
+            Regular no genera hallazgo automático — queda en audit.
+          </div>
+        </div>
+
+        <!-- Item 7: omitido -->
+        <div class="item-card skipped">
+          <div class="item-head">
+            <span class="item-parte">LUCES</span>
+            <span class="item-status-pill skip">⊘ Omitido</span>
+          </div>
+          <div class="item-actividad">Revisar luces altas</div>
+          <div class="skip-info">Motivo: "Sin luz solar suficiente para evaluar el haz"</div>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="btn btn-text" style="flex:0;">← Volver</div>
+        <div class="btn btn-primary" style="flex:1;">Continuar a firma</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Modal · Omitir item -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">5</span> Modal · Omitir item</div>
+    <div class="screen-caption">Tap en menú "⋮" del item → "Omitir". Modal pide motivo obligatorio (≥ 10 chars). Emite <code>ItemMonitoreoOmitido_v1</code>. Casos típicos: instrumento descargado, condición externa impide medir, parte inaccesible.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:44</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Sistema eléctrico</span>
+      </div>
+
+      <div class="body" style="position: relative; overflow: hidden;">
+        <div style="opacity: .25; pointer-events: none;">
+          <div class="item-card pending">
+            <div class="item-actividad">Revisar luces altas</div>
+          </div>
+        </div>
+
+        <div class="modal-backdrop">
+          <div class="modal">
+            <h3>Omitir este item</h3>
+            <div class="subtitle">No se podrá medir/evaluar. Queda en audit con tu motivo.</div>
+
+            <div style="background: #fafafa; padding: 10px 12px; border-radius: 6px; margin-bottom: 12px;">
+              <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">LUCES</div>
+              <div style="font-size: 13px; font-weight: 500;">Revisar luces altas</div>
+            </div>
+
+            <div class="input multiline focused">
+              <div class="label"><span class="req">*</span> Motivo (mín. 10 caracteres)</div>
+              <div class="value">Sin luz solar suficiente para evaluar el haz al amanecer.</div>
+            </div>
+
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;line-height:1.4;">
+              Items omitidos NO bloquean firma. El supervisor verá el motivo en audit.
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:18px;">
+              <div class="btn btn-outline btn-block">Cancelar</div>
+              <div class="btn btn-primary btn-block">Omitir item</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Cierre y firma -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">6</span> Cierre · Dictamen y firma</div>
+    <div class="screen-caption">Misma pantalla que inspección técnica (mock de Daniel image10 + cierre). Resumen de hallazgos auto-generados (seguimientos), observación general libre, dictamen libre del técnico (decisión 6 — no derivado), firma manuscrita. Al firmar, la saga §17 abre los seguimientos automáticos y el handler genera el PDF (decisión §17 ADR-007).</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:52</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Cerrar inspección</span>
+      </div>
+
+      <div class="body" style="padding-bottom: 80px;">
+        <div class="banner warning">
+          <span style="font-size:14px;">⚠</span>
+          <span><strong>2 hallazgos automáticos</strong> se abrirán como seguimientos al firmar.</span>
+        </div>
+
+        <!-- Resumen items -->
+        <div class="progress-box">
+          <div class="pb-title">Resumen Sistema eléctrico (7 items)</div>
+          <div class="pb-stats" style="flex-direction: column; gap: 4px;">
+            <span>✓ <strong>3 OK</strong> — voltaje arranque, alternador, conectores</span>
+            <span>❌ <strong>2 fuera de rango / Malo</strong> — batería voltaje, cableado</span>
+            <span>⚠ <strong>1 Regular</strong> — luces bajas</span>
+            <span>⊘ <strong>1 omitido</strong> — luces altas</span>
+          </div>
+        </div>
+
+        <!-- Observación general -->
+        <div class="item-card" style="border-left-color: var(--info);">
+          <div class="item-parte">OBSERVACIÓN GENERAL</div>
+          <div style="margin-top:8px; font-size: 12px; line-height: 1.4; color: var(--text);">
+            Equipo en condición operable con observaciones. Recomiendo cambio de batería en próximo mantenimiento programado. Multímetro requiere recalibración (lectura 10.20 V puede ser falsa).
+          </div>
+        </div>
+
+        <!-- Dictamen -->
+        <div class="item-card" style="border-left-color: var(--primary);">
+          <div class="item-parte">DICTAMEN <span class="req" style="color: var(--required);">*</span></div>
+          <div class="dictamen-options">
+            <div class="dictamen-radio puede">
+              <span class="pill-color"></span>
+              <span class="dict-label">Puede operar</span>
+            </div>
+            <div class="dictamen-radio restricc selected">
+              <span class="pill-color"></span>
+              <span class="dict-label">Con restricción</span>
+            </div>
+            <div class="dictamen-radio nopuede">
+              <span class="pill-color"></span>
+              <span class="dict-label">No puede operar</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Firma -->
+        <div class="item-card" style="border-left-color: var(--primary);">
+          <div class="item-parte">FIRMA <span class="req" style="color: var(--required);">*</span></div>
+          <div class="firma-area">Toca para firmar</div>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div class="btn btn-success btn-block">✓ Firmar y cerrar</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <h3>Mapeo acción → evento → resultado</h3>
+  <ul>
+    <li><strong>Tap "Continuar" en modal tipo (pantalla 1)</strong> con Monitoreo seleccionada → navega a selector de rutina (pantalla 2). No emite evento todavía.</li>
+    <li><strong>Tap en card de rutina (pantalla 2)</strong> → comando <code>IniciarInspeccionMonitoreo</code> → emite <code>InspeccionIniciada_v1</code> con <code>Tipo=Monitoreo</code>, <code>RutinaMonitoreoSeleccionadaId</code>, <code>ItemsSnapshot</code>.</li>
+    <li><strong>Captura numérica en rango</strong> (pantalla 3 ítem 1) → <code>MedicionRegistrada_v1</code> con <code>FueraDeRango=false</code>.</li>
+    <li><strong>Captura numérica fuera de rango</strong> (pantalla 3 ítem 2) → <strong>2 eventos atómicos</strong> en un único <code>SaveChangesAsync</code>: <code>MedicionRegistrada_v1</code> con <code>FueraDeRango=true</code> + <code>HallazgoRegistrado_v1</code> con <code>Origen=Monitoreo</code> + <code>AccionRequerida=RequiereSeguimiento</code>.</li>
+    <li><strong>Captura cualitativa Bueno</strong> (pantalla 4 ítem 4) → <code>EvaluacionCualitativaRegistrada_v1</code> con <code>Calificacion=Bueno</code>.</li>
+    <li><strong>Captura cualitativa Malo</strong> (pantalla 4 ítem 5) → <strong>2 eventos atómicos</strong>: <code>EvaluacionCualitativaRegistrada_v1</code> con <code>Calificacion=Malo</code> + <code>HallazgoRegistrado_v1</code> con <code>Origen=Monitoreo</code> + <code>RequiereSeguimiento</code>.</li>
+    <li><strong>Captura cualitativa Regular</strong> (pantalla 4 ítem 6) → <code>EvaluacionCualitativaRegistrada_v1</code> con <code>Calificacion=Regular</code>. <strong>No dispara hallazgo</strong> (decisión 2 — solo Malo).</li>
+    <li><strong>Omitir item</strong> (pantalla 5) → <code>ItemMonitoreoOmitido_v1</code> con motivo ≥ 10 chars.</li>
+    <li><strong>Tap "Firmar y cerrar"</strong> (pantalla 6) → comando <code>FirmarInspeccion</code> → 3 eventos atómicos: <code>DiagnosticoEmitido_v1</code> + <code>DictamenEstablecido_v1</code> + <code>InspeccionFirmada_v1</code>. Las sagas reaccionan: <code>AbrirSeguimientosSaga</code> abre los hallazgos automáticos como seguimientos; <code>SincronizarDictamenVigenteSaga</code> hace PUT a MYE; <code>GenerarPdfInspeccionSaga</code> renderiza el PDF.</li>
+  </ul>
+
+  <h3 style="margin-top:20px;">Decisiones reflejadas (chat 2026-04-30)</h3>
+  <ul>
+    <li><strong>Decisión 1 — Items numéricos O cualitativos, mutuamente exclusivos.</strong> Cada item del catálogo es uno o el otro; el value object <code>EvaluacionEsperada</code> tiene 2 subtipos disjuntos.</li>
+    <li><strong>Decisión 2 — Solo Malo dispara hallazgo automático.</strong> Regular se registra como audit pero no abre seguimiento. Bueno tampoco. Numérico fuera de rango sí.</li>
+    <li><strong>Decisión 4 — Rutina = sistema (eléctrico / transmisión / frenos), técnico elige al iniciar.</strong> N rutinas por grupo, no derivada automáticamente como en técnica.</li>
+    <li><strong>Decisión 5 — Catálogo desde ERP (ADR-004).</strong> Endpoint nuevo <code>GET /api/v1/rutinas-monitoreo?grupo={g}</code> — pendiente coordinación con David (doc 07 pregunta 6).</li>
+    <li><strong>Decisión 6 — Dictamen libre del técnico</strong> (mismo mental model que técnica, V-F4 sin cambio). El sistema NO deriva automáticamente, el técnico interpreta.</li>
+    <li><strong>Modelo de UX (apuesta razonable):</strong> entry único "Iniciar inspección" → modal con tipo → selector de rutina → checklist vertical scrolleable. Cada item con captura inline (sin modal por item, salvo Omitir).</li>
+  </ul>
+
+  <h3 style="margin-top:20px;">Pendiente confirmar (cola de Fase 2)</h3>
+  <ul>
+    <li>¿Frecuencia / programación previa de inspecciones de monitoreo? (mensual, por horómetro). Roadmap 10.2 lo difería — ¿entra junto con monitoreo en Fase 2?</li>
+    <li>¿Items obligatorios vs saltables? Al firmar, ¿todos los items deben tener registro o basta con observación general? (Actualmente: omitir es válido con motivo, sin bloqueo de firma.)</li>
+    <li>¿Adjuntos por item (foto del componente medido)? Especialmente útil cuando se califica <code>Malo</code> — sería evidencia para el seguimiento.</li>
+    <li>¿"Observación general" como evento separado (<code>ObservacionGeneralRegistrada_v1</code>) o atributo de <code>InspeccionFirmada_v1</code>? El segundo es más simple.</li>
+    <li>¿Lecturas de medidores (Medidor 1 / Medidor 2) al iniciar inspección de monitoreo? El comando <code>IniciarInspeccionMonitoreo</code> ya las admite — UX pendiente decidir si es obligatorio capturar.</li>
+    <li>¿El técnico puede cambiar la rutina mid-inspección? (Ej. inició "Sistema eléctrico" pero quiere cambiar a "Transmisión".) Mi apuesta: no — si cambia, debe cancelar y reiniciar.</li>
+    <li>¿Pregunta abierta para falsa lectura?: el caso del item 2 (10.20 V con observación "multímetro con pila baja") muestra que la observación justifica falsa medición. ¿Hay acción explícita "descartar marca" antes de firmar para evitar el seguimiento? §12.11.5 punto 12 lo deja como pregunta abierta para Fase 2.</li>
+  </ul>
+
+  <h3 style="margin-top:20px;">Conexión con el modelo de dominio</h3>
+  <ul>
+    <li><code>01-modelo-dominio.md</code> §12.11.5 — modelo completo de inspección de monitoreo (13 puntos detallados).</li>
+    <li><code>01-modelo-dominio.md</code> §15.4 — eventos diferidos a Fase 2 (los 4 nuevos del flujo).</li>
+    <li><code>01-modelo-dominio.md</code> §15.7 invariantes I-I1 / I-I2 / I-I3 — aplican igual a monitoreo (una sola abierta por equipo, equipo debe tener rutina, fecha reportada en rango).</li>
+    <li><code>06-contrato-apis-erp.md</code> — pendiente agregar endpoint <code>GET /rutinas-monitoreo</code> cuando se priorice Fase 2.</li>
+    <li><code>roadmap.md</code> 10.4 — paso de Fase 2 con descripción detallada.</li>
+    <li><code>07-preguntas-destrabar-followups.md</code> pregunta 6 — endpoint del catálogo, pendiente con David.</li>
+  </ul>
+</footer>
+
+</body>
+</html>

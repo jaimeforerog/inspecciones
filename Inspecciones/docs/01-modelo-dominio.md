@@ -106,7 +106,7 @@ public sealed class InspeccionTecnica
     public Guid EquipoId            { get; private set; }
     public Guid RutinaId            { get; private set; }
     public string TecnicoIniciador  { get; private set; } = default!;
-    public Guid ObraId              { get; private set; }
+    public Guid ProyectoId              { get; private set; }
     public string RutinaCodigo      { get; private set; } = default!;
     public UbicacionGps UbicacionInicio { get; private set; } = default!;
 
@@ -173,9 +173,9 @@ public enum InspeccionEstado
 // La rutina técnica NO se selecciona — se deriva del grupo del equipo: una por grupo.
 public sealed record IniciarInspeccion(
     Guid InspeccionId,                   // nuevo, no debe existir
-    Guid EquipoId,                       // del catálogo, debe estar en obra del técnico
+    Guid EquipoId,                       // del catálogo, debe estar en proyecto del técnico
     string IniciadaPor,                  // del JWT (ID del técnico)
-    Guid ObraId,                         // de los claims sinco_obras del JWT
+    Guid ProyectoId,                         // de los claims sinco_obras del JWT
     UbicacionGps Ubicacion) : ICommand;  // OBLIGATORIO — GPS del teléfono al iniciar
 
 // ⚠️ OBSOLETO — eliminado en §15.9. Reemplazado por los 3 botones de la variante B
@@ -287,7 +287,7 @@ public sealed record InspeccionIniciada_v1(
     Guid RutinaId,
     string RutinaCodigo,                        // legible para UI ("INSP. BULL.MOTOR")
     string TecnicoIniciador,
-    Guid ObraId,
+    Guid ProyectoId,
     UbicacionGps Ubicacion,                     // OBLIGATORIO — GPS al iniciar
     DateTime IniciadaEn);
 
@@ -405,7 +405,7 @@ public sealed class InspeccionTecnica
         RutinaId         = e.RutinaId;
         RutinaCodigo     = e.RutinaCodigo;
         TecnicoIniciador = e.TecnicoIniciador;
-        ObraId           = e.ObraId;
+        ProyectoId           = e.ProyectoId;
         UbicacionInicio  = e.Ubicacion;
         IniciadaEn       = e.IniciadaEn;
         Estado           = InspeccionEstado.EnEjecucion;
@@ -550,7 +550,7 @@ public sealed class InspeccionTecnicaHandler
                 rutina.RutinaId,                    // resuelto por el handler
                 rutina.Codigo,
                 cmd.IniciadaPor,
-                cmd.ObraId,
+                cmd.ProyectoId,
                 cmd.Ubicacion,
                 DateTime.UtcNow)
         };
@@ -679,7 +679,7 @@ public enum ResultadoVerificacion { Confirmada, Descartada, RequiereSeguimiento 
 
 Documentos `Marten` read-only mantenidos por sincronización REST contra Sinco on-prem. Estrategia de sincronización detallada en **ADR-004** (`00-investigacion-mercado.md §9.15`): sync inicial al desplegar + cron diario nocturno con `If-Modified-Since`/`ETag` + stale-while-revalidate como fallback. Reglas operativas vinculantes: IDs/códigos inmutables, renombrar = cambiar descripción, descontinuar = `activa = false` no delete.
 
-> **Nota:** las definiciones de tipos vigentes están en §12.7 (`EquipoLocal`, `UbicacionLocal`, `ObraLocal`, `RepuestoLocal`, `Rutina`) y §12.9.6 (`CausaFallaCatalogo`, `TipoFallaCatalogo`). Las definiciones que aparecen abajo son la primera versión preliminar — fueron refinadas en §12 tras la reconciliación con plantillas Excel del ERP. Léase §12.7 y §12.9.6 para los contratos vigentes.
+> **Nota:** las definiciones de tipos vigentes están en §12.7 (`EquipoLocal`, `UbicacionLocal`, `ProyectoLocal`, `RepuestoLocal`, `Rutina`) y §12.9.6 (`CausaFallaCatalogo`, `TipoFallaCatalogo`). Las definiciones que aparecen abajo son la primera versión preliminar — fueron refinadas en §12 tras la reconciliación con plantillas Excel del ERP. Léase §12.7 y §12.9.6 para los contratos vigentes.
 
 ```csharp
 // Definiciones preliminares — superseded por §12.7 y §12.9.6
@@ -688,7 +688,7 @@ public sealed record EquipoLocal(
     string Codigo,                  // "EXC-320D-014"
     string Modelo,
     string Marca,
-    Guid ObraActualId,
+    Guid ProyectoActualId,
     decimal HorometroActual,
     Dictionary<string, string> AtributosExtra,
     DateTime SincronizadoEn);
@@ -725,7 +725,7 @@ public interface IReferenceDataService
     Task<IReadOnlyList<CausaFallaCatalogo>> ListarCausasFalla(CancellationToken ct);
     Task<IReadOnlyList<TipoFallaCatalogo>> ListarTiposFalla(CancellationToken ct);
     Task<IReadOnlyList<UbicacionLocal>> ListarUbicaciones(CancellationToken ct);
-    Task<IReadOnlyList<ObraLocal>> ListarObras(CancellationToken ct);
+    Task<IReadOnlyList<ProyectoLocal>> ListarProyectos(CancellationToken ct);
     Task<IReadOnlyList<RepuestoLocal>> BuscarRepuestos(Guid? parteId, string? q, CancellationToken ct);
     Task<Rutina?> ObtenerRutina(Guid rutinaId, CancellationToken ct);
     Task<Rutina?> ObtenerRutinaTecnicaPorGrupo(string grupoMantenimiento, CancellationToken ct);
@@ -753,7 +753,7 @@ public sealed class SincronizarCatalogosJob
         await SincronizarConditionalGet<TipoFallaCatalogo>(session, erpAdapter, log);
         await SincronizarConditionalGet<ParteCatalogo>(session, erpAdapter, log);
         await SincronizarConditionalGet<UbicacionLocal>(session, erpAdapter, log);
-        await SincronizarConditionalGet<ObraLocal>(session, erpAdapter, log);
+        await SincronizarConditionalGet<ProyectoLocal>(session, erpAdapter, log);
         await SincronizarConditionalGet<RepuestoLocal>(session, erpAdapter, log);
         await SincronizarConditionalGet<Rutina>(session, erpAdapter, log);
         await SincronizarConditionalGet<EquipoLocal>(session, erpAdapter, log);
@@ -792,7 +792,7 @@ public sealed record BandejaItem(
     string TecnicoId,
     Guid EquipoId, string EquipoCodigo,
     Guid RutinaId, string RutinaCodigo, string RutinaNombre,
-    Guid ObraId, string ObraNombre,
+    Guid ProyectoId, string ProyectoNombre,
     DateTime IniciadaEn,
     InspeccionEstado Estado,
     int HallazgosCount,
@@ -912,7 +912,7 @@ Interfaces en el core, implementaciones en `Sinco.Inspecciones.Adapters.*`:
 public interface IPreoperacionalAdapter
 {
     Task<IReadOnlyList<NovedadPreopDto>> ObtenerNovedadesPendientes(
-        Guid obraId, int page, int size, CancellationToken ct);
+        Guid proyectoId, int page, int size, CancellationToken ct);
     Task<NovedadPreopDto> ObtenerNovedad(Guid novedadId, CancellationToken ct);
     Task<Stream> ObtenerAdjunto(Guid adjuntoId, CancellationToken ct);
     Task MarcarVerificada(
@@ -1208,7 +1208,7 @@ Las plantillas en `Plantillas Excel/` (Equipos.xlsx, Insumos.xlsx, preoperaciona
 | `placa` | `xemp899` | Para vehículos / equipos sobre rueda. Opcional. |
 | `descripcion` | `bulldozer caterpillar d6` | Texto libre. |
 | `Grupo mantenimiento` | `bulldozer` | **Clave**: agrupa equipos para aplicación de rutinas. |
-| `ubicación` | `bogota` | Texto libre — ciudad u obra (ambiguo, ver pregunta abierta). |
+| `ubicación` | `bogota` | Texto libre — ciudad o proyecto (ambiguo, ver pregunta abierta). |
 
 **Insumos.xlsx** — Catálogo de repuestos e insumos:
 
@@ -1269,7 +1269,7 @@ public sealed record EquipoLocal(
     string GrupoMantenimiento,          // "BULLDOZER" — clave para rutina
     string Modelo,                      // "D65PX2"
     string? UbicacionDescripcion,       // texto libre por ahora
-    Guid? ObraActualId,                 // si existe catálogo de obras
+    Guid? ProyectoActualId,                 // si existe catálogo de proyectos (ERP lo llama "obras")
     decimal? HorometroActual,
     Dictionary<string, string> AtributosExtra,
     DateTime SincronizadoEn);
@@ -1400,13 +1400,13 @@ Esto **reduce dos endpoints y agrega tres** respecto al inventario anterior. Hay
 
 5. **No hay campo `Modelo` del equipo en estos formatos.** La columna que había interpretado como "modelo" (D65PX2) es en realidad `Rutina Mantenimiento` — un código de rutina, no del modelo del equipo. Eso significa que el dominio **no necesita campo `Modelo`** y la rutina se asocia solo al `Grupo`. Los aggregates ajustados se ven abajo.
 
-6. **Existe catálogo de obras en el ERP.** Se modela como `ObraLocal` con su propia proyección.
+6. **Existe catálogo de proyectos en el ERP** (que el ERP nombra internamente "obras" — el módulo lo llama "proyecto" siguiendo decisión 2026-04-30 followup #4). Se modela como `ProyectoLocal` con su propia proyección.
 
-> ⚠️ **Nota:** El §12.7 representó el modelo final tras reconciliar las plantillas Excel. Tras revisar `Plantillas Excel/imagenes app.docx` (mockups reales de la app de Sinco MYE), **el modelo de `Hallazgo` se refinó nuevamente en §12.9**. Los cambios principales: `Severidad` se reemplaza por `AccionRequerida` (3 valores accionables), se agregan `CausaFalla`, `TipoFalla`, `AccionCorrectiva`, `NovedadTecnicaDescripcion`, `ObservacionCampo`, y la captura es un **wizard de 2 pasos**. Léase §12.9 para el contrato vigente. Las estructuras de Equipo, Rutina, Ubicación, Obra, Repuesto siguen tal cual están en §12.7.
+> ⚠️ **Nota:** El §12.7 representó el modelo final tras reconciliar las plantillas Excel. Tras revisar `Plantillas Excel/imagenes app.docx` (mockups reales de la app de Sinco MYE), **el modelo de `Hallazgo` se refinó nuevamente en §12.9**. Los cambios principales: `Severidad` se reemplaza por `AccionRequerida` (3 valores accionables), se agregan `CausaFalla`, `TipoFalla`, `AccionCorrectiva`, `NovedadTecnicaDescripcion`, `ObservacionCampo`, y la captura es un **wizard de 2 pasos**. Léase §12.9 para el contrato vigente. Las estructuras de Equipo, Rutina, Ubicación, Proyecto, Repuesto siguen tal cual están en §12.7.
 
 ### 12.7 Modelo final ajustado tras la reconciliación (*Hallazgo superseded por §12.9*)
 
-#### `EquipoLocal` (final)
+#### `EquipoLocal` (final — extendido 2026-04-30 con dos medidores)
 
 ```csharp
 public sealed record EquipoLocal(
@@ -1416,11 +1416,19 @@ public sealed record EquipoLocal(
     string Descripcion,
     string GrupoMantenimiento,          // "BULLDOZER" — clave para rutina
     Guid UbicacionId,                   // referencia a UbicacionLocal
-    Guid? ObraActualId,                 // referencia a ObraLocal (asignación dinámica)
-    decimal? HorometroActual,
+    Guid? ProyectoActualId,                 // referencia a ProyectoLocal (asignación dinámica)
+    LecturaMedidor? MedidorPrimario,    // p. ej. odómetro (Km) — extendido 2026-04-30
+    LecturaMedidor? MedidorSecundario,  // p. ej. horómetro (Hr) — extendido 2026-04-30
     Dictionary<string, string> AtributosExtra,
     DateTime SincronizadoEn);
+
+public sealed record LecturaMedidor(
+    string Magnitud,                    // "Km", "Hr", etc. (string del catálogo del ERP)
+    decimal Valor,                      // 123456.78
+    DateTime CapturadaEn);              // última actualización del lado ERP
 ```
+
+> **Decisión 2026-04-30 (cierre followup #3):** el mock del diseño (image4 de `Plantillas Excel/mock del diseño.docx` — pantalla "Previsualización equipo") muestra explícitamente "Medidor 1: Km 123.456,78" y "Medidor 2: Hr 12.43" como caso normal en la pantalla de selección de equipo. Por tanto, **dos medidores son la norma** (no caso atípico). La forma elegida usa dos campos posicionales (`MedidorPrimario` / `MedidorSecundario`) en lugar de `Dictionary<string,decimal>` por simplicidad — el ERP define la semántica de cuál es primario para cada grupo de mantenimiento. Si en el futuro emerge un caso con N medidores (>2), se evalúa migrar a `IReadOnlyList<LecturaMedidor>` como cambio aditivo. **Pregunta abierta para David** (paso 3.32 sync de catálogos): ¿el ERP define el orden primario/secundario por grupo, o lo decide el técnico al iniciar inspección? El módulo asume **el ERP** — si es decisión del técnico, se ajusta el contrato del endpoint.
 
 Sin campo `Modelo`. La rutina aplicable se determina por `GrupoMantenimiento`.
 
@@ -1448,7 +1456,7 @@ public sealed record ItemRutina(
 // ❌ enum TipoRutina eliminado (ver §12.11.1)
 ```
 
-#### `UbicacionLocal` y `ObraLocal` (nuevos)
+#### `UbicacionLocal` y `ProyectoLocal` (nuevos)
 
 ```csharp
 public sealed record UbicacionLocal(
@@ -1457,11 +1465,11 @@ public sealed record UbicacionLocal(
     string Nombre,
     DateTime SincronizadoEn);
 
-public sealed record ObraLocal(
-    Guid ObraId,
+public sealed record ProyectoLocal(
+    Guid ProyectoId,
     string Codigo,
     string Nombre,
-    Guid? UbicacionId,                  // si la obra tiene ubicación geográfica catalogada
+    Guid? UbicacionId,                  // si el proyecto tiene ubicación geográfica catalogada
     bool Activa,
     DateTime SincronizadoEn);
 ```
@@ -1516,7 +1524,7 @@ Diferenciar los dos eventos da reporte limpio: "cuántos hallazgos vienen de la 
 ```
 GET  /api/v1/equipos?codigo=&grupo=&page=&size=
 GET  /api/v1/equipos/{equipoCodigo}
-       → trae equipo con grupoMantenimiento, ubicacionId, obraActualId
+       → trae equipo con grupoMantenimiento, ubicacionId, proyectoActualId
 
 GET  /api/v1/rutinas?grupo={g}&tipo={preoperacional|tecnica|mantenimiento}
 GET  /api/v1/rutinas/{rutinaCodigo}
@@ -1822,15 +1830,33 @@ public sealed record InspeccionIniciada_v1(
     Guid RutinaId,
     string RutinaCodigo,
     string TecnicoIniciador,
-    Guid ObraId,
+    Guid ProyectoId,
     UbicacionGps Ubicacion,
-    DateTime IniciadaEn);
+    DateTime IniciadaEn,                    // timestamp del sistema (TimeProvider)
+    DateOnly FechaReportada,                // NUEVO 2026-04-30 — fecha que el técnico
+                                             // afirma como "fecha real" de la inspección.
+                                             // Puede ser distinta a IniciadaEn (caso típico:
+                                             // técnico carga al final del día una inspección
+                                             // hecha en campo horas antes; o carga retroactiva
+                                             // de una jornada previa con conectividad pobre).
+    LecturaMedidor? LecturaMedidorPrimario,    // NUEVO 2026-04-30 — capturada al iniciar
+    LecturaMedidor? LecturaMedidorSecundario); // NUEVO 2026-04-30 — capturada al iniciar
 ```
 
 El handler de `IniciarInspeccion` siempre lo emite con `Tipo = TipoInspeccion.Tecnica`. Cuando se priorice Monitoreo:
 - Aparece un comando hermano `IniciarInspeccionMonitoreo` (o el mismo `IniciarInspeccion` con un parámetro `Tipo`).
 - El evento se emite con `Tipo = TipoInspeccion.Monitoreo`.
 - Los comandos posteriores válidos cambian (por ejemplo, `TomarMedicion` solo aplica a Monitoreo, `RegistrarHallazgo` libre solo aplica a Tecnica).
+
+> **Sobre `FechaReportada` vs `IniciadaEn` (decisión 2026-04-30, cierre followup #2):** la pantalla 2 del mock del diseño (image2 de `Plantillas Excel/mock del diseño.docx`) muestra explícitamente un calendario donde el técnico elige la **fecha real de la inspección**, distinta de la fecha de carga al sistema. Caso operativo típico: el técnico inspeccionó en campo a las 10am pero carga al final del día (4pm), o tuvo conectividad pobre y carga al día siguiente.
+>
+> - **`IniciadaEn`** sigue siendo el timestamp del sistema, generado por el `TimeProvider` inyectado en el handler — **se mantiene la regla dura del CLAUDE.md** (prohibido `DateTime.UtcNow` en dominio; el handler genera con `TimeProvider.GetUtcNow()` y se lo pasa al constructor del evento).
+> - **`FechaReportada`** es **input del usuario** (`DateOnly`, sin componente horaria) capturado en pantalla 2. Es la fecha que el técnico afirma como "real" para esta inspección. Tipo `DateOnly` (no `DateTime`) porque la precisión es solo el día, no la hora.
+> - **Audit:** ambos campos coexisten en el evento. Reportería puede mostrar al supervisor cuándo se cargó vs cuándo se afirma haber inspeccionado, y filtrar inspecciones cargadas con N días de retraso para revisión.
+> - **Validaciones del handler** (no se modela como `Apply` — son pre-condiciones, ver invariante I-I3 §15.7):
+>   - `FechaReportada <= DateOnly.FromDateTime(IniciadaEn)` (no puede ser futura).
+>   - `FechaReportada >= DateOnly.FromDateTime(IniciadaEn).AddDays(-30)` (no más de 30 días de retroactividad — ventana de gracia razonable; si emerge necesidad de rangos mayores se evalúa caso a caso).
+> - **Sin evento separado tipo `InspeccionRetroactiva_v1`**: se descartó porque obliga a bifurcar el camino del agregado y rompe simetría. Un solo evento con dos campos cubre el caso.
 
 #### 12.11.4 Lo que NO cambia con esta decisión
 
@@ -1839,18 +1865,196 @@ El handler de `IniciarInspeccion` siempre lo emite con `Tipo = TipoInspeccion.Te
 - **Las invariantes I1-I12** siguen válidas tal como están.
 - **Los demás eventos** (`HallazgoRegistrado_v1`, `MedicionRegistrada_v1`, etc.) no cambian estructura. Lo único que cambia es: **algunos serán específicos al tipo de inspección** cuando llegue Monitoreo (ej. `MedicionTomada_v1` futura solo aplica a Monitoreo).
 
-#### 12.11.5 Camino de migración para soportar Monitoreo
+#### 12.11.5 Modelo de Inspección de Monitoreo (refinado 2026-04-30 con archivo `inspeccion.xlsx`)
 
-Cuando se priorice (escenario futuro discutido en sesión 2026-04-27, no aplicado todavía):
+> **Origen:** archivo `Inspecciones/docs/inspeccion.xlsx` enviado por Jaime el 2026-04-30. Hojas: "Rutinas monitoreo" (catálogo de items por rutina/grupo) e "Inspeccion de monitoreo" (formato de captura de ejemplo). Las decisiones 1–6 fueron confirmadas en chat el 2026-04-30.
+>
+> **Estado:** todavía no aplicado en código (Fase 2 / roadmap 10.4). Todo es aditivo respecto al MVP de inspección técnica.
 
-1. Agregar `Monitoreo` al enum `TipoInspeccion`.
-2. Extender `ItemRutina` con `MedicionEsperada?` (opcional, poblado solo cuando la rutina es de monitoreo).
-3. Definir nuevos eventos específicos para Monitoreo: `MedicionTomada_v1`, `ItemMonitoreoOmitido_v1`.
-4. Decidir si `Rutina` se reusa para ambos tipos o si se introduce `RutinaMonitoreo` como entidad separada (decisión a evaluar entonces).
-5. Snapshot condicional de items en `InspeccionIniciada_v1` cuando `Tipo == Monitoreo`.
-6. Pantalla móvil específica para flujo de monitoreo (checklist con captura de mediciones).
+**1. Enum `TipoInspeccion` extendido:**
 
-**Nada de esto requiere reescribir código actual** — todo es aditivo. La introducción del campo `TipoInspeccion` en el aggregate desde ya es la única "preparación" que hacemos.
+```csharp
+public enum TipoInspeccion
+{
+    Tecnica,
+    Monitoreo        // Fase 2 — checklist con mediciones / evaluaciones por item
+}
+```
+
+**2. Catálogo: `RutinaMonitoreo` (entidad nueva — distinta de `Rutina` de técnica):**
+
+```csharp
+public sealed record RutinaMonitoreo(
+    Guid RutinaMonitoreoId,
+    string Nombre,                                  // p. ej. "Sistema eléctrico"
+    string GrupoMantenimiento,                      // p. ej. "Camioneta"
+    IReadOnlyList<ItemRutinaMonitoreo> Items,
+    DateTime SincronizadoEn);
+
+public sealed record ItemRutinaMonitoreo(
+    Guid ItemId,
+    string Parte,                                   // "Batería"
+    string Actividad,                               // "Medición de voltaje"
+    EvaluacionEsperada Evaluacion);                 // numérica O cualitativa (mutuamente exclusivas)
+```
+
+**3. `EvaluacionEsperada` — dos value objects paralelos (decisión 1, opción A):**
+
+Cada item es **numérico O cualitativo, nunca ambos** (decisión 1, opción A confirmada 2026-04-30). Forma de los dos value objects:
+
+```csharp
+// Item con medición numérica (ej. voltaje, presión, temperatura)
+public sealed record MedicionEsperada(
+    string Magnitud,        // "voltaje"
+    string Unidad,          // "V"
+    decimal ValorMin,       // 12.3
+    decimal ValorMax)       // 12.5
+    : EvaluacionEsperada;
+
+// Item con evaluación cualitativa (ej. estado de cableado, conectores)
+public sealed record EvaluacionCualitativaEsperada()
+    : EvaluacionEsperada;
+
+public abstract record EvaluacionEsperada;
+
+public enum CalificacionCualitativa
+{
+    Bueno,                  // estado correcto
+    Regular,                // estado deteriorado, requiere atención eventual
+    Malo                    // estado crítico, dispara hallazgo automático con seguimiento
+}
+```
+
+Ejemplos del archivo `inspeccion.xlsx`:
+- Numérico: `Parte=Batería, Actividad=Medir voltaje, Evaluacion=MedicionEsperada(voltaje, V, 12.3, 12.5)`.
+- Cualitativo: `Parte=Conectores batería, Actividad=Revisar estado, Evaluacion=EvaluacionCualitativaEsperada()`.
+
+**4. Diferencia con rutina técnica (decisión 4 confirmada 2026-04-30):**
+
+| Aspecto | Rutina técnica (MVP) | Rutina de monitoreo (Fase 2) |
+|---|---|---|
+| Cardinalidad por grupo | **Una sola** rutina por grupo | **N rutinas** por grupo (Sistema eléctrico, Transmisión, Sistema de frenos, …) |
+| Selección al iniciar | Derivada automáticamente del grupo | **El técnico elige** la rutina al iniciar |
+| Items | Lista de partes aplicables (filtro) | Lista de items con evaluación esperada (checklist real) |
+| Flujo del técnico | Libre — el técnico decide qué inspeccionar | Estructurado — el técnico recorre los items de la rutina elegida |
+
+**5. Eventos nuevos del aggregate `Inspeccion` cuando `Tipo=Monitoreo`:**
+
+```csharp
+public sealed record MedicionRegistrada_v1(
+    Guid InspeccionId,
+    Guid ItemId,                    // item de la rutina (snapshot en InspeccionIniciada_v1)
+    decimal ValorMedido,
+    string? Observacion,            // opcional — p. ej. "multímetro con pila baja"
+    bool FueraDeRango,              // calculado por el handler contra MedicionEsperada
+    DateTime RegistradaEn);
+
+public sealed record EvaluacionCualitativaRegistrada_v1(
+    Guid InspeccionId,
+    Guid ItemId,
+    CalificacionCualitativa Calificacion,
+    string? Observacion,
+    DateTime RegistradaEn);
+
+public sealed record ItemMonitoreoOmitido_v1(
+    Guid InspeccionId,
+    Guid ItemId,
+    string Motivo,                  // p. ej. "multímetro descargado, no pude medir"
+    DateTime OmitidoEn);
+```
+
+**6. Trigger de hallazgo automático (decisión 2 confirmada 2026-04-30, opción A):**
+
+| Resultado del item | Hallazgo automático | `AccionRequerida` |
+|---|---|---|
+| Numérico **dentro de rango** | No | — |
+| Numérico **fuera de rango** | Sí | `RequiereSeguimiento` |
+| Cualitativo `Bueno` | No | — |
+| Cualitativo `Regular` | No (decisión 2 = solo Malo dispara) | — |
+| Cualitativo `Malo` | Sí | `RequiereSeguimiento` |
+
+Cuando se dispara hallazgo automático, el handler emite **dos eventos atómicos** en un único `SaveChangesAsync`:
+1. El evento del registro (`MedicionRegistrada_v1` con `FueraDeRango=true` o `EvaluacionCualitativaRegistrada_v1` con `Calificacion=Malo`).
+2. `HallazgoRegistrado_v1` con `Origen=Monitoreo` (nuevo valor del enum, ver punto 8), `AccionRequerida=RequiereSeguimiento`, `MedicionOrigenId=ItemId` (trazabilidad bidireccional), `ParteEquipoId` heredado del item, `NovedadTecnica` autogenerada del tipo `"Voltaje 10.2V fuera de rango esperado [12.3, 12.5]"` o `"Estado calificado Malo en conectores batería"` (editable por el técnico).
+
+Al firmar la inspección, la saga existente §17 abre `SeguimientoHallazgo` automáticamente para los hallazgos con `RequiereSeguimiento` — **se reusa la maquinaria del MVP sin cambios**.
+
+**7. `InspeccionIniciada_v1` extendido para Monitoreo:**
+
+Cuando `Tipo=Monitoreo`, el evento incluye:
+- `RutinaMonitoreoSeleccionadaId` — la rutina que el técnico eligió (decisión 4).
+- `ItemsSnapshot: IReadOnlyList<ItemRutinaMonitoreoSnapshot>` — copia inmutable de los items de la rutina al momento de iniciar (necesario porque `FueraDeRango` se calcula contra la `EvaluacionEsperada` snapshotada).
+
+```csharp
+public sealed record ItemRutinaMonitoreoSnapshot(
+    Guid ItemId,
+    string Parte,
+    string Actividad,
+    EvaluacionEsperada Evaluacion);
+```
+
+Cuando `Tipo=Tecnica`, los nuevos campos son `null` — el handler valida que el comando hermano que se use sea coherente con el `Tipo` del aggregate.
+
+**8. Enum `OrigenHallazgo` extendido con `Monitoreo` (sin cambio respecto a versión previa):**
+
+```csharp
+public enum OrigenHallazgo
+{
+    PreOperacional,
+    Manual,
+    Seguimiento,
+    Monitoreo        // Fase 2 — hallazgo derivado de medición fuera de rango o calificación Malo
+}
+```
+
+Invariantes derivadas para Fase 2:
+- Si `Origen=Monitoreo` → `MedicionOrigenId` obligatorio e inmutable (apunta al `ItemId` del item que disparó el hallazgo).
+- Si `Origen=Monitoreo` → `AccionRequerida=RequiereSeguimiento` (no genera OT inmediata).
+- Si `Origen=Monitoreo` → `TipoInspeccion` del stream = `Monitoreo`.
+
+**9. Sync de catálogo con ERP (decisión 5 confirmada 2026-04-30, opción A):**
+
+Las rutinas de monitoreo se sincronizan desde el ERP con el mismo patrón que el resto de catálogos (ADR-004, sync nocturno + stale-while-revalidate). Endpoint nuevo del lado MYE: `GET /api/v1/rutinas-monitoreo?grupo={g}` — pendiente confirmar con David. El módulo NO gestiona el catálogo localmente.
+
+**10. Dictamen de monitoreo (decisión 6 confirmada 2026-04-30, opción A):**
+
+Sin cambio respecto a inspección técnica — V-F4 (§15.5) sigue siendo "Dictamen seleccionado, siempre obligatorio, libre del técnico". El técnico interpreta los resultados de los items y decide entre `PuedeOperar` / `ConRestriccion` / `NoPuedeOperar`. Mismo mental model que técnica.
+
+**11. Comando hermano `IniciarInspeccionMonitoreo`:**
+
+```csharp
+public sealed record IniciarInspeccionMonitoreo(
+    Guid InspeccionId,
+    Guid EquipoId,
+    Guid ProyectoId,
+    Guid RutinaMonitoreoId,                         // selección del técnico (decisión 4)
+    string IniciadaPor,
+    UbicacionGps Ubicacion,
+    DateOnly FechaReportada,
+    LecturaMedidor? LecturaMedidorPrimario,
+    LecturaMedidor? LecturaMedidorSecundario,
+    IReadOnlyCollection<string> Capabilities);
+```
+
+El handler valida (además de I-I1, I-I2, I-I3 §15.7):
+- `RutinaMonitoreoId` existe y pertenece al `GrupoMantenimiento` del equipo.
+- `RutinaMonitoreo` tiene ≥1 item (rutinas vacías se rechazan).
+
+Y emite `InspeccionIniciada_v1` con `Tipo=Monitoreo` + `RutinaMonitoreoSeleccionadaId` + `ItemsSnapshot`.
+
+**12. Pregunta abierta para Fase 2 (no bloqueante hoy):**
+
+Si el técnico mide fuera de rango pero la observación lo justifica (p. ej. "multímetro con pila baja" — caso real del archivo `inspeccion.xlsx` línea 8), ¿el hallazgo automático se abre igual o existe acción explícita "descartar marca" antes de firmar? Análogo al descarte de novedad preop pero sobre medición. **No resolver hasta llegar a Fase 2** — afecta UX y posiblemente un evento `MarcaMonitoreoDescartada_v1`.
+
+**13. Lo que NO está modelado todavía (cola de preguntas pendientes):**
+
+- ¿Frecuencia / programación previa de inspecciones de monitoreo? (mensual, por horómetro, etc.) — roadmap 10.2 lo difería; con monitoreo en Fase 2, ¿entra junto?
+- ¿Items obligatorios vs saltables? ¿Al firmar, todos los items deben tener registro o basta con observación general?
+- ¿Adjuntos por item (foto del componente medido)?
+- ¿"Observación general" como evento separado o atributo de `InspeccionFirmada_v1`?
+- ¿La rutina se elige solo al iniciar o el técnico puede cambiarla mid-inspección?
+
+**Nada de esto requiere reescribir código actual** — todo es aditivo. La introducción del campo `TipoInspeccion` en el aggregate desde ya es la única "preparación" hecha en MVP.
 
 #### 12.11.6 Catálogo final de eventos del aggregate `Inspeccion`
 
@@ -2500,20 +2704,70 @@ RepuestoEstimadoActualizado_v1 (cantidad=2, justificacion="Filtro doble en este 
 
 **Patrón UX adoptado:** cada novedad en la lista "Importar desde preoperacional" muestra **tres botones inline** debajo de su contenido — verde "Verificar" / naranja "Seguimiento" / rojo "Descartar". Tap directo procesa esa novedad sola, sin paso de selección intermedio.
 
-**Razón de la decisión:** comparado con el patrón de modo selección + comando bulk (descartado), la variante B reduce fricción para el caso operativo dominante (1-3 novedades por inspección, atendidas individualmente) y simplifica la implementación. El costo es que N descartes son N modales si hubiera muchos duplicados — aceptable porque ese caso es excepcional.
+**Razón de la decisión:** comparado con el patrón de modo selección + comando bulk, la variante B reduce fricción para el caso operativo dominante (1-3 novedades por inspección, atendidas individualmente) y simplifica la implementación.
+
+> **Amendment 2026-04-30 (observación Sergio + revisión mock):** la suposición *"caso de duplicados es excepcional"* fue invalidada por el consultor producto — *"pueden existir novedades repetidas (que se permita sea masiva con una única observación)"*. La primera respuesta (modal de selección + bulk con motivo manual) **fue superseded** ese mismo día tras la revisión del mock del diseño (image12 de `Plantillas Excel/mock del diseño.docx`): el patrón final es **descarte rápido individual con motivo autogenerado**. Detalle abajo en sub-sección "Descarte rápido inline (motivo autogenerado, decisión 2026-04-30 final)".
 
 ##### Comportamiento por botón
 
 | Botón | UX | Comando emitido | Evento generado |
 |---|---|---|---|
-| **🟢 Verificar** | Abre wizard de verificación completo (pantalla 5 de `02b`): ResultadoVerificacion + diagnóstico + AccionRequerida + (paso 2 si aplica). | `RegistrarHallazgo` con `Origen=PreOperacional`, datos del wizard | `HallazgoRegistrado_v1` |
+| **🟢 Verificar** | Abre wizard de verificación completo (referencia visual histórica: image7+9 del mock de Daniel): ResultadoVerificacion + diagnóstico + AccionRequerida + (paso 2 si aplica). | `RegistrarHallazgo` con `Origen=PreOperacional`, datos del wizard | `HallazgoRegistrado_v1` |
 | **🟠 Seguimiento** | Mini-modal corto con campo "Motivo del seguimiento" (texto libre). Al guardar, evita el wizard completo. | `RegistrarHallazgo` con `Origen=PreOperacional`, `ResultadoVerificacion=RequiereSeguimiento`, `AccionRequerida=RequiereSeguimiento`, `NovedadTecnica=motivo`, parte+actividad heredadas | `HallazgoRegistrado_v1` |
 | **🔴 Descartar** | Mini-modal corto con campo "Motivo del descarte" (texto libre). Al guardar, evita el wizard. | `RegistrarHallazgo` con `Origen=PreOperacional`, `ResultadoVerificacion=Descartada`, `AccionRequerida=NoRequiereIntervencion`, `NovedadTecnica=motivo`, parte+actividad heredadas | `HallazgoRegistrado_v1` |
 
-##### Lo que NO se modela (decisión consciente)
+##### Descarte rápido inline (motivo autogenerado, decisión 2026-04-30 final)
 
-- **No hay comando `DescartarNovedadesPreopBulk`.** Se evaluó y se descartó porque la variante B no requiere modo bulk — cada acción es individual y rápida. Si en el futuro emerge un caso operativo donde 10+ novedades duplicadas son frecuentes y los modales individuales se vuelven penosos, se agrega como cambio aditivo (el comando descartado en la sesión anterior queda como referencia de implementación).
-- **No hay modo selección con checkboxes.** La lista mantiene un solo modo de interacción (tap directo en los botones), simplifica la UX.
+> **Decisión final 2026-04-30 (Jaime, tras revisión del mock):** el descarte de novedades preop se ejecuta **una a una con motivo autogenerado**. La opción de bulk con modal de motivo manual **fue evaluada y descartada** porque agrega fricción (modal, motivo escrito) que no aporta valor: con N taps en el icono "ojo tachado" y el motivo plantilla, la trazabilidad audit (técnico + fecha + canal) ya queda registrada. Para 5 duplicados, son 5 taps sin modal — operativamente trivial.
+
+**UX (image12 del mock del diseño):** cada novedad en la lista "Importar" muestra:
+- Tag de referencia (`PREOP-2026-XXXX`) + fecha + parte + descripción + operador que reportó.
+- Footer con **2 elementos**:
+  - 🚫 **Icono "ojo tachado"** (gris, izquierda) → tap único → descarta la novedad inmediatamente, sin modal. Motivo autogenerado.
+  - **Botón azul "Importar"** (derecha) → abre wizard con la novedad heredada (ver §15.9 atajos).
+
+**Comando:**
+
+```csharp
+public sealed record DescartarNovedadPreop(
+    Guid InspeccionId,
+    Guid NovedadPreopOrigenId,           // una sola novedad por comando
+    string DescartadoPor,                // username del técnico
+    IReadOnlyCollection<string> Capabilities);
+```
+
+**Validaciones del handler:**
+
+- `Capabilities` contiene `ejecutar-inspeccion`.
+- La novedad pertenece a `InspeccionId` (estaba listada en la pantalla de importación).
+- La novedad está en estado `Pendiente` (no procesada por otro técnico). Si ya está procesada → `409 Conflict` con la `inspeccionIdPropietaria` que la cerró.
+
+**Motivo autogenerado por el handler:**
+
+```csharp
+var ahora = timeProvider.GetUtcNow();
+var motivo = $"Cerrado por {cmd.DescartadoPor} el {ahora:yyyy-MM-dd HH:mm} UTC desde Inspecciones";
+
+// Emite UN evento (no N — el comando es individual):
+return new NovedadPreopDescartada_v1(
+    cmd.InspeccionId,
+    cmd.NovedadPreopOrigenId,
+    motivo,                          // string template, no input del usuario
+    cmd.DescartadoPor,
+    ahora.UtcDateTime);
+```
+
+El evento `NovedadPreopDescartada_v1` no cambia su shape — el `Motivo` queda como string libre. La diferencia con un descarte futuro con motivo manual sería invisible al schema; el discriminador (si emerge necesidad) se agrega como cambio aditivo.
+
+**Adapter Preop (P-6):** se mantiene el contrato bulk-first acordado el 2026-04-30 con David (`POST /api/v1/preop/novedades/descartar` con array `novedadIds`). En el caso individual, el módulo siempre envía un array de **un elemento** — el contrato del ERP no cambia. Esto preserva un único path de adapter y permite que en el futuro, si emerge un caso bulk legítimo (ej. saga de "limpieza periódica de novedades antiguas"), se reuse el mismo endpoint sin nuevo trabajo cross-team.
+
+**Lo que NO existe en el modelo final (decisiones del 2026-04-30):**
+
+- ❌ Modo selección con checkboxes — sin él. Tap individual al icono.
+- ❌ Modal de motivo escrito por el técnico para descarte — el motivo es siempre autogenerado.
+- ❌ Comando `DescartarNovedadesPreop` (plural, bulk con motivo único manual) — superseded en la misma sesión por simplicidad de UX.
+
+**Caso "duplicada de otra real" (mantiene aplicabilidad):** si el técnico quiere documentar explícitamente *"duplicada de hallazgo X"*, puede tap "Importar" en lugar de "ojo tachado" → wizard → elegir "No requiere intervención" → escribir el motivo en el campo `NovedadTecnica` del hallazgo. Genera `HallazgoRegistrado_v1` con motivo libre, en lugar de `NovedadPreopDescartada_v1` con motivo plantilla. Es decisión del técnico cuál camino usa según cuán importante sea el motivo manual. La novedad preop queda igualmente "atendida" en ambos caminos (la saga `CerrarInspeccionSaga` invoca P-6 si el origen es `Descartada` o si el hallazgo `RequiereSeguimiento=NoRequiereIntervencion`).
 
 ##### Atajos UX implícitos
 
@@ -3229,7 +3483,9 @@ Aggregate InspeccionTecnica (16 eventos):
     1. InspeccionIniciada_v1
     2. InspeccionFirmada_v1
     3. InspeccionCerrada_v1            (con OT correctiva)
-    4. InspeccionCerradaSinOT_v1       (sin OT, automático según hallazgos)
+    4. InspeccionCerradaSinOT_v1       (sin OT, con discriminador
+                                         MotivoCierreSinOT ∈ {AutomaticoSinIntervencion,
+                                         RechazadaPorAprobador} — extendido 2026-04-30)
     5. InspeccionCancelada_v1
 
   Hallazgos (3):
@@ -3238,7 +3494,11 @@ Aggregate InspeccionTecnica (16 eventos):
     8. HallazgoEliminado_v1            (soft delete)
 
   Novedades preop (1):
-    9. NovedadPreopDescartada_v1       (NO crea hallazgo, sólo audit)
+    9. NovedadPreopDescartada_v1       (NO crea hallazgo, sólo audit;
+                                         emitido por comando individual
+                                         DescartarNovedadPreop con motivo
+                                         autogenerado por el handler —
+                                         ver §15.9 "Descarte rápido inline")
 
   Repuestos (3):
    10. RepuestoEstimado_v1
@@ -3259,16 +3519,31 @@ Aggregate SeguimientoHallazgo (3 eventos):
    18. SeguimientoResuelto_v1          (técnico cierra "Sin intervención")
    19. SeguimientoEscalado_v1          (técnico convierte a "Intervención")
 
-Integración OT (2):
+Integración OT (3):
    20. OTSolicitada_v1                 (comando GenerarOT autorizado, ADR-007 §17)
    21. OTGeneracionFallida_v1
+   22. GeneracionOTRechazada_v1        (NUEVO 2026-04-30 — comando RechazarGenerarOT;
+                                         se emite atómicamente con InspeccionCerradaSinOT_v1
+                                         de motivo RechazadaPorAprobador, ADR-007 §17)
+
+PDF de inspección (2):
+   23. PdfInspeccionGenerado_v1        (NUEVO 2026-04-30 — saga GenerarPdfInspeccionSaga
+                                         tras InspeccionFirmada_v1, ADR-007 §17)
+   24. PdfAdjuntadoAOT_v1              (NUEVO 2026-04-30 — saga EjecutarOTSaga tras
+                                         éxito del POST /mye/ot-correctivas/{id}/adjuntos)
 
                                        ─────────────
-                          TOTAL MVP =   21 eventos
+                          TOTAL MVP =   24 eventos
 
-Diferidos a fase 2 (no MVP):
-  - MedicionRegistrada_v1
-  - MedicionActualizada_v1
+Diferidos a fase 2 — Inspección de Monitoreo (no MVP, ver §12.11.5):
+  - MedicionRegistrada_v1                  (item numérico — captura valor, calcula FueraDeRango)
+  - EvaluacionCualitativaRegistrada_v1     (item cualitativo — Bueno/Regular/Malo)
+  - ItemMonitoreoOmitido_v1                (técnico no pudo medir, motivo obligatorio)
+  - MedicionActualizada_v1                 (corrección de medición previa, opcional)
+
+Cuando el item dispara hallazgo automático (numérico fuera de rango o cualitativo=Malo,
+ver §12.11.5 punto 6), el handler emite el evento del registro + HallazgoRegistrado_v1
+con Origen=Monitoreo en un único SaveChangesAsync.
 ```
 
 ### 15.5 Validaciones pre-firma — todas bloqueantes
@@ -3284,13 +3559,20 @@ V-F3  Para cada hallazgo con AccionRequerida = RequiereIntervencion:
           mano de obra, ajuste, calibración o limpieza). El BOM consolidado
           que se envía a MYE puede ser lista vacía; MYE acepta OT correctiva
           sin repuestos.
-V-F4  Dictamen seleccionado (Apto / AptoConRestricciones / NoApto)
+V-F4  Dictamen seleccionado (PuedeOperar / ConRestriccion / NoPuedeOperar)
+        — siempre obligatorio, independiente de si hay hallazgos con
+        RequiereIntervencion (confirmado por Sergio 2026-04-30, cierra
+        regla #11 del brief consultor §6). Sin restricción sobre el valor:
+        el técnico puede dictar PuedeOperar incluso con hallazgos
+        RequiereIntervencion (es decisión técnica, no derivada).
 V-F5  Firma manuscrita capturada (FirmaUri no vacío)
 V-F6  UbicacionFirma capturada (GPS obligatorio, no bloquea si difiere de UbicacionInicio)
 V-F7  Estado actual = EnEjecucion
 ```
 
 El botón "Firmar y cerrar inspección" se deshabilita en UI mientras alguna validación falle, y se bloquea en click para evitar doble submit. El backend revalida (no confía en la UI).
+
+> **Sobre la propagación del dictamen al ERP MYE (decisión 2026-04-30, observación Sergio):** además del dictamen embebido en `POST /api/v1/mye/ot-correctivas` cuando se genera OT, el dictamen también se sincroniza al **equipo** en MYE como "dictamen vigente" mediante endpoint dedicado `PUT /api/v1/equipos/{id}/dictamen-vigente`. La invocación es **redundante en el caso con OT** (la OT también lo lleva embebido) pero **necesaria en el caso sin OT** — y consolidamos en un único punto de invocación en lugar de bifurcar la lógica del adapter. Detalle en §17 (ADR-007) sub-sección "Integración con MYE: dictamen vigente del equipo".
 
 ### 15.6 Regla automática de cierre con/sin OT
 
@@ -3314,7 +3596,101 @@ Al firmar la inspección, la saga CerrarInspeccionSaga evalúa:
 
 **Nota histórica:** la idea original era que no había opción de "saltar OT" si había hallazgos con intervención. ADR-007 mantiene esa regla — la diferencia es **quién** y **cuándo** dispara el POST a MYE: ya no la saga al firmar, sino un usuario autorizado vía comando explícito.
 
-### 15.7 Inmutabilidad post-firma
+### 15.7 Invariantes de lifecycle
+
+#### Invariantes de inicio (I-I)
+
+```
+I-I1  Una sola inspección abierta por equipo
+      ────────────────────────────────────────
+      Para un EquipoId no puede existir otra inspección con
+      Estado = EnEjecucion al ejecutar IniciarInspeccion.
+
+      Confirmada por Sergio (consultor producto) el 2026-04-30. Modelo
+      coherente con flujo colaborativo (I2b §15.2): cuando hay inspección
+      activa, varios técnicos contribuyen a la misma, no inician otra.
+
+      Implementación robusta (no basta con consulta del handler):
+        1. Handler consulta proyección Marten `InspeccionAbiertaPorEquipoView`
+           (§15.12.X) — validación blanda con mensaje accionable.
+        2. Proyección tiene índice único Postgres sobre EquipoId filtrado
+           por `Estado = EnEjecucion` — atrapa race conditions concurrentes
+           cuando dos handlers pasan la validación blanda simultáneamente.
+        3. Test obligatorio: dos IniciarInspeccion concurrentes sobre
+           mismo equipo → uno gana, otro recibe DomainException con
+           InspeccionId de la activa.
+
+      UX implícita (decisión 2026-04-30): cuando el técnico tap "Iniciar
+      inspección" sobre un equipo que YA tiene inspección activa, el
+      frontend NO muestra error — abre la inspección activa para que el
+      técnico contribuya (agregue hallazgos, suba evidencia). El backend
+      retorna la InspeccionId activa con shortcut "Ya hay inspección
+      activa, abriendo la existente" en el response.
+
+      Salida del estado EnEjecucion: solo por firma o cancelación. Una
+      vez firmada o cancelada, otro técnico puede iniciar nueva inspección
+      sobre el mismo equipo aunque la OT del flujo anterior siga pendiente
+      de aprobación (estado derivado EsperandoAprobacionOT, ADR-007 §17).
+
+I-I2  Equipo debe tener rutina técnica para poder ser inspeccionado
+      ────────────────────────────────────────────────────────────
+      Confirmada por Jaime el 2026-04-30 a partir del análisis de los datos
+      de los 27 clientes ERP (ver `08-volumenes-clientes-erp.md` si existe,
+      o el resumen en chat de la sesión 2026-04-30).
+
+      Regla: el handler de IniciarInspeccion rechaza la creación si
+      `ObtenerRutinaTecnicaPorGrupo(equipo.GrupoMantenimiento)` devuelve
+      null. La rutina determina las partes aplicables del grupo (§12.10).
+      Sin rutina no hay catálogo de partes y los hallazgos no podrían
+      cumplir I-H1 (ParteEquipoId obligatorio). Por tanto, la falta de
+      rutina es bloqueante en el inicio, no un caso a manejar tarde.
+
+      Mensaje del rechazo (DomainException): "No hay rutina técnica
+      configurada para el grupo {GrupoMantenimiento}. Contacta al admin
+      del catálogo de rutinas en Sinco para activar la rutina del grupo
+      antes de inspeccionar este equipo."
+
+      Implicaciones operativas:
+        - Datos del ERP (corte 2026-04-30) muestran equipos sin partes
+          en la hoja "Partes por Equipo" de varios clientes. La hipótesis
+          es que esos equipos están en grupos sin rutina configurada;
+          esta invariante los bloquea limpiamente sin código especial.
+        - UX: el endpoint `GET /equipos` (paso 4.5) puede exponer un flag
+          `tieneRutina` para que el frontend deshabilite el botón
+          "Iniciar inspección" en equipos sin rutina, evitando el rechazo
+          tardío. Es opcional — el backend siempre rechaza.
+
+      Test obligatorio: equipo cuyo grupo no tiene rutina → 422 con
+      mensaje accionable. Equipo con rutina vacía (sin items): caso
+      edge no priorizado en MVP — la rutina es responsabilidad del ERP,
+      asumimos que si existe, tiene items. Followup si emerge en piloto.
+
+I-I3  Rango válido de FechaReportada (decisión 2026-04-30, cierre #2)
+      ────────────────────────────────────────────────────────────────
+      El campo `FechaReportada` del comando `IniciarInspeccion` debe
+      satisfacer ambas condiciones:
+        1. FechaReportada <= DateOnly.FromDateTime(IniciadaEn)
+           (no puede ser fecha futura).
+        2. FechaReportada >= DateOnly.FromDateTime(IniciadaEn).AddDays(-30)
+           (no más de 30 días retroactivos — ventana de gracia razonable
+           para cargas demoradas por conectividad o jornada).
+      Violación → DomainException con mensaje accionable indicando el
+      rango aceptable. El handler valida antes de emitir el evento; Apply
+      es puro y no re-valida.
+
+      Razón del rango de 30 días: balance entre permitir cargas demoradas
+      (técnico carga al final del día / próximo día con conectividad) y
+      evitar abuso (registrar inspección "hecha" hace meses sin evidencia
+      real). Si emerge un caso operativo legítimo con > 30 días, se
+      evalúa extensión como cambio aditivo + ADR de auditoría especial.
+
+      `IniciadaEn` no entra en esta invariante — siempre es el timestamp
+      del sistema generado por TimeProvider en el handler (regla dura
+      del CLAUDE.md). Solo `FechaReportada` es validable contra reglas
+      operativas.
+```
+
+#### Invariantes post-firma (I-F)
 
 ```
 I-F1  Una vez en estado Firmada → no se puede:
@@ -3338,9 +3714,19 @@ I-F4  Comando GenerarOT (introducido por ADR-007 §17) requiere TODAS estas
       (no en Apply — ver convención de capa en CLAUDE.md).
 I-F5  Estado derivado EsperandoAprobacionOT (introducido por ADR-007) =
         Estado=Firmada AND existe ≥1 hallazgo RequiereIntervencion no eliminado
-        AND !OTSolicitada
+        AND !OTSolicitada AND !OTRechazada
       No es estado persistido; lo computa la proyección §15.12.5
       (BandejaInspeccionesPendientesOTView).
+I-F6  Comando RechazarGenerarOT (introducido 2026-04-30 por observación
+      Sergio, detalle en ADR-007 §17) requiere TODAS estas precondiciones:
+        - Estado actual = Firmada
+        - ≥1 hallazgo no eliminado con AccionRequerida = RequiereIntervencion
+        - !OTSolicitada (alcance limitado: no se puede rechazar tras solicitar)
+        - !OTRechazada (sin doble rechazo)
+        - Usuario tiene capability `generar-ot`
+        - Motivo no vacío y >= 10 chars
+      Atomic: el handler emite GeneracionOTRechazada_v1 + InspeccionCerradaSinOT_v1
+      (con MotivoCierreSinOT=RechazadaPorAprobador) en un único SaveChangesAsync.
 ```
 
 Si el técnico descubre un error post-firma, la única opción es crear una nueva inspección. Esto preserva auditoría limpia y evita la complejidad de "des-firmar".
@@ -3360,7 +3746,7 @@ public sealed class SeguimientoHallazgo
 {
     // Identidad
     public Guid SeguimientoId          { get; private set; }
-    public Guid EquipoId               { get; private set; }   // sigue al equipo cross-obra
+    public Guid EquipoId               { get; private set; }   // sigue al equipo cross-proyecto
 
     // Origen (referencias inmutables)
     public Guid HallazgoOrigenId       { get; private set; }
@@ -3449,7 +3835,7 @@ public sealed record SeguimientoEscalado_v1(
 | 1 | ¿Quién puede cerrar? | Cualquier técnico que inspeccione el equipo posteriormente |
 | 2 | ¿"Seguimiento" emite evento? | **No** — es no-op silencioso. Solo feedback visual al técnico (toast + card resaltada). Si más adelante se requiere reportería de "¿hace cuánto nadie revisa?", se agrega `SeguimientoRevisadoSinCambio_v1` como cambio aditivo. |
 | 3 | SLA de seguimientos viejos | Alerta visual progresiva + email diario a usuarios con capability `recibir-alertas-sla` configurados como destinatarios para el equipo, a partir de 90 días. Sin bloqueo de inspección. Sin OT automática. |
-| 4 | Visibilidad cross-obra | El seguimiento sigue al equipo, no a la obra. Se ve desde cualquier obra a la que el equipo se mueva. |
+| 4 | Visibilidad cross-proyecto | El seguimiento sigue al equipo, no al proyecto. Se ve desde cualquier proyecto al que el equipo se mueva. |
 
 #### 15.8.6 SLA visual y notificación
 
@@ -3465,7 +3851,7 @@ NO se bloquea la inspección si hay seguimientos vencidos
 NO se "escala" el aggregate solo; siempre requiere acción humana
 ```
 
-Implementación: job nocturno (Wolverine scheduled task) que escanea seguimientos `Estado=Abierto AND AbiertoEn < now-90d` y dispara correo a la lista `DestinatariosAlertasSlaPorEquipo` (proyección leída del catálogo de obras/equipos sincronizado desde MYE — el contenido de la lista es data, no código). Si la lista está vacía para un equipo, el job emite `AlertaSlaSinDestinatario_v1` (evento de observabilidad) en lugar de fallar silenciosamente.
+Implementación: job nocturno (Wolverine scheduled task) que escanea seguimientos `Estado=Abierto AND AbiertoEn < now-90d` y dispara correo a la lista `DestinatariosAlertasSlaPorEquipo` (proyección leída del catálogo de proyectos/equipos sincronizado desde MYE — el contenido de la lista es data, no código). Si la lista está vacía para un equipo, el job emite `AlertaSlaSinDestinatario_v1` (evento de observabilidad) en lugar de fallar silenciosamente.
 
 #### 15.8.7 Invariantes del aggregate `SeguimientoHallazgo`
 
@@ -3525,10 +3911,10 @@ Reemplaza el patrón anterior (2 botones) por 3 botones simétricos en la barra 
 
 Acompañados de banners informativos arriba que muestran el estado actual del backlog (novedades preop pendientes + seguimientos previos del equipo).
 
-Wireframes en:
-- `02-wireframes-mobile.html` (pantalla 3 actualizada)
-- `02b-wireframes-novedades-preop.html` (pantalla 1 actualizada)
-- `02d-wireframes-seguimientos.html` (mock completo del nuevo flujo)
+Wireframes / referencia visual:
+- **Fuente vigente 2026-04-30:** `Plantillas Excel/mock del diseño.docx` (mock de Daniel — image1 home, image2 calendario fecha, image3 buscador equipo, image4 previsualización equipo, image5 inspección vacía, image7+9 wizard, image10 lista de hallazgos, image11+12 pantalla Importar con tabs).
+- `02d-wireframes-seguimientos.html` (mock complementario del flujo de seguimientos — sigue vigente, no fue eliminado).
+- ~~`02-wireframes-mobile.html`~~ y ~~`02b-wireframes-novedades-preop.html`~~ — eliminados el 2026-04-30 (superseded por mock de Daniel).
 
 ### 15.11 Cambios pendientes en otras secciones del documento
 
@@ -3553,7 +3939,7 @@ Los aggregates son fuente de verdad; las proyecciones son vistas materializadas 
 Audiencia (por capability, no por perfil ERP):
 
 - **Auto-consulta**: usuario contribuyente del stream (registró ≥1 evento) con capability `ejecutar-inspeccion`.
-- **Auditoría puntual**: usuario con capability `auditar-inspecciones` sobre la obra a la que pertenece la inspección.
+- **Auditoría puntual**: usuario con capability `auditar-inspecciones` sobre el proyecto al que pertenece la inspección.
 
 El mapping de perfiles ERP (jefe de campo, mecánico líder, ingeniero residente, contralor, etc.) → capabilities lo define el host PWA, no este módulo. Ver ADR-002 + paso 2.5 del roadmap.
 
@@ -3570,11 +3956,11 @@ Campos clave que **debe** exponer:
 - Diagnóstico final + dictamen.
 - Firma: usuario firmante, GPS de firma, FirmaUri.
 
-#### 15.12.2 `AuditoriaInspeccionesView` — vista cross-inspección por obra
+#### 15.12.2 `AuditoriaInspeccionesView` — vista cross-inspección por proyecto
 
-Audiencia: usuarios con capability `auditar-inspecciones`. Distinto de `DetalleInspeccionView` porque cruza múltiples inspecciones en una bandeja filtrable, no detalla una inspección individual. Read model materializado por proyección Marten que consume eventos de aggregates `InspeccionTecnica` y `SeguimientoHallazgo` y los catálogos locales (obra, usuarios autores).
+Audiencia: usuarios con capability `auditar-inspecciones`. Distinto de `DetalleInspeccionView` porque cruza múltiples inspecciones en una bandeja filtrable, no detalla una inspección individual. Read model materializado por proyección Marten que consume eventos de aggregates `InspeccionTecnica` y `SeguimientoHallazgo` y los catálogos locales (proyecto, usuarios autores).
 
-Endpoint que la sirve: `GET /auditoria/inspecciones?obra=&desde=&hasta=&autor=` (paso 3.H del roadmap, nuevo).
+Endpoint que la sirve: `GET /auditoria/inspecciones?proyecto=&desde=&hasta=&autor=` (paso 3.H del roadmap, nuevo).
 
 Por cada inspección cerrada del rango: fila resumen con
 
@@ -3590,7 +3976,7 @@ Métricas agregadas (tasa de descarte por usuario firmante, por operador que rep
 
 Audiencia: usuario con capability `ejecutar-inspeccion` (su propia bandeja). Filtro adicional `?equipo=` y `?estado=` para acotar.
 
-Materializada por proyección Marten `MultiStreamProjection` que consume eventos del stream `InspeccionTecnica` (creación, transiciones de estado, cierre, cancelación) y joins de catálogo (`EquipoLocal`, `ObraLocal`, `Rutina`) para denormalizar códigos y nombres.
+Materializada por proyección Marten `MultiStreamProjection` que consume eventos del stream `InspeccionTecnica` (creación, transiciones de estado, cierre, cancelación) y joins de catálogo (`EquipoLocal`, `ProyectoLocal`, `Rutina`) para denormalizar códigos y nombres.
 
 Endpoint que la sirve: `GET /inspecciones?equipo=&estado=` (paso 3.44 del roadmap).
 
@@ -3602,7 +3988,7 @@ public sealed record BandejaItem(
     string TecnicoId,
     Guid EquipoId, string EquipoCodigo,
     Guid RutinaId, string RutinaCodigo, string RutinaNombre,
-    Guid ObraId, string ObraNombre,
+    Guid ProyectoId, string ProyectoNombre,
     DateTime IniciadaEn,
     InspeccionEstado Estado,
     int HallazgosCount,
@@ -3639,7 +4025,7 @@ Notas operativas:
 
 - Filtro por `?estado=` permite recuperar histórico de seguimientos resueltos/escalados por equipo (auditoría de "qué pasó con los seguimientos que abrimos hace meses").
 - `BadgeSla` es **derivación de presentación**: se calcula al servir, no se materializa con timestamp congelado. Esto evita reproyecciones diarias por cambio de bucket.
-- Cross-obra: la proyección agrupa por `EquipoId`, no por `ObraActualId` — un seguimiento sigue al equipo (decisión §15.8.5 punto 4).
+- Cross-proyecto: la proyección agrupa por `EquipoId`, no por `ProyectoActualId` — un seguimiento sigue al equipo (decisión §15.8.5 punto 4).
 
 #### 15.12.5 `BandejaInspeccionesPendientesOTView` — bandeja de aprobación de OT
 
@@ -3647,18 +4033,18 @@ Notas operativas:
 
 Audiencia: usuarios con capability `generar-ot`. Es la cola de trabajo del aprobador (jefe de campo / supervisor / contralor — el host PWA mapea perfiles a capability).
 
-Materializada por proyección Marten que consume eventos de `InspeccionTecnica`: `InspeccionFirmada_v1`, `HallazgoRegistrado_v1` / `HallazgoActualizado_v1` / `HallazgoEliminado_v1` (para conocer si hay ≥1 RequiereIntervencion no eliminado), `OTSolicitada_v1`, `InspeccionCerrada_v1`, `OTGeneracionFallida_v1`. Una inspección entra a la bandeja al recibir `InspeccionFirmada_v1` con ≥1 RequiereIntervencion no eliminado, y sale al recibir `OTSolicitada_v1` (pasa a `EnProcesoOT`) o ya nunca aparece si llegó `InspeccionCerradaSinOT_v1`.
+Materializada por proyección Marten que consume eventos de `InspeccionTecnica`: `InspeccionFirmada_v1`, `HallazgoRegistrado_v1` / `HallazgoActualizado_v1` / `HallazgoEliminado_v1` (para conocer si hay ≥1 RequiereIntervencion no eliminado), `OTSolicitada_v1`, `GeneracionOTRechazada_v1`, `InspeccionCerrada_v1`, `OTGeneracionFallida_v1`. Una inspección entra a la bandeja al recibir `InspeccionFirmada_v1` con ≥1 RequiereIntervencion no eliminado, y sale por: `OTSolicitada_v1` (pasa a `EnProcesoOT`), `GeneracionOTRechazada_v1` (rechazada por aprobador, decisión 2026-04-30), o nunca aparece si llegó `InspeccionCerradaSinOT_v1` por motivo `AutomaticoSinIntervencion`.
 
-Endpoint que la sirve: `GET /inspecciones/pendientes-ot?obra=&firmada-desde=&firmada-hasta=` (paso 3.45b del roadmap).
+Endpoint que la sirve: `GET /inspecciones/pendientes-ot?proyecto=&firmada-desde=&firmada-hasta=` (paso 3.45b del roadmap).
 
 Campos clave por fila:
 
-- `InspeccionId`, `EquipoId`, `EquipoCodigo`, `ObraId`, `ObraNombre`.
+- `InspeccionId`, `EquipoId`, `EquipoCodigo`, `ProyectoId`, `ProyectoNombre`.
 - `FirmadaPor`, `FirmadaEn`.
 - `HallazgosIntervencionCount` — conteo de hallazgos no eliminados con `AccionRequerida = RequiereIntervencion`.
 - `RepuestosEstimadosCount` (consolidado del BOM previsto).
 - `Dictamen` (Apto / AptoConRestricciones / NoApto).
-- `EstadoOT`: `EsperandoAprobacion` | `EnProceso` (post-OTSolicitada, pre-confirmación MYE) | `Fallida` (post-OTGeneracionFallida).
+- `EstadoOT`: `EsperandoAprobacion` | `EnProceso` (post-OTSolicitada, pre-confirmación MYE) | `Fallida` (post-OTGeneracionFallida) | `Rechazada` (post-GeneracionOTRechazada — terminal, decisión 2026-04-30).
 - `DiasFirmada` — antigüedad desde firma (derivado al consultar). Útil para SLA visual: una inspección con 7+ días esperando aprobación debe alertar.
 
 Notas operativas:
@@ -3667,7 +4053,47 @@ Notas operativas:
 - Si llega `OTGeneracionFallida_v1`, vuelve a aparecer con `EstadoOT=Fallida` y permite reintento (capability `generar-ot` también autoriza retry, paso 3.G del roadmap).
 - SLA de aprobación pendiente (alerta a las X horas/días) — diferido. Followup en `FOLLOWUPS.md` cuando emerja.
 
-#### 15.12.6 Convenciones para proyecciones futuras
+#### 15.12.6 `InspeccionAbiertaPorEquipoView` — uniqueness para regla I-I1
+
+**Origen:** decisión 2026-04-30 (Sergio observación). Materializa el constraint "una sola inspección abierta por equipo" (I-I1, §15.7).
+
+**Audiencia:** handler de `IniciarInspeccion` (consulta blanda) + Postgres (constraint duro contra race conditions).
+
+**Forma:**
+
+```csharp
+public sealed record InspeccionAbiertaPorEquipoView(
+    Guid EquipoId,                  // KEY con índice único Postgres parcial
+                                     // (filtrado por Estado=EnEjecucion)
+    Guid InspeccionId,
+    string TecnicoIniciador,
+    DateTime IniciadaEn,
+    Guid ProyectoId);
+```
+
+**Eventos consumidos:**
+- `InspeccionIniciada_v1` → upsert fila con `EquipoId` como key.
+- `InspeccionFirmada_v1` → delete fila (sale de `EnEjecucion`).
+- `InspeccionCancelada_v1` → delete fila.
+
+**Constraint Postgres** (declarado en migración Marten):
+
+```sql
+CREATE UNIQUE INDEX ix_inspeccion_abierta_equipo_unique
+    ON mt_doc_inspeccionabiertaporequipoview (data->>'EquipoId');
+```
+
+(El índice cubre toda la tabla porque la fila solo existe mientras la inspección está `EnEjecucion` — no hace falta filtrado parcial.)
+
+**Comportamiento de race condition:**
+1. Técnico A ejecuta `IniciarInspeccion(equipoX)`. Handler valida blando (no hay activa) → emite `InspeccionIniciada_v1`. La proyección upsert.
+2. Técnico B simultáneamente ejecuta lo mismo. Handler valida blando contra read model **stale** (no ve la fila aún). Emite `InspeccionIniciada_v1`. La proyección intenta upsert → Postgres rechaza por unique violation.
+3. El error de proyección lo atrapa Wolverine: cancela el commit del stream y devuelve excepción al handler de B.
+4. B recibe error, recarga, ahora ve la inspección activa, redirige al técnico a la existente (UX I-I1).
+
+**Endpoint que la usa:** ninguno directamente — es interna al handler. La bandeja de inspecciones del técnico la sirve `BandejaTecnicoView` (§15.12.3).
+
+#### 15.12.7 Convenciones para proyecciones futuras
 
 - Cada proyección declara explícitamente: audiencia, eventos consumidos, endpoint que la sirve.
 - Las proyecciones son **stale-while-revalidate-friendly**: tolerar lag de segundos respecto al stream.
@@ -3848,13 +4274,22 @@ EnEjecucion
 #### Eventos nuevos (Δ §15.4)
 
 ```csharp
+public enum ResponsableCosto
+{
+    Proyecto,                       // el proyecto donde está el equipo asume el costo
+    DepartamentoEquipos             // el área que administra los equipos como activo asume el costo
+}
+
 public sealed record OTSolicitada_v1(
     Guid InspeccionId,
-    string SolicitadaPor,        // user id del aprobador con capability generar-ot
+    string SolicitadaPor,           // user id del aprobador con capability generar-ot
+    ResponsableCosto Responsable,   // quien asume el costo (uno por OT, no por hallazgo) — confirmado 2026-04-30
     DateTime SolicitadaEn);
 ```
 
 `InspeccionCerrada_v1`, `InspeccionCerradaSinOT_v1`, `OTGeneracionFallida_v1` mantienen su shape — solo cambia **quién/cuándo** los emite.
+
+> **Sobre `ResponsableCosto` (decisión 2026-04-30):** el campo existe del lado MYE en el DTO de `POST /api/v1/mye/ot-correctivas`. El nombre exacto del campo en el DTO está **pendiente de confirmar con David** (ver `07-preguntas-destrabar-followups.md`). El enum es **cerrado** (solo dos valores; no admite `Garantia`, `OtroProyecto`, ni "responsable por hallazgo"). Decisión por OT, no por hallazgo: una inspección con varios hallazgos `RequiereIntervencion` consolida en una OT con un único responsable. **Followup #4 cerrado 2026-04-30:** la palabra del lenguaje del módulo es **`Proyecto`** (sinónimo de "obra" del ERP). El módulo internamente usa `Proyecto`; el adapter al ERP traduce ↔ `obra` cuando llama endpoints como `/catalogos/obras`. `Proyecto` aquí en `ResponsableCosto` es el centro de costo (= el proyecto donde el equipo está asignado).
 
 #### Comando nuevo
 
@@ -3862,7 +4297,8 @@ public sealed record OTSolicitada_v1(
 public sealed record GenerarOT(
     Guid InspeccionId,
     string SolicitadaPor,
-    IReadOnlyCollection<string> Capabilities);   // del contexto del host PWA
+    ResponsableCosto Responsable,                 // input del aprobador en pantalla de aprobación
+    IReadOnlyCollection<string> Capabilities);    // del contexto del host PWA
 ```
 
 Validaciones del handler (todas bloqueantes — ver I-F4):
@@ -3870,14 +4306,68 @@ Validaciones del handler (todas bloqueantes — ver I-F4):
 - Aggregate en estado `Firmada`.
 - ≥1 hallazgo no eliminado con `AccionRequerida = RequiereIntervencion`.
 - `!OTSolicitada` (no se aceptan dos solicitudes sobre el mismo stream).
+- `!OTRechazada` (no se acepta solicitar OT que ya fue rechazada — ver `RechazarGenerarOT` abajo).
+- `Responsable` ∈ {`Proyecto`, `DepartamentoEquipos`} (validación de enum cerrado).
+
+#### Comando + evento de rechazo de OT (decisión 2026-04-30, observación Sergio)
+
+> **Origen:** observación de Sergio el 2026-04-30 — *"se puede cancelar la generación de la orden de trabajo derivada de dicha inspección"*. Sin este comando, una inspección firmada con `RequiereIntervencion` quedaba indefinidamente en `EsperandoAprobacionOT` si nadie aprobaba.
+
+```csharp
+public sealed record RechazarGenerarOT(
+    Guid InspeccionId,
+    string Motivo,                                // texto libre, min 10 chars
+    string RechazadoPor,
+    IReadOnlyCollection<string> Capabilities);
+
+public sealed record GeneracionOTRechazada_v1(
+    Guid InspeccionId,
+    string Motivo,
+    string RechazadoPor,
+    DateTime RechazadaEn);
+```
+
+**Validaciones del handler (todas bloqueantes — ver I-F6):**
+- `Capabilities` contiene `generar-ot` (misma capability que `GenerarOT` — quien puede aprobar puede rechazar).
+- Aggregate en estado `Firmada`.
+- ≥1 hallazgo no eliminado con `AccionRequerida = RequiereIntervencion` (sin intervención no aplica — la saga ya cerró sin OT automáticamente).
+- `!OTSolicitada` (alcance limitado: una vez solicitada y enviada al ERP, cancelar requiere coordinación cross-team — confirmado 2026-04-30, fuera de alcance MVP).
+- `!OTRechazada` (no se acepta doble rechazo).
+- `Motivo` no vacío y >= 10 chars.
+
+**Atomicidad — el handler emite DOS eventos en un único `SaveChangesAsync`:**
+
+1. `GeneracionOTRechazada_v1` (audit del rechazo).
+2. `InspeccionCerradaSinOT_v1` con discriminador `MotivoCierreSinOT = RechazadaPorAprobador` (estado terminal).
+
+```csharp
+// InspeccionCerradaSinOT_v1 extendido (decisión 2026-04-30)
+public enum MotivoCierreSinOT
+{
+    AutomaticoSinIntervencion,    // saga al firmar (no había RequiereIntervencion)
+    RechazadaPorAprobador         // RechazarGenerarOT (NUEVO 2026-04-30)
+}
+
+public sealed record InspeccionCerradaSinOT_v1(
+    Guid InspeccionId,
+    MotivoCierreSinOT Motivo,     // NUEVO campo discriminador
+    DateTime CerradaEn);
+```
+
+**Apply puro:** `Apply(GeneracionOTRechazada_v1) → OTRechazada = true; MotivoRechazo = e.Motivo`. `Apply(InspeccionCerradaSinOT_v1) → Estado = CerradaSinOT`. Sin validaciones en `Apply`.
+
+**Equipo se libera:** la proyección `InspeccionAbiertaPorEquipoView` (§15.12.6) elimina la fila al recibir `InspeccionCerradaSinOT_v1` (no requiere cambio — ya consume ese evento). Otro técnico puede iniciar nueva inspección sobre el equipo de inmediato.
 
 #### Sagas
 
 | Saga | Trigger | Acción |
 |---|---|---|
-| `CerrarInspeccionSaga` (existente, simplificada) | `InspeccionFirmada_v1` | Si **no** hay `RequiereIntervencion` → emite `InspeccionCerradaSinOT_v1`. Si **sí** hay → no-op (espera comando humano). |
+| `CerrarInspeccionSaga` (existente, simplificada) | `InspeccionFirmada_v1` | Si **no** hay `RequiereIntervencion` → emite `InspeccionCerradaSinOT_v1`. Si **sí** hay → no-op (espera comando humano). En **ambos casos** dispara `SincronizarDictamenVigenteSaga`. |
 | `EjecutarOTSaga` (nueva) | `OTSolicitada_v1` | POST `/api/v1/mye/ot-correctivas` vía outbox (ADR-006). En éxito → `InspeccionCerrada_v1`. En fallo permanente o agotado retry → `OTGeneracionFallida_v1`. |
 | `AbrirSeguimientosSaga` (existente, sin cambio) | `InspeccionFirmada_v1` | Para hallazgos `RequiereSeguimiento` abre aggregates `SeguimientoHallazgo` (§15.8). Independiente del flujo OT. |
+| `SincronizarDictamenVigenteSaga` (nueva, decisión 2026-04-30) | `InspeccionFirmada_v1` | PUT `/api/v1/equipos/{equipoId}/dictamen-vigente` vía outbox con el dictamen del stream. Independiente del flujo OT — corre en toda firma. Detalle abajo. |
+| `GenerarPdfInspeccionSaga` (nueva, decisión 2026-04-30) | `InspeccionFirmada_v1` | Renderiza PDF localmente con QuestPDF (datos congelados del stream), sube a Azure Blob, emite `PdfInspeccionGenerado_v1` con `BlobUri` + `Hash`. Independiente del flujo OT — el PDF queda disponible aun si la inspección cierra `SinOT`. Detalle en sub-sección "Generación de PDF de inspección" abajo. |
+| `EjecutarOTSaga` (existente — extendida 2026-04-30) | (sin cambio en trigger) | Tras éxito del `POST /mye/ot-correctivas` (ya tiene `OTCorrectivaIdSinco`), invoca **adicionalmente** `POST /api/v1/mye/ot-correctivas/{otCorrectivaIdSinco}/adjuntos` con el PDF (multipart). En éxito emite `PdfAdjuntadoAOT_v1`. Si el adjunto falla, emite `AdjuntoPdfFallido_v1` para queue manual — **NO bloquea ni revierte la OT** (la OT ya existe en MYE). Si el PDF aún no está generado al momento (race), reintenta con backoff. |
 
 #### Aggregate — estado interno
 
@@ -3885,27 +4375,130 @@ Validaciones del handler (todas bloqueantes — ver I-F4):
 public sealed class InspeccionTecnica
 {
     // ... campos existentes ...
-    public bool OTSolicitada { get; private set; }      // setea Apply(OTSolicitada_v1) → true
+    public bool OTSolicitada    { get; private set; }   // setea Apply(OTSolicitada_v1) → true
+    public bool OTRechazada     { get; private set; }   // setea Apply(GeneracionOTRechazada_v1) → true
+    public string? MotivoRechazoOT { get; private set; }
 }
 
-public void Apply(OTSolicitada_v1 e)
+public void Apply(OTSolicitada_v1 e)              => OTSolicitada    = true;
+public void Apply(GeneracionOTRechazada_v1 e)
 {
-    OTSolicitada = true;
+    OTRechazada     = true;
+    MotivoRechazoOT = e.Motivo;
 }
 ```
 
-`Apply` es puro (consistente con regla dura de CLAUDE.md). Las precondiciones I-F4 viven en el método de decisión `GenerarOT(...)`.
+`Apply` es puro (consistente con regla dura de CLAUDE.md). Las precondiciones I-F4 e I-F6 viven en los métodos de decisión `GenerarOT(...)` y `RechazarGenerarOT(...)`.
 
 #### Capabilities
 
 | Capability | Quién la otorga | Para qué |
 |---|---|---|
 | `ejecutar-inspeccion` | Host PWA (mapping de perfiles ERP → capabilities, paso 2.5 roadmap) | Iniciar, registrar hallazgos, firmar |
-| `generar-ot` (NUEVA) | Host PWA | Ejecutar comando `GenerarOT` |
+| `generar-ot` (NUEVA) | Host PWA | Ejecutar comando `GenerarOT` o `RechazarGenerarOT` (quien aprueba puede rechazar) |
 | `auditar-inspecciones` | Host PWA | Ver `AuditoriaInspeccionesView`, acceder cross-inspección |
 | `recibir-alertas-ot-fallida` | Host PWA | Notificación cuando integración MYE falla |
+| `recibir-alertas-ot-rechazada` (NUEVA 2026-04-30) | Host PWA | Notificación cuando un aprobador rechaza generar OT — destinatarios típicos: técnico firmante, supervisor del área. La capability es independiente de `generar-ot`: quien rechaza no se notifica a sí mismo, pero sí a otros. |
 
 `generar-ot` es **independiente** de `ejecutar-inspeccion`: un usuario puede tener una, ambas, o ninguna. Un técnico puede firmar pero no aprobar; un supervisor puede aprobar pero (típicamente) no ejecuta inspecciones él mismo. La matriz concreta de mapping ERP → capabilities la define el host PWA, no este módulo.
+
+#### Integración con MYE: dictamen vigente del equipo (decisión 2026-04-30)
+
+**Origen:** observación de Sergio (consultor producto) el 2026-04-30 — *"debe existir un servicio para actualizar este campo en el ERP"*.
+
+**Decisión:** además del dictamen embebido en `POST /api/v1/mye/ot-correctivas` (paso 4.9 del roadmap, viaja con la OT), se introduce un endpoint dedicado en MYE para mantener el **dictamen vigente del equipo** independientemente del flujo OT.
+
+| Aspecto | Decisión |
+|---|---|
+| Endpoint MYE (propuesto) | `PUT /api/v1/equipos/{equipoId}/dictamen-vigente` — nombre exacto pendiente de confirmar con David (ver doc 07) |
+| Body | `{ "dictamen": "PuedeOperar" \| "ConRestriccion" \| "NoPuedeOperar", "inspeccionOrigenId": "guid", "firmadaEn": "iso-8601", "tecnicoFirmante": "username" }` |
+| Cuándo se invoca | En **toda firma** de inspección (con OT y sin OT) — opción (ii) confirmada 2026-04-30. Redundante con el body de OT cuando hay intervención, pero unifica la lógica del adapter. |
+| Quién lo invoca | `SincronizarDictamenVigenteSaga` (nueva, ver tabla de sagas arriba) reactiva sobre `InspeccionFirmada_v1`. Wolverine outbox + retry exponencial estándar (ADR-006). |
+| Idempotencia | Idempotency-Key recomendada: `{InspeccionId}` (un dictamen vigente por inspección firmante). MYE debe aceptar replay del PUT con misma key + mismo body sin efecto colateral. |
+| Resiliencia | Si falla persistentemente → `DictamenVigenteSyncFallida_v1` (nuevo evento candidato; **NO bloquea cierre de inspección** — el cierre de la inspección es independiente del estado de sync con MYE). El módulo retiene el último dictamen sincronizado en proyección lateral para reintento. |
+| Alternativa rechazada | Bifurcar la lógica: solo invocar PUT cuando `CerradaSinOT`. Rechazada porque obliga a saber del lado del adapter el resultado de la saga de OT — peor cohesión. |
+
+**Eventos potenciales nuevos** (a confirmar cuando se implemente el slice; no se persisten en el aggregate `InspeccionTecnica` salvo el evento de fallo):
+
+```csharp
+// En el outbox / saga side, no en el aggregate
+public sealed record DictamenVigenteSyncFallida_v1(
+    Guid InspeccionId,
+    Guid EquipoId,
+    DictamenOperacion Dictamen,
+    string DetalleError,
+    DateTime FallidaEn);
+```
+
+**Open question pendiente con David:** ¿el campo `DictamenVigente` ya existe en la entidad `Equipo` del ERP, o es a construir? El payload propuesto y el contrato de idempotencia son tentativos. Ver `07-preguntas-destrabar-followups.md` (pregunta 2 a David).
+
+#### Generación de PDF de inspección y adjunto a OT (decisión 2026-04-30)
+
+**Origen:** observación de Sergio el 2026-04-30 — *"cuando se genere una OT, debe llegar como adjunto a esta, el PDF de la inspección"*.
+
+**Decisión 1 — Cuándo se genera:** **al firmar** la inspección, no al generar OT. Razones:
+- Datos congelados (post-firma el aggregate es inmutable por I-F1, ningún hallazgo cambia).
+- Disponible aun cuando la inspección cierre `SinOT` (auditoría, reportes, prueba para el cliente).
+- Si la generación de OT se rechaza (I-F6) o el PDF se necesita antes de aprobar OT, ya está listo.
+
+**Decisión 2 — Quién renderiza:** el módulo, con **QuestPDF** (librería .NET de uso común, soporta layouts complejos y escala). Alternativa rechazada: pedir al ERP que genere el PDF — agrega dependencia operativa cross-team y duplica datos.
+
+**Decisión 3 — Cómo viaja al ERP:** **endpoint separado** `POST /api/v1/mye/ot-correctivas/{otCorrectivaIdSinco}/adjuntos` con `multipart/form-data` tras la creación de la OT. Detalle del contrato en `06-contrato-apis-erp.md` (M-1b). Alternativas rechazadas:
+- Base64 en el body de M-1: pesado, requiere extender contrato existente.
+- URL SAS del blob: requiere que MYE tenga acceso a Azure Blob (cross-network del ERP on-prem hacia Azure) — fricción operativa.
+
+**Eventos nuevos (Δ §15.4):**
+
+```csharp
+public sealed record PdfInspeccionGenerado_v1(
+    Guid InspeccionId,
+    Uri BlobUri,                    // ruta interna del blob en Azure (no SAS público)
+    long TamanoBytes,
+    string Sha256,                  // integridad para reconciliación
+    DateTime GeneradoEn);
+
+public sealed record PdfAdjuntadoAOT_v1(
+    Guid InspeccionId,
+    string OTCorrectivaIdSinco,
+    string AdjuntoIdSinco,          // id que devuelve MYE al recibir el adjunto
+    DateTime AdjuntadoEn);
+
+// En outbox, no en aggregate
+public sealed record AdjuntoPdfFallido_v1(
+    Guid InspeccionId,
+    string OTCorrectivaIdSinco,
+    string DetalleError,
+    DateTime FallidaEn);
+```
+
+**Layout del PDF (definido por el módulo, sin template Sinco existente):**
+
+| Sección | Contenido |
+|---|---|
+| Header | Logo Sinco MYE, número correlativo de inspección, fecha de firma, código + descripción del equipo, proyecto |
+| Inicio | Técnico iniciador, fecha/hora de inicio, ubicación GPS de inicio |
+| Hallazgos | Por cada hallazgo no eliminado: parte, actividad, novedad técnica, `AccionRequerida`, tipo/causa de falla (si `RequiereIntervencion`), repuestos estimados (lista con cantidades), miniaturas de adjuntos (1ra página de PDFs y thumbnails de imágenes) |
+| Diagnóstico final | Texto del diagnóstico |
+| Dictamen | `PuedeOperar` / `ConRestriccion` / `NoPuedeOperar` con resaltado visual |
+| Firma | Imagen escaneada de la firma manuscrita; técnico firmante; fecha/hora de firma; ubicación GPS de firma |
+| Contribuyentes | Lista de `TecnicosContribuyentes` (todos los que aportaron eventos al stream) |
+| Footer | Numeración de páginas, hash SHA-256 del documento, enlace canónico a `GET /inspecciones/{id}` |
+
+**Almacenamiento en blob:**
+- Container: `inspecciones-pdf` (separado de `adjuntos-hallazgos`).
+- Path: `{InspeccionId}/inspeccion-{numeroCorrelativo}.pdf`.
+- Lifecycle: retención de 7 años (cumple normativa típica de archivo de inspecciones).
+- Auth: el módulo accede con managed identity. Frontend obtiene URL SAS de descarga vía endpoint del módulo (no acceso directo al blob).
+
+**Resiliencia:**
+- Generación PDF puede fallar (datos corruptos, librería) → emite evento `PdfInspeccionGeneracionFallida_v1` (candidato, a confirmar) y queue manual. **NO bloquea cierre ni OT** — el PDF se regenera al resolver.
+- Adjunto a OT puede fallar (5xx, 4xx) → `AdjuntoPdfFallido_v1`, queue manual. La OT existe igual en MYE; el adjunto se reintenta o se sube manual desde MYE web.
+- Race condition (PDF aún generándose cuando llega `OTSolicitada_v1`): `EjecutarOTSaga` consulta el stream antes de invocar el endpoint de adjuntos; si `PdfInspeccionGenerado_v1` aún no existe, espera con backoff (max 5 min) y luego falla con `AdjuntoPdfFallido_v1`.
+
+**Open questions pendientes con David** (ver `07-preguntas-destrabar-followups.md`):
+1. ¿MYE ya tiene endpoint de adjuntos para OT correctivas, o es a construir?
+2. ¿Tamaño máximo del adjunto que MYE acepta? Sugerencia: ≥ 10 MB (el PDF estándar pesa 1-5 MB con miniaturas de fotos).
+3. ¿Tipos MIME admitidos? El módulo solo enviará `application/pdf` aquí — confirmar.
 
 ### Implicaciones para read models
 
@@ -3919,11 +4512,13 @@ public void Apply(OTSolicitada_v1 e)
 | Paso | Cambio |
 |---|---|
 | 3.27 | `CerrarInspeccionSaga` — dividir en dos sagas (`CerrarInspeccionSaga` simplificada + `EjecutarOTSaga` nueva). |
+| 3.27c (NUEVO 2026-04-30) | Adapter MYE: `PUT /equipos/{id}/dictamen-vigente`. Invocado por `SincronizarDictamenVigenteSaga` (nueva). Tests obligatorios: replay con misma key (idempotencia), 4xx no retry, 5xx con backoff. |
 | 3.42 | `POST /inspecciones/{id}/firmar` — semántica reducida: ya no implica POST a MYE. |
 | 3.42b (NUEVO) | Comando + endpoint `POST /inspecciones/{id}/generar-ot`. Capability gate `generar-ot`. |
 | 3.45 | `GET /inspecciones/{id}` — exponer `EstadoOT` y capabilities del usuario consultante. |
 | 3.45b (NUEVO) | Bandeja `GET /inspecciones/pendientes-ot?...` sirviendo §15.12.5. |
 | 2.5 | Mapping de perfiles ERP → capabilities — agregar `generar-ot` a la matriz. |
+| 4.9b (NUEVO 2026-04-30) | Endpoint MYE `PUT /api/v1/equipos/{equipoId}/dictamen-vigente` — pendiente coordinación cross-team. |
 
 ### Implicaciones para UI (frontend)
 

@@ -24,8 +24,8 @@ Producir una **spec de slice** que sirva de contrato para los roles `red` y `gre
 - **Lenguaje en español** para conceptos de dominio (`InspeccionTecnica`, `Hallazgo`, `Repuesto`, `Seguimiento`, `Equipo`, `Parte`, `Rutina`, `Tecnico`, `Obra`).
 - **Coordenadas GPS**: siempre `UbicacionGps(Latitud, Longitud, PrecisionMetros, CapturadoEn)` — prohibido `double` pelado para lat/long.
 - **Fechas calendario**: `DateOnly`; timestamps: `DateTimeOffset`.
-- **IDs externos de Sinco** (equipos, partes, repuestos, obras): el comando los recibe como `string` y el dominio los trata como opacos. Los catálogos locales (ADR-004) tienen sus propios documentos.
-- **Multi-obra**: el `tecnico.ObrasAsignadas` viene del contexto del usuario inyectado por el host PWA Sinco MYE. El dominio lo recibe como parámetro (`ISet<ObraId>`); nunca lo lee del contexto HTTP ni asume el mecanismo concreto del host.
+- **IDs externos de Sinco** (equipos, partes, repuestos, proyectos — el ERP los nombra "obras"): el comando los recibe como `string` y el dominio los trata como opacos. Los catálogos locales (ADR-004) tienen sus propios documentos.
+- **Multi-proyecto**: el `tecnico.ProyectosAsignados` viene del contexto del usuario inyectado por el host PWA Sinco MYE (claim `sinco_obras` literal del IdP, mapeado por el módulo a `proyectos`). El dominio lo recibe como parámetro (`ISet<ProyectoId>`); nunca lo lee del contexto HTTP ni asume el mecanismo concreto del host.
 - **Eventos**: `record` inmutable en pasado (`HallazgoRegistrado`, no `RegistrarHallazgo`).
 - **Comandos**: `record` inmutable en presente imperativo (`RegistrarHallazgo`, no `Registrar`).
 - **Versionado de eventos**: sufijo `_v1` cuando emerja una segunda versión (p. ej. `HallazgoRegistrado_v2`). Por defecto los eventos son `v1` implícito.

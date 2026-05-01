@@ -37,7 +37,7 @@ Líder de adopción global por simplicidad. Constructor de checklists drag-and-d
 - **Integración:** API REST pública, webhooks, integración nativa con Procore, SharePoint, Dropbox y Zapier. Existe una *Universal linked data lists 2-way API* para sincronizar catálogos.
 - **Arquitectura:** SaaS multi-tenant cloud, app móvil iOS/Android offline-first.
 - **Precios:** plan Premium desde **USD 24/usuario/mes** (anual). Mínimo un seat completo. Free tier limitado.
-- **Implicación para nosotros:** es la "vara" en UX. Lo que NO ofrece y nosotros sí podríamos: lógica de horas-máquina, costeo por activo en obra, integración bidireccional con un ERP específico, eventos de dominio expuestos.
+- **Implicación para nosotros:** es la "vara" en UX. Lo que NO ofrece y nosotros sí podríamos: lógica de horas-máquina, costeo por activo en proyecto, integración bidireccional con un ERP específico, eventos de dominio expuestos.
 
 ### Whip Around
 
@@ -139,7 +139,7 @@ Marten encaja particularmente bien con este dominio porque:
 
 - Cada inspección es **una secuencia de eventos inmutables** (inspección iniciada, ítem revisado, defecto detectado, foto adjuntada, firmada, aprobada). Eso es literalmente el caso de uso textbook de event sourcing.
 - La **auditoría regulatoria** (DVIR / SST / ISO 55000 / cliente final) exige trazabilidad inmutable: ES la da gratis.
-- Las **proyecciones** (Marten projections) cubren las vistas que el ERP necesita: estado actual del activo, KPIs de obra, próximas inspecciones, defectos abiertos. Cada proyección es un *contrato de lectura* contra el ERP.
+- Las **proyecciones** (Marten projections) cubren las vistas que el ERP necesita: estado actual del activo, KPIs de proyecto, próximas inspecciones, defectos abiertos. Cada proyección es un *contrato de lectura* contra el ERP.
 - El **desacople** se materializa publicando eventos al ERP por outbox/bus. El ERP nunca lee la base de datos de inspecciones; consume eventos.
 
 Patrón de referencia: comando llega → handler carga el stream → emite evento(s) → Marten persiste → proyecciones se actualizan → outbox publica al bus → ERP (y otros consumidores) reaccionan.
@@ -156,7 +156,7 @@ Patrón de referencia: comando llega → handler carga el stream → emite event
 | IBM Maximo | EAM enterprise | Sí | Sí / Sí | Parcial (Kafka opcional) | >USD 3.150/mes | Bajo (otro segmento) |
 | HCSS / B2W | Heavy/civil US | Sí | Sí / Sí | No | Custom | Bajo (foco US) |
 | Tenna | Telemática + equipo | Sí | Sí / Sí | No | Custom | Bajo |
-| Procore (+ Vista) | Gestión de obra | Sí | Sí / Limitado | No | Custom | Bajo (no es CMMS puro) |
+| Procore (+ Vista) | Gestión de proyecto | Sí | Sí / Limitado | No | Custom | Bajo (no es CMMS puro) |
 | openMAINT | Open-source EAM | Limitado | Sí / No | No | Gratis | — |
 | ERPNext | ERP open-source | Sí (limitado) | Sí / Sí | Parcial | Gratis / Cloud | — |
 
@@ -169,7 +169,7 @@ Patrón de referencia: comando llega → handler carga el stream → emite event
    - Integración **event-driven en tiempo real** con el ERP propio (vs. polling/REST que usa la mayoría).
    - **Trazabilidad de auditoría inmutable** habilitada por event sourcing (vendible como cumplimiento ISO/SST).
    - **Inspección guiada paso a paso** estilo Tractian (SOP forzada), que SafetyCulture y Fracttal no enforce.
-   - **Costos por activo y por obra** alimentados desde el ERP, mostrados en la app — pocos competidores cierran este loop bidireccionalmente.
+   - **Costos por activo y por proyecto** alimentados desde el ERP, mostrados en la app — pocos competidores cierran este loop bidireccionalmente.
 3. **Lo que NO debemos construir nosotros**: motor de checklists genérico desde cero (es commodity); construirlo a la altura de SafetyCulture es un proyecto en sí. Considerar si conviene un componente reutilizable.
 4. **Modelo comercial de referencia para LATAM**: Fracttal va con cotización, Tractian igual. Si vamos a comercializar fuera del cliente inicial, **USD 15-25 por usuario/mes** es la banda razonable.
 5. **Riesgo principal**: Fracttal tiene presencia y dominio del español. Nuestra ventaja no es batirlo en CMMS general, sino ser **la pieza de inspección perfectamente acoplada al ERP del cliente**.
@@ -246,7 +246,7 @@ Patrón de referencia: comando llega → handler carga el stream → emite event
 
 ### Flujo principal en el módulo
 
-1. Técnico abre la app → ve **bandeja de novedades pendientes** del preoperacional para los equipos asignados a su obra.
+1. Técnico abre la app → ve **bandeja de novedades pendientes** del preoperacional para los equipos asignados a su proyecto.
 2. Selecciona una novedad → la app crea una **inspección técnica** que la referencia, o el técnico inicia una inspección programada.
 3. Ejecuta la plantilla del tipo de inspección: ítems con OK / con-falla / N/A, mediciones numéricas, fotos, observaciones.
 4. Por cada falla detectada: identifica **repuestos** (búsqueda en catálogo de inventario) e **insumos**, con cantidad estimada.
@@ -262,7 +262,7 @@ Patrón de referencia: comando llega → handler carga el stream → emite event
 - Confirmar el **contrato de eventos del preoperacional**: qué emite hoy, qué hay que agregar, en qué bus.
 - Confirmar **cómo expone el catálogo de repuestos/insumos** Sinco hoy (¿módulo inventario? ¿API REST? ¿base compartida?).
 - Definir **idempotencia y outbox** para no duplicar OTs correctivas si un evento se reprocesa.
-- Definir **modelo de offline para técnicos**: probablemente más relajado que para operarios pero igual obligatorio en obras remotas.
+- Definir **modelo de offline para técnicos**: probablemente más relajado que para operarios pero igual obligatorio en proyectos remotos.
 
 ### Recomendación actualizada de referencias visuales
 
@@ -711,7 +711,7 @@ Se evaluaron dos enfoques:
 - **Sin notificación push** al técnico cuando aparece una novedad nueva. Aceptable para el caso de uso.
 - **Adjuntos**: el módulo en Azure los lee bajo demanda vía VPN (la API devuelve URL firmada que apunta a un endpoint del preop o a un servicio proxy). Si VPN cae, no se ven fotos. Mitigación opcional: cachear en Blob los adjuntos consultados (lazy replication).
 - **Acoplamiento al contrato API del preoperacional**: si cambia, el módulo se rompe. Mitigación: versionado de URL (`/api/v1/...`), capa ACL aislada en el módulo (`Sinco.Inspecciones.Adapters.Preoperacional`), tests de contrato (Pact o equivalente).
-- **Offline del técnico**: si el técnico va a obra sin señal, su app no llega al API. Mitigación: cuando se conecta, descarga las novedades pendientes de los equipos asignados a su obra a una caché local en el dispositivo. Esto es responsabilidad del cliente móvil, no del backend.
+- **Offline del técnico**: si el técnico va al proyecto sin señal, su app no llega al API. Mitigación: cuando se conecta, descarga las novedades pendientes de los equipos asignados a su proyecto a una caché local en el dispositivo. Esto es responsabilidad del cliente móvil, no del backend.
 
 ### Lo que NO cambia con esta decisión
 
@@ -767,7 +767,7 @@ On-Prem (Sinco)                                Azure (módulo Inspecciones)
 
 ```
 GET  /api/v1/preop/novedades?obra={obraId}&estado=pendiente&page=1&size=50
-        → Lista paginada de novedades pendientes de verificar para los equipos de la obra.
+        → Lista paginada de novedades pendientes de verificar para los equipos del proyecto. (URL del ERP usa "obra"; el módulo lo conoce internamente como "proyecto" — decisión 2026-04-30.)
 
 GET  /api/v1/preop/novedades/{novedadId}
         → Detalle completo: equipo, parte, actividad, descripción,
@@ -974,7 +974,7 @@ A las del preoperacional (§9.11) se suman las de equipo y parte. Estas probable
 
 ```
 GET /api/v1/equipos/{equipoId}
-       → Detalle del equipo: serial, modelo, marca, obra asignada, horómetro, etc.
+       → Detalle del equipo: serial, modelo, marca, proyecto asignado, horómetro, etc.
 
 GET /api/v1/equipos/{equipoId}/partes
        → Lista de partes/componentes aplicables a este equipo
@@ -1046,7 +1046,7 @@ Esto reescribe el alcance del workstream B y obliga a coordinación cross-team.
 
 Diez a once endpoints en **cuatro módulos distintos** de Sinco, posiblemente **cuatro equipos distintos** (sumando el de identidad/usuarios por el ADR-002).
 
-> **Nota (2026-04-27):** Tras la revisión de plantillas Excel del ERP, este inventario fue **revisado** en `01-modelo-dominio.md §12.8`. La versión vigente cambia: el endpoint `/equipos/{id}/partes` se reemplaza por `/equipos/{cod}` + `/rutinas?grupo=&tipo=` (las partes vienen via los items de la rutina aplicable al grupo del equipo, no asociadas al equipo individual). Se agregan catálogos cerrados de partes, actividades, ubicaciones y obras. Total final: **15 endpoints**. Léase `01-modelo-dominio.md §12.8` para la lista vigente.
+> **Nota (2026-04-27):** Tras la revisión de plantillas Excel del ERP, este inventario fue **revisado** en `01-modelo-dominio.md §12.8`. La versión vigente cambia: el endpoint `/equipos/{id}/partes` se reemplaza por `/equipos/{cod}` + `/rutinas?grupo=&tipo=` (las partes vienen via los items de la rutina aplicable al grupo del equipo, no asociadas al equipo individual). Se agregan catálogos cerrados de partes, actividades, ubicaciones y proyectos (que el ERP nombra "obras"). Total final: **15 endpoints**. Léase `01-modelo-dominio.md §12.8` para la lista vigente.
 
 ### Lo bueno
 
@@ -1143,7 +1143,7 @@ B-5: Integración punta a punta + ajustes          (2 sem)       ◀ todos
 1. **No reusar la auth tal cual** (sesiones server-side de Sinco no funcionan en cloud).
 2. **No duplicar credenciales**: el técnico no debería tener "una clave Sinco + una clave Azure". Una sola identidad operativa.
 3. **Token único** que sirva contra cloud y on-prem, para no fragmentar el cliente móvil.
-4. **Sinco on-prem mantiene la verdad sobre quién es usuario válido y qué obras/equipos puede ver** — la autorización sigue siendo Sinco; sólo cambia el mecanismo de autenticación.
+4. **Sinco on-prem mantiene la verdad sobre quién es usuario válido y qué proyectos/equipos puede ver** — la autorización sigue siendo Sinco; sólo cambia el mecanismo de autenticación.
 
 ### Opciones evaluadas
 
@@ -1164,7 +1164,7 @@ Es el balance correcto entre:
 - Bajo riesgo de ingeniería personalizada (no se construye token issuer; se usa lo de Microsoft).
 - Compatibilidad con que **on-prem también valide los mismos tokens**: cualquier API .NET puede validar JWTs Entra usando `Microsoft.AspNetCore.Authentication.JwtBearer` + JWKS público.
 - Camino limpio para sumar MFA, conditional access, B2C de clientes futuros sin reescribir.
-- Sinco mantiene la **verdad sobre roles y obras asignadas** — eso entra al token vía claims enrichment al momento del login.
+- Sinco mantiene la **verdad sobre roles y proyectos asignados** — eso entra al token vía claims enrichment al momento del login.
 
 ### Arquitectura del flujo
 
@@ -1174,7 +1174,7 @@ Es el balance correcto entre:
 │  ┌──────────────────┐        ┌──────────────────────────┐                  │
 │  │ BD usuarios      │        │ Servicio "User Sync API" │                  │
 │  │ Sinco (master)   │ ─────▶ │ (expone usuarios + roles │                  │
-│  │ + roles + obras  │        │  + obras vía REST)       │                  │
+│  │ + roles + proyec │        │  + proyectos vía REST)   │                  │
 │  └──────────────────┘        └────────────┬─────────────┘                  │
 │                                            │                                │
 │  ┌──────────────────┐                      │                                │
@@ -1244,7 +1244,7 @@ Pull-based, vía VPN, con un job en Azure (Function timer-triggered o Logic App)
 - Llama `GET /api/v1/admin/usuarios?desde={lastSync}` en Sinco (endpoint a construir, expone delta).
 - Por cada usuario: crea/actualiza/desactiva en Entra usando **Microsoft Graph** o **SCIM**.
 - Mapea roles Sinco → grupos Entra (`sinco-tecnicos`, `sinco-ingenieros`, `sinco-supervisores`).
-- Mapea obras asignadas → custom directory extensions en el usuario Entra (atributos custom).
+- Mapea proyectos asignados → custom directory extensions en el usuario Entra (atributos custom).
 
 **Ventaja del pull**: Sinco no expone nada al internet — todo va por VPN. Solo el endpoint `/admin/usuarios` necesita estar disponible para el sync, y solo desde la VNet Azure.
 
@@ -1293,11 +1293,11 @@ Cada endpoint cloud y on-prem valida en el token:
 - `sinco_roles` contiene "tecnico" o "ingeniero" para acceder a inspecciones.
 - `sinco_obras` contiene el `obraId` del recurso solicitado, o el usuario tiene rol "supervisor" que ve todo.
 
-Si la autorización fina cambia (un técnico se reasigna de obra), el token actual sigue válido hasta vencer (típicamente 1h). El sync periódico actualiza Entra y el próximo refresh trae los claims correctos. Si se necesita revocación inmediata, agregar token revocation o reducir TTL — pero solo si hay caso de uso real.
+Si la autorización fina cambia (un técnico se reasigna de proyecto), el token actual sigue válido hasta vencer (típicamente 1h). El sync periódico actualiza Entra y el próximo refresh trae los claims correctos. Si se necesita revocación inmediata, agregar token revocation o reducir TTL — pero solo si hay caso de uso real.
 
 ### Lo que se acepta como trade-off
 
-- **Latencia de cambio de roles/obras**: hasta el próximo refresh del token (≤ 1h). Aceptable.
+- **Latencia de cambio de roles/proyectos**: hasta el próximo refresh del token (≤ 1h). Aceptable.
 - **Mantenimiento del sync**: una pieza nueva que monitorear. Mitigación: alertas en Application Insights si el sync falla N veces seguidas.
 - **Doble fuente de verdad** (Sinco para la data operativa, Entra para identity en cloud) — bien explícito en el sync, no es problema si está bien gobernado.
 - **Salida HTTPS desde on-prem a Microsoft endpoints**: requiere coordinación con redes Sinco. No es excepcional, pero hay que pedirla.
@@ -1320,7 +1320,7 @@ Si la autorización fina cambia (un técnico se reasigna de obra), el token actu
 Esta arquitectura permite evolucionar a:
 - B2C/External ID si se vende a clientes finales con marcas distintas.
 - Federación inversa si Sinco lanza su propio IdP corporativo y quieren federar.
-- MFA condicional por rol/obra/horario sin tocar código.
+- MFA condicional por rol/proyecto/horario sin tocar código.
 
 Nada de eso requiere reescribir lo de arriba.
 
@@ -1332,7 +1332,7 @@ Nada de eso requiere reescribir lo de arriba.
 
 ### Contexto
 
-El módulo de inspecciones consume múltiples **catálogos de referencia** que viven en Sinco on-prem: causas de falla, tipos de falla, partes, actividades, ubicaciones, obras, equipos, rutinas, repuestos. Estos catálogos:
+El módulo de inspecciones consume múltiples **catálogos de referencia** que viven en Sinco on-prem: causas de falla, tipos de falla, partes, actividades, ubicaciones, proyectos (que el ERP nombra "obras"), equipos, rutinas, repuestos. Estos catálogos:
 
 - Se cargan **una vez al arranque del proyecto** del cliente.
 - Reciben típicamente **1-2 actualizaciones por año** (agregar una causa nueva, renombrar una descripción).
@@ -1376,7 +1376,7 @@ Cobertura completa del inventario §12.9.7 del modelo de dominio:
 | Causas de falla | `GET /api/v1/catalogos/causas-falla` | Una vez al arranque + raras adiciones |
 | Tipos de falla | `GET /api/v1/catalogos/tipos-falla` | Una vez al arranque + raras adiciones |
 | Ubicaciones | `GET /api/v1/catalogos/ubicaciones` | Esporádico |
-| Obras | `GET /api/v1/catalogos/obras` | Mensual |
+| Proyectos (ERP los nombra "obras") | `GET /api/v1/catalogos/obras` | Mensual |
 | Repuestos / insumos | `GET /api/v1/insumos` | Variable; adiciones frecuentes |
 
 **Nota**: Repuestos puede tener volumen de adiciones más alto. Si en operación real resulta que el cron diario es insuficiente para repuestos, se reduce su intervalo a 4-6 horas sin tocar los demás. La estrategia es por catálogo.
@@ -1440,12 +1440,12 @@ Si la operación demanda mejor responsividad (ej. en operaciones grandes con cam
 - Volumen aproximado: ¿miles de SKUs, decenas de miles?
 
 **Sobre el alcance funcional del MVP:**
-- ¿Qué **2-3 tipos de inspección técnica** entran primero (motor, hidráulica, post-mantenimiento, certificación)?
-- Perfil del **técnico/ingeniero**: ¿uno por obra? ¿flotantes entre obras? ¿cuántas inspecciones por día se esperan?
+- ⚠️ **Pregunta superseded** (decisión 2026-04-27, §12.10/§12.11 del modelo): el MVP usa una rutina técnica única por grupo de mantenimiento, sin subdivisión por enfoque (motor / hidráulica / post-mantenimiento). Pregunta vigente: ¿el alcance de "una rutina por grupo, sin subdividir" se sostiene en operación real, o emerge necesidad de "contexto de inspección" como cambio aditivo?
+- Perfil del **técnico/ingeniero**: ¿uno por proyecto? ¿flotantes entre proyectos? ¿cuántas inspecciones por día se esperan?
 - ¿Se requiere **offline duro** (días sin sincronizar) o "buen offline" (horas)?
 
 **Sobre normativa y cliente piloto:**
-- Cliente piloto y tipo de obra (vial, minera, edificación, hidroeléctrica).
+- Cliente piloto y tipo de proyecto (vial, minero, edificación, hidroeléctrico).
 - Normativas aplicables (ISO 45001, normativa minera colombiana, ANI/INVIAS).
 
 ---

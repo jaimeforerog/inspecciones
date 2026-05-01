@@ -41,7 +41,7 @@ Sinco MYE ya tiene una **app móvil** con módulos de Preoperacional, Estado de 
 - Sinco no tiene Azure landing zone hoy. El módulo es la primera carga cloud de la compañía.
 - El resto del ecosistema Sinco vive on-prem (BD SQL Server, APIs REST, identidad).
 - Ningún endpoint REST que el módulo necesita existe hoy en Sinco. Hay que construirlos.
-- Los catálogos de equipos, partes, causas de falla, tipos de falla, repuestos, ubicaciones y obras existen como datos en el ERP — solo hay que exponerlos vía REST.
+- Los catálogos de equipos, partes, causas de falla, tipos de falla, repuestos, ubicaciones y proyectos (que el ERP nombra "obras") existen como datos en el ERP — solo hay que exponerlos vía REST.
 
 ---
 
@@ -246,7 +246,7 @@ Generación **automática** vía saga `CerrarInspeccionSaga` al recibir `Inspecc
 
 ### ADR-004 — Sincronización de catálogos de referencia
 
-Catálogos (causas/tipos de falla, partes, ubicaciones, obras, equipos, rutinas, repuestos) sincronizados con **sync inicial + cron diario nocturno con `If-Modified-Since`/`ETag` + stale-while-revalidate** como fallback. Botón admin "refrescar ahora" diferido a v1.1. Reglas operativas vinculantes en el lado ERP: IDs/códigos inmutables, renombrar = cambiar solo descripción, descontinuar = `activa = false` no delete. Ventana de staleness aceptada: hasta 24h. Detalle completo en `00-investigacion-mercado.md §9.15`.
+Catálogos (causas/tipos de falla, partes, ubicaciones, proyectos, equipos, rutinas, repuestos) sincronizados con **sync inicial + cron diario nocturno con `If-Modified-Since`/`ETag` + stale-while-revalidate** como fallback. Botón admin "refrescar ahora" diferido a v1.1. Reglas operativas vinculantes en el lado ERP: IDs/códigos inmutables, renombrar = cambiar solo descripción, descontinuar = `activa = false` no delete. Ventana de staleness aceptada: hasta 24h. Detalle completo en `00-investigacion-mercado.md §9.15`.
 
 ### ADR-005 — SignalR para notificación push del cierre
 
@@ -353,18 +353,18 @@ El consultor debe ser **Microsoft Partner activo** con las siguientes competenci
 
 El módulo se considera entregado cuando:
 
-1. ✅ Un técnico en obra puede abrir la app, ver inspecciones programadas para él.
+1. ✅ Un técnico en proyecto puede abrir la app, ver inspecciones programadas para él.
 2. ✅ Puede iniciar una inspección, recorrer la rutina técnica, marcar items con hallazgo.
 3. ✅ Puede importar novedades del preoperacional y verificarlas.
 4. ✅ Puede registrar hallazgos ad-hoc usando los catálogos cerrados (Parte, Causa, Tipo).
 5. ✅ Para hallazgos `RequiereIntervencion`, puede estimar repuestos del catálogo de inventario.
 6. ✅ Puede emitir diagnóstico, dictamen y firmar.
 7. ✅ La OT correctiva aparece en MYE con BOM consolidado y código identificable.
-8. ✅ El supervisor puede ver KPIs y bandeja consolidada por obra desde la web.
+8. ✅ El supervisor puede ver KPIs y bandeja consolidada por proyecto desde la web.
 9. ✅ El sistema sobrevive caídas temporales de VPN sin pérdida de datos del lado backend (las inspecciones en proceso quedan persistidas; al recuperar conexión continúan).
 10. ✅ Auditoría: cualquier inspección cerrada puede reconstruir su historia completa desde el event store.
 
-> **No incluido en MVP (online-only):** trabajo offline del técnico (sin red). Se difiere a versión posterior. Si el técnico pierde conexión durante una inspección, recibe un mensaje claro y reintenta cuando recupera red. Para futuras versiones, las decisiones técnicas y volúmenes ya están analizados (PWA + IndexedDB + pre-fetch dirigido por obra del día) — esta funcionalidad es agregable sin rediseño del modelo de dominio.
+> **No incluido en MVP (online-only):** trabajo offline del técnico (sin red). Se difiere a versión posterior. Si el técnico pierde conexión durante una inspección, recibe un mensaje claro y reintenta cuando recupera red. Para futuras versiones, las decisiones técnicas y volúmenes ya están analizados (PWA + IndexedDB + pre-fetch dirigido por proyecto del día) — esta funcionalidad es agregable sin rediseño del modelo de dominio.
 
 ---
 
@@ -381,9 +381,9 @@ Estos supuestos se asumen razonables al firmar el SOW pero deben confirmarse en 
 | MVP cubre **una rutina técnica por grupo de mantenimiento** (BULLDOZER, EXCAVADORA, VOLQUETA, etc.). No hay subdivisiones por enfoque (motor/hidráulica) ni distinción de contexto (post-mantenimiento/certificación) en v1. La rutina se deriva del grupo al iniciar inspección — el técnico no selecciona. | Bajo — agregable de forma aditiva si emerge necesidad |
 | Cliente piloto a definir antes del arranque del workstream C | Medio — sin piloto el DoD pierde concreción |
 | El DDL del preoperacional se entrega al consultor en kickoff | Medio — requerido para B-1 |
-| **MVP es online-only** — offline diferido a versión posterior. El técnico debe tener conexión durante la inspección. | Medio — restricción operativa explícita; en obras remotas sin señal no podrá usar el módulo en v1.0 |
+| **MVP es online-only** — offline diferido a versión posterior. El técnico debe tener conexión durante la inspección. | Medio — restricción operativa explícita; en proyectos remotos sin señal no podrá usar el módulo en v1.0 |
 | **Stack PWA confirmado**: la app móvil de Sinco MYE es PWA en React, ya tiene Service Worker activo, soporta iOS, mantenida por el mismo equipo que construye este módulo | Bajo — heredamos infraestructura existente, no introducimos SW nuevo |
-| La pantalla "Importar desde preoperacional" se diseña con base en wireframes existentes (`02-wireframes-mobile.html`) y se valida con UX Sinco antes de codificar | Bajo — alcance acotado |
+| La pantalla "Importar hallazgo" (con tabs Preoperacional / Seguimiento) se diseña con base en el mock vigente (`Plantillas Excel/mock del diseño.docx`, image11–13 del mock de Daniel) y se valida con UX Sinco antes de codificar | Bajo — alcance acotado |
 | La pantalla de cierre + dictamen + firma (pantalla 6 de wireframes) es propuesta nueva, no existe en mockups Sinco | Medio — validar con UX Sinco |
 | El concepto `Dictamen` (PuedeOperar/ConRestriccion/NoPuedeOperar) es nuevo del módulo de inspecciones, no preexistente en MYE | Bajo — se persiste en el aggregate y viaja al request a MYE |
 
@@ -411,8 +411,8 @@ Estos supuestos se asumen razonables al firmar el SOW pero deben confirmarse en 
 
 - `00-investigacion-mercado.md` — investigación de mercado, ADRs, Cumplimiento EDA Sinco, brief detallado, preguntas abiertas.
 - `01-modelo-dominio.md` — modelo de dominio completo: bounded contexts, aggregate, eventos, comandos, invariantes, saga, adapters, naming, estructura de proyecto, reconciliación con plantillas Excel del ERP, refinamiento del Hallazgo, ADR-003.
-- `02-wireframes-mobile.html` — wireframes móviles de las pantallas clave (8 pantallas, paleta y patrones tomados de la app real Sinco MYE).
-- `Plantillas Excel/` — formatos reales del ERP (Equipos.xlsx, Insumos.xlsx, preoperacional.xlsx, imagenes app.docx).
+- `Plantillas Excel/mock del diseño.docx` — **fuente visual vigente desde 2026-04-30** (mock de Daniel — 13 pantallas en 4 secciones: Etapa inicial, Hallazgo no requiere intervención, Hallazgo sí requiere intervención, Importar hallazgo). Reemplazó a los wireframes HTML previos.
+- `Plantillas Excel/` — formatos reales del ERP (Equipos.xlsx, Insumos.xlsx, preoperacional.xlsx, imagenes app.docx) + carpeta `Datos clientes/` con reportes de los 27 clientes (ver `08-volumenes-clientes-erp.md`).
 
 ---
 

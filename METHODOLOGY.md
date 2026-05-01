@@ -208,7 +208,7 @@ Para slices que sincronizan catálogos Sinco (equipos, partes, repuestos, obras,
 
 Para slices de la PWA (Fase 5 del roadmap), la spec se reformula:
 
-- [ ] Wireframe de referencia citado (`02-wireframes-mobile.html` pantalla N, o `02b/02c/02d`).
+- [ ] Mock/wireframe de referencia citado (mock vigente: `Plantillas Excel/mock del diseño.docx` imageN; secundarios: `02c-variantes-ux-novedades.html` para análisis comparativo histórico, `02d-wireframes-seguimientos.html` para el aggregate Seguimiento).
 - [ ] Principios MD3 invocados explicitados (lista corta).
 - [ ] Smoke visual del usuario antes de marcar como `approved`.
 - [ ] Sin red phase formal (se trabaja con verificación visual + lint clean + build verde). Tests E2E con Playwright son slice aparte.

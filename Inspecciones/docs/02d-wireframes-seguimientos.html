@@ -253,6 +253,61 @@ body {
 }
 .bottom-bar .btn { flex: 1; }
 
+/* Tabs Preoperacional / Seguimiento (decisión 2026-04-30, mock de Daniel image11) */
+.tabs-bar {
+  display: flex; background: white; border-bottom: 1px solid var(--divider);
+  padding: 0 16px;
+}
+.tab-item {
+  flex: 1; padding: 12px 8px; text-align: center;
+  font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  border-bottom: 2px solid transparent; cursor: pointer;
+}
+.tab-item.active {
+  color: var(--primary); border-bottom-color: var(--primary); font-weight: 600;
+}
+.tab-item .badge-count {
+  display: inline-block; margin-left: 4px; padding: 1px 6px;
+  background: #f1f5f9; color: var(--text-secondary);
+  border-radius: 10px; font-size: 10px; font-weight: 600;
+}
+.tab-item.active .badge-count { background: rgba(33, 150, 243, .15); color: var(--primary); }
+
+/* Card de novedad preop importable (pestaña Preoperacional) */
+.preop-card {
+  background: var(--surface); border-radius: 8px; padding: 12px;
+  margin-bottom: 12px; box-shadow: var(--shadow-1);
+}
+.preop-card .ref-tag {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  background: #dbeafe; color: #1e40af; font-size: 10px; font-weight: 600;
+}
+.preop-card .preop-fecha { font-size: 11px; color: var(--text-secondary); }
+.preop-card .preop-titulo { font-weight: 500; margin: 6px 0 4px; color: var(--text); }
+.preop-card .preop-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+.preop-card .preop-meta {
+  display: flex; gap: 12px; margin-top: 6px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.preop-card .action-row {
+  display: flex; gap: 8px; margin-top: 10px; align-items: stretch;
+}
+.btn-import-main {
+  flex: 1; padding: 10px 8px; border-radius: 6px;
+  font-size: 13px; font-weight: 600; text-align: center;
+  background: var(--primary); color: white;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn-discard-icon {
+  flex: 0 0 44px; padding: 10px 0; border-radius: 6px;
+  font-size: 18px; text-align: center;
+  border: 1.5px solid var(--action-high);
+  background: var(--action-high-bg); color: var(--action-high);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.btn-discard-icon::before { content: "🗑"; }
+
 /* Modal */
 .modal-backdrop {
   position: absolute; left: 0; right: 0; top: 0; bottom: 0;
@@ -391,7 +446,7 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
   <!-- 1. Inspección del equipo con dos banners -->
   <div class="screen-wrapper">
     <div class="screen-label"><span class="num">1</span> Inspección del equipo (entry)</div>
-    <div class="screen-caption">Pantalla del flujo principal con DOS banners: novedades preop pendientes (naranja) + <strong>seguimientos previos del equipo</strong> (azul, propuesta nueva). El técnico decide cuál revisar primero.</div>
+    <div class="screen-caption">Pantalla del flujo principal con DOS banners informativos: novedades preop pendientes (naranja) + <strong>seguimientos previos del equipo</strong> (azul). En el bottom bar, dos botones únicos (decisión 2026-04-30, mock de Daniel image5): <strong>+ Agregar hallazgo</strong> (manual ad-hoc) y <strong>📁 Importar hallazgo</strong> (abre pantalla con tabs Preoperacional / Seguimiento — el badge consolida ambas fuentes, ej. "7" = 5 preop + 2 seguimientos). El botón previo "↻ Traer de seguimiento" se eliminó — ahora se accede a los seguimientos desde la segunda pestaña de "Importar hallazgo".</div>
     <div class="phone">
       <div class="status-bar"><span>9:55</span><span>● ● ● ●</span></div>
       <div class="app-bar">
@@ -436,15 +491,12 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
         </div>
 
       </div>
+      <!-- Bottom bar — decisión 2026-04-30: dos botones únicos. "Importar hallazgo" abre pantalla con tabs Preoperacional/Seguimiento (mock de Daniel image11). El badge consolida los contadores de ambas fuentes. -->
       <div class="bottom-bar" style="flex-direction:column;gap:8px;">
         <div class="btn btn-primary btn-block">+ Agregar hallazgo</div>
         <div class="btn btn-outline btn-block" style="position:relative;">
-          📁 Importar desde preoperacional
-          <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:var(--action-mid-bg);color:var(--action-mid);font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;">5</span>
-        </div>
-        <div class="btn btn-outline btn-block" style="position:relative;">
-          ↻ Traer de seguimiento
-          <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:var(--info-bg);color:var(--info);font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;">2</span>
+          📁 Importar hallazgo
+          <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:var(--action-mid-bg);color:var(--action-mid);font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;">7</span>
         </div>
       </div>
     </div>
@@ -452,14 +504,19 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
 
   <!-- 2. Lista de seguimientos -->
   <div class="screen-wrapper">
-    <div class="screen-label"><span class="num">2</span> Lista de seguimientos</div>
-    <div class="screen-caption">Mismas 3 opciones que en hallazgos manuales y novedades preop: <strong>Sin intervención</strong> (cierra) / <strong>Seguimiento</strong> (continúa abierto) / <strong>Intervención</strong> (escala a hallazgo con OT). Un mental model uniforme en todo el sistema.</div>
+    <div class="screen-label"><span class="num">2</span> Importar hallazgo · Pestaña Seguimiento</div>
+    <div class="screen-caption">Pantalla destino del botón <strong>"📁 Importar hallazgo"</strong> de la pantalla 1. Dos pestañas (decisión 2026-04-30, mock de Daniel image11): <strong>Preoperacional</strong> (actividades reportadas por el operador en el preop, ver pantalla 2b) y <strong>Seguimiento</strong> (seguimientos abiertos del equipo desde inspecciones previas). Aquí muestra la pestaña Seguimiento activa: cada seguimiento tiene 3 opciones — <strong>Sin intervención</strong> (cierra) / <strong>Seguimiento</strong> (continúa abierto) / <strong>Intervención</strong> (escala a hallazgo con OT). Un mental model uniforme con hallazgos manuales y novedades preop.</div>
     <div class="phone">
       <div class="status-bar"><span>9:57</span><span>● ● ● ●</span></div>
       <div class="app-bar">
         <span class="icon">←</span>
-        <span class="title">Seguimientos del equipo</span>
+        <span class="title">Importar hallazgo</span>
         <span class="actions">⋮</span>
+      </div>
+
+      <div class="tabs-bar">
+        <div class="tab-item">Preoperacional <span class="badge-count">5</span></div>
+        <div class="tab-item active">Seguimiento <span class="badge-count">2</span></div>
       </div>
 
       <div class="equip-strip">
@@ -520,6 +577,90 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
           </div>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- 2b. Importar hallazgo · Pestaña Preoperacional (decisión 2026-04-30) -->
+  <div class="screen-wrapper">
+    <div class="screen-label"><span class="num">2b</span> Importar hallazgo · Pestaña Preoperacional</div>
+    <div class="screen-caption">Misma pantalla destino del botón <strong>"📁 Importar hallazgo"</strong>, pero con la pestaña <strong>Preoperacional</strong> activa. Lista las novedades reportadas por el operador en el preoperacional. Cada novedad tiene dos acciones inline: <strong>"📥 Importar"</strong> (abre wizard de hallazgo, técnico elige acción requerida) y <strong>"🗑 Descartar"</strong> (icono pequeño rojo, descarta inmediato con motivo autogenerado plantilla <code>"Cerrado por {usuario} el {fecha} UTC desde Inspecciones"</code> — sin modal). Patrón final 2026-04-30, alineado con mock de Daniel image11/12 y §15.9 "Descarte rápido inline" del modelo.</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:58</span><span>● ● ● ●</span></div>
+      <div class="app-bar">
+        <span class="icon">←</span>
+        <span class="title">Importar hallazgo</span>
+        <span class="actions">⋮</span>
+      </div>
+
+      <div class="tabs-bar">
+        <div class="tab-item active">Preoperacional <span class="badge-count">5</span></div>
+        <div class="tab-item">Seguimiento <span class="badge-count">2</span></div>
+      </div>
+
+      <div class="equip-strip">
+        <div class="equip-card">
+          <div class="equip-name">Caterpillar D11T Custom</div>
+          <div class="equip-meta">HD-9908-TX · M-109 · BULLDOZER</div>
+        </div>
+      </div>
+
+      <div class="body" style="padding-bottom: 16px;">
+        <div class="banner preop">
+          <span style="font-size:14px;">⚠</span>
+          <span><strong>5 actividades</strong> del preoperacional pendientes desde el 24 abr.</span>
+        </div>
+
+        <div class="preop-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="ref-tag">PREOP-2026-0341</span>
+            <span class="preop-fecha">27 abr · 6:15 AM</span>
+          </div>
+          <div class="preop-titulo">Sistema hidráulico — Cilindro de levante</div>
+          <div class="preop-desc">"Fuga de aceite hidráulico visible en sello inferior del cilindro."</div>
+          <div class="preop-meta">
+            <span>👤 Juan David Gómez</span>
+            <span>📷 2 fotos</span>
+          </div>
+          <div class="action-row">
+            <div class="btn-import-main">📥 Importar</div>
+            <div class="btn-discard-icon" title="Descartar (motivo autogenerado)" aria-label="Descartar novedad"></div>
+          </div>
+        </div>
+
+        <div class="preop-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="ref-tag">PREOP-2026-0298</span>
+            <span class="preop-fecha">26 abr · 5:55 AM</span>
+          </div>
+          <div class="preop-titulo">Tren de rodaje — Neumático delantero derecho</div>
+          <div class="preop-desc">"Presión baja detectada — 85 PSI vs nominal 95 PSI."</div>
+          <div class="preop-meta">
+            <span>👤 Rodrigo Fuentes</span>
+            <span>📷 1 foto</span>
+          </div>
+          <div class="action-row">
+            <div class="btn-import-main">📥 Importar</div>
+            <div class="btn-discard-icon" title="Descartar (motivo autogenerado)" aria-label="Descartar novedad"></div>
+          </div>
+        </div>
+
+        <div class="preop-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="ref-tag">PREOP-2026-0255</span>
+            <span class="preop-fecha">25 abr · 6:08 AM</span>
+          </div>
+          <div class="preop-titulo">Sistema eléctrico — Batería principal</div>
+          <div class="preop-desc">"Tensión en bornes baja durante arranque — 10.2V."</div>
+          <div class="preop-meta">
+            <span>👤 Claudia Álvarez</span>
+            <span>📷 1 foto</span>
+          </div>
+          <div class="action-row">
+            <div class="btn-import-main">📥 Importar</div>
+            <div class="btn-discard-icon" title="Descartar (motivo autogenerado)" aria-label="Descartar novedad"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -905,7 +1046,9 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
    [Pasan días/semanas]
         ↓
 [Inspección #2156 del mismo equipo]
-   └─ Pantalla 1: banner azul + botón "↻ Traer de seguimiento [2]"
+   └─ Pantalla 1: banner azul + botón unificado "📁 Importar hallazgo [7]"
+                  → abre pantalla con tabs Preoperacional / Seguimiento (decisión 2026-04-30,
+                    mock de Daniel image11). El badge consolida los contadores de ambas fuentes.
    └─ Pantalla 2: lista con 3 acciones por seguimiento (mismo lenguaje que hallazgo)
 
    ✓ Sin intervención  → SeguimientoResuelto_v1     (Estado = Resuelto)
@@ -938,7 +1081,7 @@ footer ul { font-size: 12px; color: var(--text-secondary); line-height: 1.7; mar
         <li><strong>No</strong> se bloquea la inspección si hay seguimientos vencidos</li>
       </ul>
     </li>
-    <li><strong>Decisión 4 — Cross-obra: el seguimiento sigue al equipo</strong>: si el equipo cambia de obra, el seguimiento sigue activo y se ve desde la nueva obra. La identidad del seguimiento es <code>EquipoId + HallazgoOrigenId</code>, independiente de la obra.</li>
+    <li><strong>Decisión 4 — Cross-proyecto: el seguimiento sigue al equipo</strong>: si el equipo cambia de proyecto, el seguimiento sigue activo y se ve desde el nuevo proyecto. La identidad del seguimiento es <code>EquipoId + HallazgoOrigenId</code>, independiente del proyecto.</li>
     <li><strong>"Intervención" emite 2 eventos atómicos</strong>: cierra el seguimiento original + crea el hallazgo con intervención en la inspección actual. La OT correctiva se genera al firmar esa inspección.</li>
     <li><strong>Badge de antigüedad</strong>: refleja exactamente la regla de SLA — 0-30 azul / 30-90 naranja / +90 rojo. Ayuda a priorizar visualmente.</li>
     <li><strong>Heredan adjuntos del hallazgo origen</strong>: si los hay. El técnico que escala puede agregar los suyos.</li>

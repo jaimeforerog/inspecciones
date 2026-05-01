@@ -29,8 +29,8 @@
 | 0.4 | Modelo de dominio inicial | ✅ | `01-modelo-dominio.md` §1–§14 |
 | 0.5 | Reconciliación con plantillas Excel del ERP | ✅ | §12 del modelo |
 | 0.6 | Refinamiento final del modelo (review event-by-event) | ✅ | §15 — fuente de verdad |
-| 0.7 | Wireframes flujo principal del técnico | ✅ | `02-wireframes-mobile.html` (rev. 3) |
-| 0.8 | Wireframes flujo novedades preop (variante B) | ✅ | `02b-wireframes-novedades-preop.html` |
+| 0.7 | Wireframes flujo principal del técnico | ✅ | **Fuente vigente 2026-04-30:** `Plantillas Excel/mock del diseño.docx` (mock de Daniel — 13 pantallas en 4 secciones). Los wireframes HTML previos `02-wireframes-mobile.html` se eliminaron el 2026-04-30; el mock de Daniel es la única referencia visual. |
+| 0.8 | Wireframes flujo novedades preop (variante B) | ✅ | **Fuente vigente 2026-04-30:** sección "Importar hallazgo" del mock de Daniel (image11–13 con tabs Preoperacional/Seguimiento + wizard heredado). HTML previo `02b-wireframes-novedades-preop.html` eliminado el 2026-04-30. Patrón final: 2 acciones por novedad (📥 Importar + 🗑 Descartar con motivo autogenerado), sin botón "Seguimiento" inline (se accede vía wizard). Detalle modelado en §15.9 de `01-modelo-dominio.md`. |
 | 0.9 | Comparativa de variantes UX (A/B/C) | ✅ | `02c-variantes-ux-novedades.html` |
 | 0.10 | Wireframes flujo seguimientos del equipo | ✅ | `02d-wireframes-seguimientos.html` |
 | 0.11 | SOW / arquitectura resumida para equipo interno | ✅ | `03-sow-consultor.md` |
@@ -39,9 +39,9 @@
 | 0.14 | ADR-003: Generación de OT correctiva en MYE | ✅ | `01-modelo-dominio.md` §13 |
 | 0.15 | ADR-004: Sincronización de catálogos | ✅ | `00-investigacion-mercado.md` §9.15 |
 | 0.16 | ADR-005: Azure SignalR para push del cierre | ✅ | `01-modelo-dominio.md` §14 |
-| 0.17 | Validar modelo con consultor mecánico | ⏳ | Sesión ~2h tras lectura del brief |
+| 0.17 | Validar modelo con consultor mecánico | ✅ | **Cerrado 2026-04-30.** Sesión con Sergio (consultor producto, ingeniero mecánico) entregó 4 observaciones que ya están aplicadas al modelo: (1) **Dictamen siempre obligatorio + sync al equipo en MYE** — confirmó regla #11 del brief y agregó nuevo endpoint M-W-1 `PUT /equipos/{id}/dictamen-vigente` (modelado en §17 ADR-007 + brief regla #11 actualizada). (2) **Cancelar generación de OT** post-firma — comando `RechazarGenerarOT` + evento `GeneracionOTRechazada_v1` + estado terminal `RechazadaPorAprobador` (modelado en §17 + brief regla #13 + invariante I-F6). (3) **Una sola inspección abierta por equipo** — invariante I-I1 + proyección `InspeccionAbiertaPorEquipoView` con índice único Postgres (§15.7 + §15.12.6 + brief regla #12). (4) **PDF de inspección como adjunto a OT** — saga `GenerarPdfInspeccionSaga` + endpoint M-1b + eventos `PdfInspeccionGenerado_v1` y `PdfAdjuntadoAOT_v1` (§17 + brief regla #14). Adicionalmente: descarte rápido de novedades preop (§15.9 — superseded la propuesta inicial de bulk con modal). Ver brief consultor §6 reglas 11–14 para resumen ejecutivo. |
 | 0.18 | Recibir DDL del preoperacional + contratar shape DTO | 🚧 | Espera por equipo del preop |
-| 0.19 | Confirmar lista MVP de tipos de inspección | ⏳ | Motor, hidráulica, post-mantenimiento (propuesta) |
+| 0.19 | Confirmar alcance de rutina técnica única por grupo | ✅ | Decidido 2026-04-27 (§12.10 + §12.11): una sola rutina técnica por grupo de mantenimiento (no se subdivide motor/hidráulica/post-mantenimiento). MVP usa único `TipoInspeccion = Tecnica`. Monitoreo (con `MedicionEsperada` rango min/max) queda en 10.4 — refinado 2026-04-30 §12.11.5. |
 | 0.20 | Limpieza de referencias obsoletas en §2.1, §6, I7 del modelo | ✅ | Banners `⚠️ SECCIÓN HISTÓRICA` y notas inline `⚠️ OBSOLETO` añadidos en §2.1, §3, §6, §7, §7.4.5, §12.10.8, §12.10.9, §12.10.10 e I7 (2026-04-28). Tabla §15.11 marcada como completada. |
 
 ---
@@ -60,8 +60,8 @@
 | 1.6 | Azure Active Directory + Entra ID tenant | ⏳ | Para auth de aplicación |
 | 1.7 | RBAC y policies de gobierno | ⏳ | |
 | 1.8 | Provisionar Azure Container Apps | ⏳ | Hosting del backend |
-| 1.9 | Provisionar Azure Database for PostgreSQL Flexible | ⏳ | Marten event store |
-| 1.10 | Provisionar Azure Blob Storage | ⏳ | Adjuntos de inspecciones |
+| 1.9 | Provisionar Azure Database for PostgreSQL Flexible | ⏳ | Marten event store. **Dimensionamiento 2026-04-30** (basado en volúmenes de los 27 clientes ERP — `08-volumenes-clientes-erp.md` hallazgo 7): tier inicial **B2s** suficiente para catálogos (~260K entidades totales: 10K equipos + 53K partes + 4.5K rutinas + 190K SKUs). Carga real esperada: eventos de inspecciones — ~100-300 inspecciones/día por cliente intensivo (EXPLANAN, FUNDACIONES). Plan de escalado vertical antes de exponer a clientes con > 30K SKUs. |
+| 1.10 | Provisionar Azure Blob Storage | ⏳ | Adjuntos de inspecciones + PDFs de inspección (decisión 2026-04-30 §17 ADR-007). **Cuota 2026-04-30**: ≥ 1 TB para primer año asumiendo retención 7 años. Containers separados: `adjuntos-hallazgos` (fotos/PDFs subidos por técnicos en el wizard) y `inspecciones-pdf` (PDFs generados por `GenerarPdfInspeccionSaga`). Lifecycle policy con tiering a Cool tras 90 días sin acceso. |
 | 1.11 | Provisionar Azure Key Vault | ⏳ | Secretos y connection strings |
 | 1.12 | Provisionar Azure Application Insights | ⏳ | Observabilidad |
 | 1.13 | Provisionar Azure SignalR Service (Standard tier) | ⏳ | Push del cierre de inspección |
@@ -82,10 +82,10 @@
 | 2.2 | Diseño de sync usuarios Sinco → IdP del host | ⏳ | Pull-based, vía REST sobre VPN — **solo si el host no lo tiene ya** |
 | 2.3 | Implementar job de sync de usuarios | ⏳ | Wolverine timer trigger — **solo si el host no lo tiene ya** |
 | 2.4 | Configurar app registration en el IdP del host | ⏳ | OAuth2/OIDC scopes — **responsabilidad del host PWA** |
-| 2.5 | Definir matriz comando → capability requerida (least privilege) | ⏳ | **No predefine perfiles del ERP** (técnico, supervisor, etc.). La matriz define **capabilities** (verbos como `ejecutar-inspeccion`, `auditar-inspecciones`, `recibir-alertas-sla`) que el host PWA mapea a su catálogo de perfiles ERP. El módulo nunca consulta "eres técnico" — consulta "tienes capability X". Independiente del IdP elegido (ADR-002). |
+| 2.5 | Definir matriz comando → capability requerida (least privilege) | ⏳ | **No predefine perfiles del ERP** (técnico, supervisor, etc.). La matriz define **capabilities** (verbos como `ejecutar-inspeccion`, `generar-ot`, `auditar-inspecciones`, `recibir-alertas-sla`, `recibir-alertas-ot-fallida`, `recibir-alertas-ot-rechazada` —última agregada 2026-04-30) que el host PWA mapea a su catálogo de perfiles ERP. El módulo nunca consulta "eres técnico" — consulta "tienes capability X". Independiente del IdP elegido (ADR-002). |
 | 2.6 | Implementar JWT validation middleware en backend cloud | ⏳ | Configurable según IdP del host |
 | 2.7 | Implementar JWT validation en APIs Sinco on-prem | ⏳ | Cross-team con equipos Sinco |
-| 2.8 | Política de gestión de claims (obras del técnico) | ⏳ | Mapeo del claim que use el host (p. ej. `sinco_obras` si Entra ID) |
+| 2.8 | Política de gestión de claims (proyectos del técnico) | ⏳ | Mapeo del claim que use el host (p. ej. `sinco_obras` literal del ERP si Entra ID; el módulo lo expone internamente como `proyectos` siguiendo decisión 2026-04-30 followup #4). |
 | 2.9 | Tests de auth end-to-end | ⏳ | |
 
 ---
@@ -139,8 +139,13 @@
 | 3.25 | Saga: derivación Cerrada vs CerradaSinOT vs EsperandoAprobacionOT | ⏳ | Cerrada/CerradaSinOT siguen siendo eventos persistidos; `EsperandoAprobacionOT` es estado derivado en proyección §15.12.5. Ver §15.6 (histórico) + §17 (vigente). |
 | 3.26 | Saga: apertura de seguimientos al firmar | ⏳ | Para hallazgos `RequiereSeguimiento`. Independiente del flujo OT (corre siempre al firmar). |
 | 3.27 | Adapter MYE: POST /mye/ot-correctivas | ⏳ | Invocado desde **`EjecutarOTSaga`** (3.24b), no desde `CerrarInspeccionSaga`. Idempotency-Key=InspeccionId. Tres tests WireMock obligatorios (replay 200, 4xx sin retry, 5xx con backoff). Cuarto test si se adopta fallback `GET` (ver 4.10). Detalle en ADR-003 §13. |
+| 3.27c | Adapter MYE: PUT /equipos/{id}/dictamen-vigente (NUEVO 2026-04-30) | ⏳ | Invocado desde **`SincronizarDictamenVigenteSaga`** (nueva, reactiva sobre `InspeccionFirmada_v1`). Corre en toda firma (con OT y sin OT). Idempotency-Key=InspeccionId. Tres tests WireMock: replay 200, 4xx sin retry (`DictamenVigenteSyncFallida_v1` candidato, NO bloquea cierre), 5xx con backoff. Origen: observación Sergio 2026-04-30 — ver §17 ADR-007 y M-W-1 en `06-contrato-apis-erp.md`. |
+| 3.27d | Adapter MYE: POST /mye/ot-correctivas/{id}/adjuntos (NUEVO 2026-04-30) | ⏳ | Invocado desde **`EjecutarOTSaga` extendida** tras éxito de M-1 (paso 3.27). Multipart con PDF generado por `GenerarPdfInspeccionSaga` (paso 3.27e). Idempotency-Key=`{InspeccionId}-pdf`. Tests WireMock: éxito post-OT, race con PDF aún no generado → backoff + reintento, 4xx no retry → `AdjuntoPdfFallido_v1` (NO revierte OT), 5xx con backoff. Detalle en M-1b de `06-contrato-apis-erp.md`. |
+| 3.27e | Servicio: generación de PDF con QuestPDF (NUEVO 2026-04-30) | ⏳ | Renderiza el PDF localmente con QuestPDF (`Sinco.Inspecciones.PdfRendering`). Layout definido en §17 ADR-007 sub-sección "Generación de PDF". Tests: snapshot del layout (regresión visual), edge cases (sin adjuntos, hallazgos eliminados, cierre sin OT). |
+| 3.24c | Saga `SincronizarDictamenVigenteSaga` (NUEVA 2026-04-30) | ⏳ | Reacciona a `InspeccionFirmada_v1`. Invoca paso 3.27c vía outbox. Independiente del flujo OT: corre en toda firma. |
+| 3.24d | Saga `GenerarPdfInspeccionSaga` (NUEVA 2026-04-30) | ⏳ | Reacciona a `InspeccionFirmada_v1`. Invoca paso 3.27e (renderizar PDF), sube a Azure Blob (`inspecciones-pdf` container), emite `PdfInspeccionGenerado_v1` con `BlobUri` + `Sha256`. Independiente del flujo OT — el PDF queda disponible aun si la inspección cierra `SinOT`. |
 | 3.28 | Adapter Preop: POST /preop/novedades/{id}/verificar | ⏳ | Por cada novedad procesada |
-| 3.29 | Adapter Preop: POST /preop/novedades/{id}/descartar | ⏳ | Para `NovedadPreopDescartada_v1` |
+| 3.29 | Adapter Preop: POST /preop/novedades/descartar (1 novedad por llamada en MVP) | ⏳ | Para comando individual `DescartarNovedadPreop` (decisión final 2026-04-30: motivo autogenerado, sin modal). El módulo siempre envía array de 1; el ERP soporta N por flexibilidad futura. Tests WireMock: éxito 1 novedad, 409 si ya procesada, replay con misma Idempotency-Key. Detalle en §15.9 "Descarte rápido inline" del modelo y P-6 de `06-contrato-apis-erp.md`. |
 | 3.30 | Outbox + reintento exponencial | ⏳ | Wolverine built-in |
 | 3.31 | Tests de integración con mocks de Sinco | ⏳ | |
 
@@ -148,8 +153,8 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 3.32 | Job de sync inicial + cron diario | ⏳ | ADR-004 |
-| 3.33 | Proyección local: `EquipoLocal`, `ParteLocal`, `RepuestoLocal`, `ObraLocal`, `RutinaLocal`, `CausaFallaLocal`, `TipoFallaLocal` | ⏳ | 7 catálogos |
+| 3.32 | Job de sync inicial + cron diario | ⏳ | ADR-004. **Decisión 2026-04-30**: para clientes con > 10K SKUs (CONCRESCOL ~34K, PAVIMENTOS, CASS, REDES) implementar **sync incremental basado en `?updatedSince=` del lado ERP** — full sync diario es costoso. Confirmar con David al definir M-3..M-7 si los endpoints aceptan filtro temporal. Detalle en `08-volumenes-clientes-erp.md` hallazgo 7. |
+| 3.33 | Proyección local: `EquipoLocal`, `ParteLocal`, `RepuestoLocal`, `ProyectoLocal`, `RutinaLocal`, `CausaFallaLocal`, `TipoFallaLocal` | ⏳ | 7 catálogos. `ProyectoLocal` se sincroniza desde `GET /api/v1/catalogos/obras` del ERP — adapter traduce. |
 | 3.34 | Estrategia stale-while-revalidate | ⏳ | Si VPN cae |
 | 3.35 | Health checks por catálogo | ⏳ | App Insights |
 
@@ -157,22 +162,23 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 3.36 | Endpoint `POST /inspecciones` (iniciar) | ⏳ | |
+| 3.36 | Endpoint `POST /inspecciones` (iniciar) | ⏳ | Body lleva: `equipoId`, `proyectoId`, `ubicacion` (GPS), `fechaReportada` (DateOnly, decisión 2026-04-30 cierre #2), `lecturaMedidorPrimario?` y `lecturaMedidorSecundario?` (decisión 2026-04-30 cierre #3). Valida invariantes I-I1, I-I2, I-I3 (§15.7). **I-I1**: una sola inspección abierta por equipo. Si ya hay activa, response retorna `200 OK` con `inspeccionId` existente y flag `redirected: true`. **I-I2**: equipo cuyo grupo no tiene rutina → 422 `GRUPO_SIN_RUTINA`. **I-I3**: `FechaReportada` fuera del rango `[hoy-30d, hoy]` → 422 `FECHA_REPORTADA_FUERA_DE_RANGO`. Tests obligatorios: (a) equipo libre con rutina → 200, (b) equipo con activa → 200 redirect, (c) concurrente → race resuelto por §15.12.6, (d) equipo sin rutina → 422, (e) `fechaReportada` futura → 422, (f) `fechaReportada` 31+ días atrás → 422, (g) `fechaReportada=hoy` → 200, (h) `fechaReportada=hoy-30d` (borde) → 200, (i) lecturas de medidores capturadas correctamente, (j) lecturas de medidores ausentes (equipo sin medidores) → 200. |
 | 3.37 | Endpoint `POST /inspecciones/{id}/hallazgos` | ⏳ | |
 | 3.38 | Endpoint `PATCH /inspecciones/{id}/hallazgos/{hid}` | ⏳ | |
 | 3.39 | Endpoint `DELETE /inspecciones/{id}/hallazgos/{hid}` | ⏳ | Soft delete |
 | 3.40 | Endpoints repuestos (3) | ⏳ | |
 | 3.41 | Endpoints adjuntos: solicitar SAS + confirmar upload | ⏳ | Pattern blob upload |
 | 3.42 | Endpoint `POST /inspecciones/{id}/firmar` | ⏳ | Comando consolidado. **Por ADR-007**: la firma ya NO dispara POST a MYE. Solo emite `InspeccionFirmada_v1` (+ `DiagnosticoEmitido_v1` y `DictamenEstablecido_v1` atómicos). Si no hay `RequiereIntervencion`, la saga 3.24 cierra como `CerradaSinOT`. Si sí hay, la inspección queda en estado derivado `EsperandoAprobacionOT` esperando comando humano. |
-| 3.42b | Endpoint `POST /inspecciones/{id}/generar-ot` (NUEVO ADR-007) | ⏳ | Capability gate: requiere `generar-ot`. Comando `GenerarOT` valida I-F4 (§15.7) y emite `OTSolicitada_v1`. Saga `EjecutarOTSaga` (3.24b) toma desde ahí. Tests obligatorios: (a) usuario sin capability → 403, (b) inspección sin `RequiereIntervencion` → 422, (c) re-emisión sobre stream con `OTSolicitada` previo → 422, (d) éxito feliz. |
+| 3.42b | Endpoint `POST /inspecciones/{id}/generar-ot` (NUEVO ADR-007) | ⏳ | Capability gate: requiere `generar-ot`. Body lleva `responsable: "Proyecto" \| "DepartamentoEquipos"` (enum cerrado, decisión 2026-04-30 §17). Comando `GenerarOT` valida I-F4 (§15.7) y emite `OTSolicitada_v1` con el `Responsable`. Saga `EjecutarOTSaga` (3.24b) propaga el campo al payload de MYE. Tests obligatorios: (a) usuario sin capability → 403, (b) inspección sin `RequiereIntervencion` → 422, (c) re-emisión sobre stream con `OTSolicitada` previo → 422, (d) `responsable` fuera del enum → 400, (e) éxito feliz por cada valor del enum, (f) re-emisión sobre stream con `OTRechazada` previo → 422 (no se solicita lo que se rechazó). |
+| 3.42c | Endpoint `POST /inspecciones/{id}/rechazar-ot` (NUEVO 2026-04-30) | ⏳ | Capability gate: requiere `generar-ot` (misma que aprobar — quien aprueba puede rechazar). Body `{ motivo }`. Comando `RechazarGenerarOT` valida I-F6 (§15.7) y emite atómicamente `GeneracionOTRechazada_v1` + `InspeccionCerradaSinOT_v1` con `MotivoCierreSinOT=RechazadaPorAprobador`. Tests obligatorios: (a) usuario sin capability → 403, (b) inspección sin `RequiereIntervencion` → 422, (c) `OTSolicitada` previo → 422 (fuera de alcance MVP), (d) doble rechazo → 422, (e) motivo vacío → 400, (f) motivo <10 chars → 400, (g) éxito feliz: dispara `SincronizarDictamenVigenteSaga` y libera el equipo (proyección `InspeccionAbiertaPorEquipoView` borra fila al recibir `InspeccionCerradaSinOT_v1`). |
 | 3.43 | Endpoint `POST /inspecciones/{id}/cancelar` | ⏳ | |
 | 3.44 | Endpoint `GET /inspecciones?equipo=&estado=` (bandeja) | ⏳ | Sirve `BandejaTecnicoView` (§15.12.3). Autorización: capability `ejecutar-inspeccion`; filtros `equipo` y `estado` opcionales. |
 | 3.45 | Endpoint `GET /inspecciones/{id}` (detalle) | ⏳ | Sirve `DetalleInspeccionView` (§15.12.1). **Debe** exponer: hallazgos eliminados con `MotivoEliminacion`, novedades preop descartadas con `MotivoDescarte` + `DescartadaPor` + timestamp, trazabilidad de hallazgos escalados (`SeguimientoOrigenId`). **Por ADR-007**: además expone `EstadoOT` derivado (`NoAplica` / `EsperandoAprobacion` / `EnProceso` / `Generada` / `Fallida`) y las capabilities del usuario consultante para que el frontend muestre/oculte botón "Generar OT". Autorización: capability `ejecutar-inspeccion` para contribuyente del stream o capability `auditar-inspecciones` para acceso amplio. |
-| 3.45b | Endpoint `GET /inspecciones/pendientes-ot?obra=&firmada-desde=&firmada-hasta=` (NUEVO ADR-007) | ⏳ | Sirve `BandejaInspeccionesPendientesOTView` (§15.12.5) — cola de aprobación. Audiencia: capability `generar-ot`. Incluye también filas con `EstadoOT=EnProceso` (post-OTSolicitada) y `EstadoOT=Fallida` (post-OTGeneracionFallida). Proyección Marten dedicada — instanciarla con tests de derivación de estado. |
+| 3.45b | Endpoint `GET /inspecciones/pendientes-ot?proyecto=&firmada-desde=&firmada-hasta=` (NUEVO ADR-007) | ⏳ | Sirve `BandejaInspeccionesPendientesOTView` (§15.12.5) — cola de aprobación. Audiencia: capability `generar-ot`. Incluye también filas con `EstadoOT=EnProceso` (post-OTSolicitada) y `EstadoOT=Fallida` (post-OTGeneracionFallida). Proyección Marten dedicada — instanciarla con tests de derivación de estado. |
 | 3.46 | Endpoint `GET /equipos/{id}/seguimientos?estado=Abierto` | ⏳ | Sirve `SeguimientosAbiertosPorEquipoView` (§15.12.4). Audiencia: `ejecutar-inspeccion` (banner Pantalla 1 / lista Pantalla 2 del flujo seguimientos) + `auditar-inspecciones`. Filtro `?estado=` permite recuperar histórico (Resuelto/Escalado). |
 | 3.47 | Endpoint `POST /seguimientos/{id}/resolver` | ⏳ | |
 | 3.48 | Endpoint `POST /seguimientos/{id}/escalar` | ⏳ | |
-| 3.49 | Endpoint `POST /novedades-preop/{id}/descartar` | ⏳ | Crea evento dedicado |
+| 3.49 | Endpoint `POST /inspecciones/{id}/novedades-preop/{novedadId}/descartar` (individual) | ⏳ | Body `{ descartadoPor }`. Comando individual `DescartarNovedadPreop` emite UN evento `NovedadPreopDescartada_v1` con motivo autogenerado por el handler (`"Cerrado por {usuario} el {fecha} UTC desde Inspecciones"`). Decisión final 2026-04-30: sin modal, sin motivo manual, sin bulk con motivo único. Tests obligatorios: éxito feliz, novedad ya procesada → 409, novedad no pertenece a la inspección → 404, usuario sin capability `ejecutar-inspeccion` → 403. |
 | 3.50 | Documentación OpenAPI/Swagger | ⏳ | |
 
 ### 3.G SignalR Hub
@@ -191,7 +197,7 @@
 | # | Paso | Estado | Notas |
 |---|---|---|---|
 | 3.55 | Proyección Marten `AuditoriaInspeccionesView` | ⏳ | Consume eventos de `InspeccionTecnica` y `SeguimientoHallazgo`, denormaliza por inspección. Materializa indicador `DecisionContradiceReporteOperador`. |
-| 3.56 | Endpoint `GET /auditoria/inspecciones?obra=&desde=&hasta=&autor=` | ⏳ | Bandeja filtrable de inspecciones cerradas en una obra. Paginada. Autorización: capability `auditar-inspecciones` (matriz en paso 2.5). |
+| 3.56 | Endpoint `GET /auditoria/inspecciones?proyecto=&desde=&hasta=&autor=` | ⏳ | Bandeja filtrable de inspecciones cerradas en un proyecto. Paginada. Autorización: capability `auditar-inspecciones` (matriz en paso 2.5). |
 | 3.57 | Endpoint `GET /auditoria/inspecciones/{id}` | ⏳ | Atajo al `DetalleInspeccionView` (paso 3.45) con autorización de auditoría. Misma proyección, control de acceso por capability. |
 | 3.58 | Tests de autorización (usuario sin capability `auditar-inspecciones` recibe 403) | ⏳ | Cross-cutting con paso 2.5 |
 
@@ -211,23 +217,25 @@
 |---|---|---|---|
 | 4.1 | `GET /preop/novedades?equipo=&estado=pendiente` | 🚧 | Lista viva, no snapshot |
 | 4.2 | `POST /preop/novedades/{id}/verificar` | 🚧 | Body con `AccionRequerida` (RequiereIntervencion o RequiereSeguimiento) + `NovedadTecnica` (diagnóstico) |
-| 4.3 | `POST /preop/novedades/{id}/descartar` | 🚧 | Body con motivo |
+| 4.3 | `POST /preop/novedades/descartar` (bulk-capable, 1..N en JSON — decisión 2026-04-30) | 🚧 | Body con `inspeccionId` + `novedadIds: []` (array de 1 en MVP) + `motivo` (autogenerado del lado módulo) + `descartadaPor`. Capacidad bulk preservada por flexibilidad futura (sagas de limpieza, batch admin). Detalle en P-6 de `06-contrato-apis-erp.md`. **🚧 Confirmar con David** path final, idempotency-key y máximo de N por request. |
 | 4.4 | DDL del preoperacional compartido | 🚧 | Bloqueante para 0.18 |
 
 ### 4.B Equipo MYE núcleo
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 4.5 | `GET /equipos?obra=` (lista por obra del técnico) | 🚧 | |
+| 4.5 | `GET /equipos?obra=` (lista por proyecto del técnico — el ERP usa "obra" en URL) | 🚧 | |
 | 4.6 | `GET /equipos/{id}` (detalle) | 🚧 | |
 | 4.7 | `GET /equipos/{id}/partes` (árbol del equipo) | 🚧 | |
 | 4.8 | `GET /partes/{id}` (detalle) | 🚧 | |
-| 4.9 | `POST /mye/ot-correctivas` (crear OT) | 🚧 | Cuerpo: hallazgos, repuestos, dictamen, técnico. **Idempotencia real obligatoria** sobre `Idempotency-Key=InspeccionId`: misma key → mismo `200 OK` con mismo `OTCorrectivaIdSinco`, persistente, ventana ≥30 días. Detalle del contrato en ADR-003 §13. |
+| 4.9 | `POST /mye/ot-correctivas` (crear OT) | 🚧 | Cuerpo: hallazgos, repuestos, dictamen, técnico, `responsableCosto` (decisión 2026-04-30, enum `Proyecto`/`DepartamentoEquipos`), `solicitadaPor` (ADR-007). **Idempotencia real obligatoria** sobre `Idempotency-Key=InspeccionId`: misma key → mismo `200 OK` con mismo `OTCorrectivaIdSinco`, persistente, ventana ≥30 días. Detalle del contrato en ADR-003 §13. |
+| 4.9b | `PUT /equipos/{id}/dictamen-vigente` (NUEVO 2026-04-30) | 🚧 | Endpoint MYE para sincronizar dictamen vigente del equipo en cada firma. Cuerpo: `dictamen` + `inspeccionOrigenId` + `firmadaEn` + `tecnicoFirmante`. **Pendiente coordinación cross-team** — confirmar con David si campo y endpoint ya existen, o construir. Detalle en M-W-1 de `06-contrato-apis-erp.md` y pregunta 3 de `07-preguntas-destrabar-followups.md`. |
+| 4.9c | `POST /mye/ot-correctivas/{id}/adjuntos` (NUEVO 2026-04-30) | 🚧 | Endpoint MYE para adjuntar PDF de inspección a OT (multipart). **Pendiente coordinación cross-team** — confirmar con David existencia, tamaño máximo, tipos admitidos, comportamiento ante replay. Detalle en M-1b de `06-contrato-apis-erp.md` y pregunta 5 de `07-preguntas-destrabar-followups.md`. |
 | 4.10 | `GET /mye/ot-correctivas?inspeccionId={id}` (fallback) | 🚧 | **Condicionalmente obligatorio**: deja de ser opcional si el equipo MYE no puede entregar el contrato de idempotencia real de 4.9. Habilita el patrón "consulta-antes-de-crear" (ADR-003 §13). Si 4.9 cumple, 4.10 queda como deuda técnica diferida. |
 | 4.11 | `GET /catalogos/causas-falla` | 🚧 | ADR-004 |
 | 4.12 | `GET /catalogos/tipos-falla` | 🚧 | ADR-004 |
 | 4.13 | `GET /catalogos/grupos` | 🚧 | |
-| 4.14 | `GET /catalogos/obras` | 🚧 | |
+| 4.14 | `GET /catalogos/obras` (catálogo de proyectos — el ERP usa "obras" en URL; adapter mapea a `ProyectoLocal`) | 🚧 | |
 
 ### 4.C Equipo Inventario
 
@@ -242,7 +250,7 @@
 | # | Paso | Estado | Notas |
 |---|---|---|---|
 | 4.18 | `GET /usuarios?role=tecnico` (sync hacia el IdP del host) | 🚧 | Condicional al ADR-002 (tentativo). Solo aplica si el host PWA no tiene ya el sync. |
-| 4.19 | `GET /usuarios/{id}` (detalle con obras asignadas) | 🚧 | |
+| 4.19 | `GET /usuarios/{id}` (detalle con proyectos asignados — el ERP los nombra "obras") | 🚧 | |
 
 ---
 
@@ -280,10 +288,10 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 5.17 | Lista de novedades con 3 botones inline (variante B) | ⏳ | `02b` pantalla 2 |
+| 5.17 | Pantalla "Importar" con tabs Preoperacional/Seguimiento (decisión 2026-04-30) | ⏳ | Referencia visual: image11/12 del mock de Daniel. Cada item con 2 acciones: 📥 Importar (botón principal, abre wizard) + 🗑 Descartar (icono, motivo autogenerado). Pestaña Seguimiento: solo 📥 Importar (sin descartar — escala el seguimiento via comando `EscalarSeguimiento`). |
 | 5.18 | Modal Descartar con motivo obligatorio | ⏳ | |
 | 5.19 | Modal Seguimiento con motivo | ⏳ | |
-| 5.20 | Wizard verificar paso 1 + paso 2 | ⏳ | Pantallas 5+6 de `02b` |
+| 5.20 | Wizard verificar paso 1 + paso 2 | ⏳ | Referencia visual: image7 (paso 1 con radios `AccionRequerida`) e image9 (paso 2 análisis técnico) del mock de Daniel. Image13 muestra el wizard cuando viene de "Importar" (paso 1 heredado del preop, técnico arranca en paso 2). |
 
 ### 5.D Pantallas del flujo seguimientos
 
@@ -313,10 +321,11 @@
 | # | Paso | Estado | Notas |
 |---|---|---|---|
 | 6.1 | Servicio de email (SMTP corporativo o SendGrid) | ⏳ | |
-| 6.2 | Plantilla de notificación: OT fallida → destinatarios con capability `recibir-alertas-ot-fallida` | ⏳ | |
+| 6.2 | Plantilla de notificación: OT fallida → destinatarios con capability `recibir-alertas-ot-fallida` | ⏳ |
+| 6.2b | Plantilla de notificación: OT rechazada (NUEVO 2026-04-30) → destinatarios con capability `recibir-alertas-ot-rechazada`. Asunto debe incluir equipo + proyecto; cuerpo debe incluir motivo del rechazo, técnico firmante, aprobador que rechazó, link al detalle de la inspección. Quien rechaza NO se notifica a sí mismo. | ⏳ | |
 | 6.3 | Plantilla de notificación: seguimiento +90 días → destinatarios con capability `recibir-alertas-sla` | ⏳ | Diario hasta cierre |
 | 6.4 | Endpoint admin: cola de OT fallidas | ⏳ | |
-| 6.5 | Configuración por obra/equipo de destinatarios de alertas (data, no código) | ⏳ | Lista de usernames + capability requerida (`recibir-alertas-sla`, `recibir-alertas-ot-fallida`). Sincronizada desde catálogo MYE o configurada localmente — decisión pendiente. |
+| 6.5 | Configuración por proyecto/equipo de destinatarios de alertas (data, no código) | ⏳ | Lista de usernames + capability requerida (`recibir-alertas-sla`, `recibir-alertas-ot-fallida`). Sincronizada desde catálogo MYE o configurada localmente — decisión pendiente. |
 
 ---
 
@@ -342,7 +351,7 @@
 | 8.1 | Consultor lee `04-brief-consultor-producto.md` | ⏳ | ~30 min |
 | 8.2 | Sesión de validación 2h | ⏳ | 5 áreas críticas priorizadas |
 | 8.3 | Aplicar feedback al modelo / wireframes | ⏳ | Iterativo |
-| 8.4 | Cerrar lista MVP de tipos de inspección | ⏳ | Motor / hidráulica / post-mantenimiento |
+| 8.4 | Validar con consultor el alcance de la rutina técnica única por grupo | ⏳ | El modelo vigente (§12.10/§12.11) define una rutina técnica por grupo de mantenimiento. Sergio confirma si la operación real tolera no subdividir motor/hidráulica o si emerge la necesidad de "contexto de inspección" como cambio aditivo. También sondea qué mediciones críticas esperaría en Monitoreo (Fase 2). |
 
 ---
 
@@ -350,11 +359,11 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 9.1 | Seleccionar 1-2 obras piloto | ⏳ | Con buena conectividad para mitigar restricción online-only |
+| 9.1 | Seleccionar 1-2 proyectos piloto | ⏳ | Con buena conectividad para mitigar restricción online-only. **Decisión 2026-04-30 (análisis volúmenes):** el piloto debe ser cliente que **use Preoperacional con datos** para ejercitar el flujo verificar/descartar/seguimiento. De los 27 clientes del ERP, solo 5 cumplen: EXPLANAN (10712 preop), FUNDACIONES Y PILOTAJES (4123), JMV (3637), SCHRADER CAMARGO (82), DEMO (test). Recomendados: **EXPLANAN** o **FUNDACIONES Y PILOTAJES** — los que más volumen tienen y validan el bulk de descarte de novedades repetidas. Detalle en `08-volumenes-clientes-erp.md` hallazgo 1. |
 | 9.2 | Capacitación a técnicos del piloto | ⏳ | Material breve + sesión presencial |
 | 9.3 | Despliegue a ambiente staging | ⏳ | |
 | 9.4 | UAT con 3-5 técnicos | ⏳ | Feedback iterativo |
-| 9.5 | Despliegue a producción | ⏳ | Bandera por obra |
+| 9.5 | Despliegue a producción | ⏳ | Bandera por proyecto |
 | 9.6 | Monitoreo cercano semana 1 | ⏳ | App Insights + standup diario |
 | 9.7 | Retrospectiva + plan de rollout extendido | ⏳ | |
 
@@ -367,8 +376,8 @@
 | 10.1 | Mediciones (`MedicionRegistrada_v1`) | ⏸ | Más relevante en inspección de monitoreo |
 | 10.2 | Programación previa de inspección (estado `Programada`) | ⏸ | Aditivo |
 | 10.3 | Modo offline (PWA + IndexedDB + Background Sync) | ⏸ | Estimaciones ya hechas |
-| 10.4 | Tipo de inspección "Monitoreo" | ⏸ | Aditivo al enum `TipoInspeccion` |
-| 10.5 | Comando bulk para descarte de novedades duplicadas | ⏸ | Si emerge volumen alto |
+| 10.4 | Tipo de inspección "Monitoreo" | ⏸ | **Detallado 2026-04-30 con `inspeccion.xlsx` de Jaime — modelado en §12.11.5.** Aditivo al enum `TipoInspeccion`. Aggregate nuevo `RutinaMonitoreo` (catálogo, distinto de `Rutina` técnica). N rutinas por grupo (Sistema eléctrico / Transmisión / Frenos), técnico elige al iniciar. Items con dos modos: `MedicionEsperada(min,max,unidad)` numérico O `EvaluacionCualitativaEsperada` con enum `Bueno/Regular/Malo` (mutuamente exclusivos). Eventos nuevos: `MedicionRegistrada_v1`, `EvaluacionCualitativaRegistrada_v1`, `ItemMonitoreoOmitido_v1`. Trigger hallazgo automático con `RequiereSeguimiento`: numérico fuera de rango O cualitativo `Malo`. Sync de catálogo desde ERP (ADR-004). Dictamen libre como en técnica. Comando hermano `IniciarInspeccionMonitoreo`. Endpoint MYE pendiente: `GET /api/v1/rutinas-monitoreo?grupo={g}` — ver doc 07 pregunta nueva a David. |
+| 10.5 | ~~Comando bulk para descarte de novedades duplicadas~~ | ❌ | **Descartado el 2026-04-30** tras revisión del mock del diseño. La observación de Sergio se atiende con descarte rápido individual (motivo autogenerado, sin modal) — un tap por novedad, sin selección múltiple. Modelado en §15.9 "Descarte rápido inline". El contrato del ERP P-6 preserva capacidad bulk para flexibilidad futura. |
 | 10.6 | Evento `SeguimientoRevisadoSinCambio_v1` | ⏸ | Si emerge necesidad de reportería |
 | 10.7 | Botón admin "refrescar catálogo ahora" | ⏸ | ADR-004 |
 | 10.8 | Reportes y KPIs avanzados | ⏸ | Post-piloto |
@@ -388,7 +397,7 @@
 | R3 | DDL preop bloqueado del lado del equipo del preop | Workstream paralelo, mock del DTO mientras tanto |
 | R4 | Conectividad VPN inestable | Stale-while-revalidate en catálogos (ADR-004) + degradación graceful |
 | R5 | UX inadecuada para técnico de campo (audiencia nueva) | Validación con consultor mecánico (Fase 8) antes del piloto |
-| R6 | Restricción online-only en obras remotas | Selección cuidadosa de obras piloto + documentación clara |
+| R6 | Restricción online-only en proyectos remotos | Selección cuidadosa de proyectos piloto + documentación clara |
 | R7 | Catálogos cambian IDs en Sinco rompiendo audit histórico | Reglas operativas vinculantes (ADR-004): IDs inmutables, descontinuar = flag activo=false |
 
 ---
