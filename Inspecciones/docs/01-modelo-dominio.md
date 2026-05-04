@@ -1655,7 +1655,7 @@ La invariante I7 cambia:
 |---|---|
 | Si hay al menos un hallazgo `Critica`, el dictamen debe ser `NoPuedeOperar` | Si hay al menos un hallazgo con `AccionRequerida = RequiereIntervencion`, **se debe generar OT correctiva** al cerrar la inspección |
 
-El concepto de `DictamenOperacion` se mantiene como decisión separada del técnico al cerrar. La regla exacta de "no contradecirse" (cuándo hallazgos `RequiereIntervencion` impiden `Dictamen = PuedeOperar`) vale la pena validarla con técnicos reales — no es derivable solo de los mockups.
+El concepto de `DictamenOperacion` se mantiene como decisión separada del técnico al cerrar. ~~La regla exacta de "no contradecirse" (cuándo hallazgos `RequiereIntervencion` impiden `Dictamen = PuedeOperar`) vale la pena validarla con técnicos reales~~ — **resuelto 2026-05-04 (decisión Jaime, V-F8 §15.5):** si hay ≥1 hallazgo con `AccionRequerida ∈ {RequiereSeguimiento, RequiereIntervencion}`, el dictamen NO puede ser `PuedeOperar`. Solo `ConRestriccion` o `NoPuedeOperar`.
 
 **Nuevas invariantes (refinadas 2026-04-27 con regla condicional confirmada por el usuario):**
 
@@ -2055,7 +2055,7 @@ El módulo NO gestiona el catálogo de definiciones localmente (lo sincroniza). 
 
 **10. Dictamen de monitoreo (decisión 6 confirmada 2026-04-30, opción A):**
 
-Sin cambio respecto a inspección técnica — V-F4 (§15.5) sigue siendo "Dictamen seleccionado, siempre obligatorio, libre del técnico". El técnico interpreta los resultados de los items y decide entre `PuedeOperar` / `ConRestriccion` / `NoPuedeOperar`. Mismo mental model que técnica.
+Sin cambio respecto a inspección técnica — V-F4 (§15.5) sigue siendo "Dictamen seleccionado, siempre obligatorio". El técnico interpreta los resultados de los items y decide entre `PuedeOperar` / `ConRestriccion` / `NoPuedeOperar`. Mismo mental model que técnica. **V-F8 también aplica a monitoreo** (decisión 2026-05-04): si hay ≥1 hallazgo con `RequiereSeguimiento` o `RequiereIntervencion` (caso típico del flujo monitoreo, donde los hallazgos automáticos siempre son `RequiereSeguimiento`), el dictamen NO puede ser `PuedeOperar`.
 
 **11. Comando hermano `IniciarInspeccionMonitoreo`:**
 
@@ -3205,8 +3205,8 @@ public sealed record CrearOTCorrectivaResponse_v1(
 **Derivación de prioridad** (proposta a validar con MYE):
 - Dictamen `NoPuedeOperar` → Prioridad `Urgente`.
 - Dictamen `ConRestriccion` con ≥1 hallazgo `RequiereIntervencion` → `Alta`.
-- Dictamen `PuedeOperar` con `RequiereIntervencion` → `Normal`.
-- (Si no hay `RequiereIntervencion` no se llega a este punto.)
+- ~~Dictamen `PuedeOperar` con `RequiereIntervencion`~~ — **caso imposible** (decisión 2026-05-04 V-F8): `PuedeOperar` no admite hallazgos con seguimiento o intervención, por tanto nunca llega al flujo de generación de OT.
+- (Si no hay `RequiereIntervencion` no se llega a este punto. Por V-F8 + I-F4, `PuedeOperar` también nunca llega a este punto.)
 
 ### Flujo de error
 
@@ -3652,12 +3652,47 @@ V-F3  Para cada hallazgo con AccionRequerida = RequiereIntervencion:
 V-F4  Dictamen seleccionado (PuedeOperar / ConRestriccion / NoPuedeOperar)
         — siempre obligatorio, independiente de si hay hallazgos con
         RequiereIntervencion (confirmado por Sergio 2026-04-30, cierra
-        regla #11 del brief consultor §6). Sin restricción sobre el valor:
-        el técnico puede dictar PuedeOperar incluso con hallazgos
-        RequiereIntervencion (es decisión técnica, no derivada).
+        regla #11 del brief consultor §6). El valor del dictamen está
+        restringido por V-F8 (regla nueva 2026-05-04) cuando hay hallazgos
+        con AccionRequerida ∈ {RequiereSeguimiento, RequiereIntervencion}.
 V-F5  Firma manuscrita capturada (FirmaUri no vacío)
 V-F6  UbicacionFirma capturada (GPS obligatorio, no bloquea si difiere de UbicacionInicio)
 V-F7  Estado actual = EnEjecucion
+V-F8  Coherencia dictamen ↔ hallazgos (decisión 2026-05-04 — Jaime)
+        ─────────────────────────────────────────────────────────────
+        Si ∃ ≥1 hallazgo no eliminado con
+        AccionRequerida ∈ {RequiereSeguimiento, RequiereIntervencion}
+        entonces Dictamen ∉ {PuedeOperar}.
+        Solo se permite Dictamen ∈ {ConRestriccion, NoPuedeOperar}.
+
+        Razón operativa: PuedeOperar (= "Apto") significa que el equipo
+        opera sin restricciones. Si hay hallazgos pendientes (intervención
+        o seguimiento), por definición hay algo que atender — no es "apto
+        sin restricción". Coherente con la decisión 2026-05-04 de Jaime
+        de acoplar dictamen y AccionRequerida para evitar inspecciones
+        contradictorias en el sentido "todo bien" pero "tengo cosas que
+        revisar/reparar".
+
+        Hallazgos con AccionRequerida = NoRequiereIntervencion NO
+        restringen el dictamen — un hallazgo "observado pero OK" puede
+        coexistir con dictamen PuedeOperar (es información, no problema).
+
+        Implementación: el handler de FirmarInspeccion valida V-F8
+        antes de emitir DictamenEstablecido_v1 + InspeccionFirmada_v1.
+        Mensaje del rechazo: "No puedes firmar con dictamen 'Apto'.
+        Hay {N} hallazgos que requieren {seguimiento|intervención|ambos}.
+        Selecciona 'Con restricciones' o 'No apto'."
+
+        UX: el frontend deshabilita el dictamen PuedeOperar mientras
+        haya hallazgos elegibles. El backend revalida (no confía en UI).
+
+        Tests obligatorios:
+        - Firmar con PuedeOperar + hallazgo RequiereSeguimiento → DomainException.
+        - Firmar con PuedeOperar + hallazgo RequiereIntervencion → DomainException.
+        - Firmar con PuedeOperar + solo hallazgos NoRequiereIntervencion → 200.
+        - Firmar con PuedeOperar sin hallazgos → bloqueado por V-F1 (≥1 hallazgo), no V-F8.
+        - Firmar con ConRestriccion + cualquier combinación → 200 (sin restricción de dictamen).
+        - Firmar con NoPuedeOperar + cualquier combinación → 200.
 ```
 
 El botón "Firmar y cerrar inspección" se deshabilita en UI mientras alguna validación falle, y se bloquea en click para evitar doble submit. El backend revalida (no confía en la UI).
@@ -3685,6 +3720,29 @@ Al firmar la inspección, la saga CerrarInspeccionSaga evalúa:
 ```
 
 **Nota histórica:** la idea original era que no había opción de "saltar OT" si había hallazgos con intervención. ADR-007 mantiene esa regla — la diferencia es **quién** y **cuándo** dispara el POST a MYE: ya no la saga al firmar, sino un usuario autorizado vía comando explícito.
+
+#### Matriz dictamen × hallazgos × cierre (vigente 2026-05-04)
+
+> **Combinación de V-F8 (§15.5) + I-F4 (§15.7) + flujo automático de cierre.**
+
+| Dictamen | ≥1 RequiereIntervencion | ≥1 RequiereSeguimiento | Cierre | OT |
+|---|---|---|---|---|
+| **PuedeOperar** ("Apto") | No | No | Auto: `InspeccionCerradaSinOT_v1` motivo `AutomaticoSinIntervencion`. Firma y cierre inmediatos. | Sin OT — `GenerarOT` rechazado por I-F4 (defensa) |
+| **PuedeOperar** | Sí | — | ❌ Bloqueado por V-F8 al firmar | (no aplica) |
+| **PuedeOperar** | No | Sí | ❌ Bloqueado por V-F8 al firmar | (no aplica) |
+| **ConRestriccion** | No | No | Auto: `InspeccionCerradaSinOT_v1` (caso raro pero válido — restricciones derivadas de hallazgos `NoRequiereIntervencion` o de criterio del técnico) | Sin OT |
+| **ConRestriccion** | Sí | — | `EsperandoAprobacionOT` → aprobador decide → con OT o rechazo | Posible (M-1 vía outbox tras aprobación manual) |
+| **ConRestriccion** | No | Sí | Auto: `InspeccionCerradaSinOT_v1` (no requiere OT — solo seguimiento). Saga abre `SeguimientoHallazgo` para cada hallazgo. | Sin OT — solo seguimientos |
+| **NoPuedeOperar** | No | No | Auto: `InspeccionCerradaSinOT_v1` (caso raro — equipo decomisado sin reparación pedida) | Sin OT |
+| **NoPuedeOperar** | Sí | — | `EsperandoAprobacionOT` → aprobador decide | Posible |
+| **NoPuedeOperar** | No | Sí | Auto: `InspeccionCerradaSinOT_v1` + apertura de `SeguimientoHallazgo` ×N | Sin OT |
+
+**Reglas operativas que se desprenden de la matriz:**
+
+1. **Apto = cierre instantáneo, sin OT.** El usuario no espera, no hay paso de aprobación. Por V-F8, Apto solo es alcanzable cuando todos los hallazgos son `NoRequiereIntervencion` (o no hay hallazgos, lo cual viola V-F1).
+2. **OT solo aparece con dictamen `ConRestriccion` o `NoPuedeOperar`** y `≥1 RequiereIntervencion`. Es la única combinación que entra a `EsperandoAprobacionOT`.
+3. **Seguimientos se abren independientemente de OT** — la saga `CerrarInspeccionSaga` los crea al firmar para cualquier hallazgo `RequiereSeguimiento`, sin importar el flujo OT.
+4. **`SincronizarDictamenVigenteSaga`** (M-W-1) corre en **toda firma** sin importar dictamen — el equipo siempre recibe el dictamen vigente actualizado.
 
 ### 15.7 Invariantes de lifecycle
 
@@ -3808,7 +3866,15 @@ I-F4  Comando GenerarOT (introducido por ADR-007 §17) requiere TODAS estas
         - Estado actual = Firmada
         - ≥1 hallazgo no eliminado con AccionRequerida = RequiereIntervencion
         - !OTSolicitada (no se aceptan dos OTSolicitada_v1 sobre el mismo stream)
+        - !OTRechazada (no se solicita lo que ya se rechazó)
         - Usuario tiene capability `generar-ot` en su contexto del host PWA
+        - Dictamen ∈ {ConRestriccion, NoPuedeOperar} (defensa segunda
+          contra dictamen PuedeOperar — extendida 2026-05-04 por
+          decisión Jaime: "cuando el dictamen sea Apto no permita
+          generar OT y la inspección se firme y se cierre"). Por V-F8
+          esta condición ya está garantizada al firmar; la verificación
+          en I-F4 es defensa explícita ante inconsistencias previas
+          al deploy de V-F8 o ediciones futuras del aggregate.
       Violar cualquiera lanza excepción de dominio en el método de decisión
       (no en Apply — ver convención de capa en CLAUDE.md).
 I-F5  Estado derivado EsperandoAprobacionOT (introducido por ADR-007) =
