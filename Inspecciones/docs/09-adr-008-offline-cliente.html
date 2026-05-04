@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR-008 — Cola de comandos offline cliente PWA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<style>
+:root {
+  --primary: #0D47A1;
+  --primary-dark: #062B66;
+  --primary-light: #E3F2FD;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #5F6368;
+  --text-muted: #9AA0A6;
+  --divider: #E0E4E9;
+
+  --lane-tec: #E3F2FD;
+  --lane-tec-border: #1976D2;
+  --lane-front: #E8F5E9;
+  --lane-front-border: #388E3C;
+  --lane-back: #FFF3E0;
+  --lane-back-border: #EF6C00;
+  --lane-saga: #F3E5F5;
+  --lane-saga-border: #7B1FA2;
+  --lane-erp: #FFEBEE;
+  --lane-erp-border: #D32F2F;
+  --lane-stor: #F5F5F5;
+  --lane-stor-border: #757575;
+  --ok: #C8E6C9;
+  --warn: #FFF8E1;
+  --err: #FFCDD2;
+  --end: #ECEFF1;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-2: 0 4px 8px rgba(0,0,0,.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #ECEFF1;
+  color: var(--text);
+  padding: 24px 16px 64px;
+  min-height: 100vh;
+  line-height: 1.55;
+}
+
+.page-header {
+  max-width: 1400px; margin: 0 auto 24px; text-align: center;
+  padding: 24px;
+  background: linear-gradient(135deg, var(--primary-light) 0%, #FFFFFF 100%);
+  border-radius: 12px;
+  box-shadow: var(--shadow-1);
+}
+.page-header h1 { font-weight: 500; font-size: 26px; color: #263238; margin-bottom: 6px; }
+.page-header p { color: var(--text-secondary); font-size: 14px; max-width: 900px; margin: 0 auto; }
+.page-header .meta {
+  display: inline-flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center;
+  font-size: 12px;
+}
+.page-header .meta span {
+  background: rgba(13,71,161,.08); padding: 4px 10px; border-radius: 12px; color: var(--primary-dark);
+}
+
+.toc {
+  max-width: 1400px; margin: 0 auto 24px;
+  background: var(--surface); border-radius: 8px; padding: 12px 20px;
+  box-shadow: var(--shadow-1);
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.toc strong { color: var(--text-secondary); font-size: 13px; margin-right: 8px; }
+.toc a {
+  text-decoration: none; color: var(--primary);
+  padding: 4px 10px; border-radius: 6px; font-size: 13px;
+  transition: background 0.15s;
+}
+.toc a:hover { background: var(--primary-light); }
+
+.section {
+  max-width: 1400px; margin: 0 auto 24px;
+  background: var(--surface); border-radius: 12px; padding: 24px 28px;
+  box-shadow: var(--shadow-1);
+}
+.section h2 {
+  font-weight: 500; font-size: 20px; color: var(--primary-dark);
+  border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; margin-bottom: 16px;
+}
+.section h3 {
+  font-weight: 500; font-size: 16px; color: var(--text);
+  margin: 18px 0 10px; padding-left: 10px; border-left: 4px solid var(--primary);
+}
+.section p { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; }
+.section ul, .section ol { margin-left: 24px; margin-bottom: 10px; color: var(--text-secondary); font-size: 14px; }
+.section li { margin-bottom: 4px; }
+.section code {
+  font-family: 'Roboto Mono', monospace; font-size: 12.5px;
+  background: #F1F5F9; padding: 1px 6px; border-radius: 3px; color: #1E40AF;
+}
+.section a { color: var(--primary); }
+
+.lane-legend {
+  display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 20px;
+}
+.lane-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 16px; font-size: 12.5px;
+  border: 2px solid; font-weight: 500;
+}
+.lane-chip.tec { background: var(--lane-tec); border-color: var(--lane-tec-border); color: var(--lane-tec-border); }
+.lane-chip.front { background: var(--lane-front); border-color: var(--lane-front-border); color: var(--lane-front-border); }
+.lane-chip.back { background: var(--lane-back); border-color: var(--lane-back-border); color: var(--lane-back-border); }
+.lane-chip.saga { background: var(--lane-saga); border-color: var(--lane-saga-border); color: var(--lane-saga-border); }
+.lane-chip.erp { background: var(--lane-erp); border-color: var(--lane-erp-border); color: var(--lane-erp-border); }
+.lane-chip.stor { background: var(--lane-stor); border-color: var(--lane-stor-border); color: var(--lane-stor-border); }
+
+.diagram-wrapper {
+  background: #FAFBFC; border: 1px solid var(--divider); border-radius: 8px;
+  padding: 16px; margin: 16px 0; position: relative; overflow: auto;
+  min-height: 480px;
+}
+.diagram-wrapper.tall { min-height: 720px; }
+.diagram-wrapper .controls {
+  position: sticky; top: 8px; left: 100%; display: flex; gap: 4px; z-index: 10;
+  width: fit-content; margin-left: auto;
+}
+.diagram-wrapper .controls button {
+  background: var(--surface); border: 1px solid var(--divider);
+  width: 32px; height: 32px; border-radius: 6px; cursor: pointer;
+  font-size: 16px; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-1);
+}
+.diagram-wrapper .controls button:hover { background: var(--primary-light); color: var(--primary); }
+.diagram-wrapper .mermaid { display: block; min-height: 420px; }
+.diagram-wrapper.tall .mermaid { min-height: 660px; }
+.diagram-wrapper svg {
+  max-width: none !important;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+.diagram-wrapper .mermaid svg[id^="mermaid-"] { font-size: 14px; }
+
+table {
+  width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px;
+  background: var(--surface);
+}
+table th {
+  background: var(--primary-light); color: var(--primary-dark); text-align: left;
+  padding: 10px 12px; font-weight: 500; border-bottom: 2px solid var(--primary);
+}
+table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text);
+  vertical-align: top;
+}
+table tr:nth-child(even) td { background: #FAFBFC; }
+table code { font-size: 11.5px; }
+
+.tab-bar {
+  display: flex; gap: 4px; border-bottom: 2px solid var(--divider); margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  background: none; border: none; cursor: pointer; padding: 10px 18px;
+  font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); border-radius: 6px 6px 0 0;
+  transition: all 0.15s; border-bottom: 3px solid transparent; margin-bottom: -2px;
+}
+.tab-btn.active { color: var(--primary-dark); border-bottom-color: var(--primary); background: var(--primary-light); }
+.tab-btn:hover:not(.active) { background: var(--bg); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.callout {
+  background: var(--lane-tec); border-left: 4px solid var(--lane-tec-border);
+  padding: 12px 16px; border-radius: 4px; margin: 12px 0; font-size: 13px;
+}
+.callout.warn { background: var(--warn); border-color: #F57C00; }
+.callout.err { background: var(--err); border-color: var(--lane-erp-border); }
+.callout.ok { background: var(--ok); border-color: #388E3C; }
+
+footer {
+  max-width: 1400px; margin: 24px auto 0; padding: 16px 24px;
+  background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-1);
+  font-size: 12px; color: var(--text-muted); text-align: center;
+}
+footer a { color: var(--primary); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+.kbd {
+  font-family: 'Roboto Mono', monospace; font-size: 12px;
+  background: #ECEFF1; border: 1px solid #B0BEC5;
+  padding: 1px 6px; border-radius: 3px;
+}
+
+pre.codeblock {
+  background: #0F172A; color: #E2E8F0;
+  font-family: 'Roboto Mono', monospace; font-size: 12.5px; line-height: 1.55;
+  padding: 14px 18px; border-radius: 6px;
+  overflow-x: auto; margin: 12px 0;
+  border-left: 3px solid var(--primary);
+}
+pre.codeblock code {
+  background: transparent; color: inherit; padding: 0;
+  font-family: inherit; font-size: inherit;
+}
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>ADR-008 — Cola de comandos offline cliente PWA</h1>
+  <p>Cómo el técnico graba trabajo en campo sin conectividad: el cliente almacena <strong>comandos</strong> (intenciones) en IndexedDB, no eventos. El servidor decide y produce eventos en Marten al sincronizar.</p>
+  <div class="meta">
+    <span>📄 Doc fuente: 00-investigacion-mercado.md §9.16</span>
+    <span>📅 Versión: 2026-05-04</span>
+    <span>📌 Estado: Aceptada (2026-05-04)</span>
+    <span>🔗 Relacionado: ADR-004, ADR-005, ADR-006</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>📑 Secciones:</strong>
+  <a href="#carriles">Carriles</a>
+  <a href="#flujo-principal">Flujo cliente↔server</a>
+  <a href="#estados-comando">Estados del comando</a>
+  <a href="#adjuntos">Adjuntos en 2 fases</a>
+  <a href="#schema">Schema cliente</a>
+  <a href="#anatomia">Anatomía de una jornada</a>
+  <a href="#fallas">Modos de falla</a>
+  <a href="#decisiones">Decisiones críticas</a>
+  <a href="#referencias">Referencias</a>
+</nav>
+
+<!-- =================== CARRILES =================== -->
+<section class="section" id="carriles">
+  <h2>1. Carriles y notación</h2>
+  <p>Los diagramas usan los mismos 6 carriles del repo (02i/02j/02k) para que sea consistente con los workflows técnica/monitoreo/seguimientos.</p>
+
+  <div class="lane-legend">
+    <span class="lane-chip tec">👤 Técnico</span>
+    <span class="lane-chip front">📱 Frontend PWA</span>
+    <span class="lane-chip back">🔧 Backend módulo</span>
+    <span class="lane-chip saga">⏰ Wolverine outbox / dedup</span>
+    <span class="lane-chip stor">💾 IndexedDB / OPFS / Marten</span>
+  </div>
+
+  <table>
+    <thead><tr><th>Carril</th><th>Responsabilidad en este flujo</th></tr></thead>
+    <tbody>
+      <tr><td>👤 Técnico</td><td>Captura offline en wizard, decide en rechazos</td></tr>
+      <tr><td>📱 Frontend PWA</td><td>IndexedDB <code>comandos_pendientes</code>, OPFS para fotos, worker de sync, UI badges</td></tr>
+      <tr><td>🔧 Backend módulo</td><td>Endpoint <code>/comandos/{tipo}</code>, handler, valida invariantes, produce eventos</td></tr>
+      <tr><td>⏰ Wolverine</td><td>Dedup por <code>X-Client-Command-Id</code>, outbox a ERP (ADR-006)</td></tr>
+      <tr><td>💾 Storage</td><td>IndexedDB (cliente), OPFS (fotos), Marten event store (server)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================== FLUJO PRINCIPAL =================== -->
+<section class="section" id="flujo-principal">
+  <h2>2. Flujo principal — captura offline y sincronización</h2>
+  <p>Camino completo desde que el técnico tap en "agregar hallazgo" sin conexión, hasta que el servidor commitea el evento en Marten y responde ack al cliente. Las líneas punteadas indican llamadas que pueden estar en cola por offline.</p>
+
+  <div class="diagram-wrapper tall">
+    <div class="controls">
+      <button onclick="zoomDiagram('flujo-principal-mmd', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('flujo-principal-mmd', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('flujo-principal-mmd')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('flujo-principal-mmd')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="flujo-principal-mmd">
+flowchart TD
+    Start((1. Técnico tap<br/>+ Hallazgo)):::lTec
+
+    subgraph FaseCaptura["📍 Fase A — Captura offline en cliente"]
+        N2[2. UI wizard<br/>llenar payload]:::lTec
+        N3[3. Capturar GPS<br/>+ capturadoEn]:::lFront
+        N4[4. Generar<br/>clientCommandId UUIDv7]:::lFront
+        N5[5. Tomar foto]:::lTec
+        N6[(6. OPFS<br/>foto + adjuntoTempId)]:::lStor
+        N7[7. Construir comando<br/>RegistrarHallazgo + adjuntoTempId]:::lFront
+        N8[(8. IndexedDB<br/>comandos_pendientes<br/>status=pendiente)]:::lStor
+        N9[9. Aplicar localmente<br/>a read_models]:::lFront
+        N10[10. UI muestra hallazgo<br/>badge: pendiente]:::lFront
+    end
+
+    Start --> N2 --> N3 --> N4 --> N5 --> N6 --> N7 --> N8 --> N9 --> N10
+
+    N10 --> N11{11. ¿Hay red?}:::lFront
+
+    N11 -- No --> N12[12. Esperar conectividad<br/>Worker monitorea online event]:::lFront
+    N12 --> N11
+
+    N11 -- Sí --> FaseSync
+
+    subgraph FaseSync["🔄 Fase B — Sincronización"]
+        N13[13. Worker lee cola<br/>FIFO por streamId]:::lFront
+        N14["14. status enviando<br/>POST /comandos/RegistrarHallazgo"]:::lFront
+        N15["15. Header X-Client-Command-Id<br/>igual a clientCommandId"]:::lFront
+        N16{"16. Wolverine dedup?"}:::lSaga
+        N17(("17. 409 Conflict<br/>respuesta original")):::lSaga
+        N18["18. Handler<br/>RegistrarHallazgoHandler"]:::lBack
+        N19{"19. ¿Invariantes<br/>I-H1..I-H4?"}:::lBack
+        N20(("20. 422 Unprocessable<br/>razón V-F o I violada")):::lBack
+        N21[21. session.Events.Append<br/>HallazgoRegistrado_v1]:::lBack
+        N22[(22. Marten<br/>SaveChangesAsync)]:::lStor
+        N23((23. 200 OK<br/>+ eventoId + sasUploadUri)):::lBack
+    end
+
+    N13 --> N14 --> N15 --> N16
+    N16 -- Ya aplicado --> N17
+    N16 -- Nuevo --> N18 --> N19
+    N19 -- No --> N20
+    N19 -- Sí --> N21 --> N22 --> N23
+
+    N17 --> N30
+    N20 --> N31
+    N23 --> N24
+
+    subgraph FaseAdjunto["📤 Fase C — Upload de foto SAS"]
+        N24[24. Cliente recibe<br/>sasUploadUri]:::lFront
+        N25[25. PUT directo a Blob<br/>desde OPFS]:::lFront
+        N26[26. POST ConfirmarAdjunto<br/>blobUri]:::lFront
+        N27[27. Append AdjuntoConfirmado_v1]:::lBack
+        N28[28. Borrar foto local OPFS]:::lFront
+    end
+
+    N24 --> N25 --> N26 --> N27 --> N28 --> N30
+
+    subgraph FaseAck["✅ Fase D — Confirmación"]
+        N30[30. status=confirmado<br/>UI badge verde]:::lFront
+        N31[31. status=rechazado<br/>UI badge rojo<br/>STOP cola del stream]:::lFront
+        N32[32. SignalR push<br/>read_models autoritativo]:::lBack
+        EndOk((33. End — sincronizado)):::lOk
+        EndErr((34. End — técnico decide:<br/>corregir o descartar)):::lWarn
+    end
+
+    N30 --> N32 --> EndOk
+    N31 --> EndErr
+
+    classDef lTec fill:#E3F2FD,stroke:#1976D2,color:#000
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lSaga fill:#F3E5F5,stroke:#7B1FA2,color:#000
+    classDef lStor fill:#F5F5F5,stroke:#757575,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+    classDef lWarn fill:#FFF8E1,stroke:#F57C00,color:#000
+    classDef lError fill:#FFCDD2,stroke:#D32F2F,color:#000
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>⚠️ Punto crítico:</strong> el cliente <em>nunca</em> emite eventos. Lo que se almacena en IndexedDB es <code>RegistrarHallazgo</code> (intención, infinitivo); lo que el server commitea en Marten es <code>HallazgoRegistrado_v1</code> (hecho, participio pasado). Si en code review aparece un <code>Append</code> invocado desde la PWA, es bug.
+  </div>
+</section>
+
+<!-- =================== ESTADOS DEL COMANDO =================== -->
+<section class="section" id="estados-comando">
+  <h2>3. Ciclo de vida de un comando</h2>
+  <p>Cada comando en <code>comandos_pendientes</code> avanza por estos estados. Las transiciones rojas son terminales que requieren acción del técnico.</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('estados-mmd', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('estados-mmd', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('estados-mmd')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('estados-mmd')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="estados-mmd">
+stateDiagram-v2
+    [*] --> pendiente : Técnico ejecuta acción
+    pendiente --> enviando : Worker toma de cola, POST comando
+    enviando --> confirmado : 200 OK / 202 Accepted
+    enviando --> confirmado : 409 Conflict (dedup ya aplicado)
+    enviando --> rechazado : 422 invariante violada
+    enviando --> pendiente : 5xx / timeout, backoff exp.
+    enviando --> pendiente : 401, refresh token y reanudar
+    confirmado --> [*] : Se elimina de cola
+    rechazado --> pendiente : Técnico edita y reintenta
+    rechazado --> [*] : Técnico descarta (soft delete local)
+
+    note right of enviando
+        Imprescindible:
+        clientCommandId UUIDv7
+        viaja como MessageId
+        Wolverine dedup
+    end note
+
+    note right of rechazado
+        STOP de la cola
+        del stream afectado
+        (otros streams siguen)
+    end note
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Estado</th><th>UI badge</th><th>Transiciones salientes</th></tr></thead>
+    <tbody>
+      <tr><td><code>pendiente</code></td><td>🔘 Gris "pendiente"</td><td>→ <code>enviando</code> al haber red</td></tr>
+      <tr><td><code>enviando</code></td><td>🔵 Azul pulsante</td><td>→ <code>confirmado</code>, <code>rechazado</code>, o vuelve a <code>pendiente</code> con backoff</td></tr>
+      <tr><td><code>confirmado</code></td><td>🟢 Verde (auto-desaparece 2s)</td><td>→ eliminado de cola</td></tr>
+      <tr><td><code>rechazado</code></td><td>🔴 Rojo + razón (V-F#, I-#)</td><td>Acción manual del técnico</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================== ADJUNTOS =================== -->
+<section class="section" id="adjuntos">
+  <h2>4. Flujo de adjuntos en 2 fases</h2>
+  <p>Las fotos no viajan en el payload del comando. Patrón SAS de ADR-005: el server emite URI firmada, el cliente sube directo a Blob, después confirma. Esto soporta fotos de 5-10 MB sin saturar el body de POST y sin pasar por backend.</p>
+
+  <div class="diagram-wrapper tall">
+    <div class="controls">
+      <button onclick="zoomDiagram('adjuntos-mmd', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('adjuntos-mmd', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('adjuntos-mmd')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('adjuntos-mmd')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="adjuntos-mmd">
+sequenceDiagram
+    autonumber
+    participant T as 👤 Técnico
+    participant U as 📱 PWA UI
+    participant Q as 📦 IndexedDB cola
+    participant O as 💾 OPFS
+    participant W as 🔄 Sync Worker
+    participant B as 🔧 Backend handler
+    participant M as 🗄️ Marten
+    participant Z as ☁️ Azure Blob
+
+    rect rgb(232, 245, 233)
+        Note over T,O: Fase A — Captura offline
+        T->>U: Tomar foto del hallazgo
+        U->>O: write(adjuntoTempId, blob)
+        O-->>U: ok
+        U->>Q: enqueue(RegistrarHallazgo<br/>+ adjuntoTempId)
+        U-->>T: UI muestra "pendiente"
+    end
+
+    rect rgb(255, 243, 224)
+        Note over W,M: Fase B — Sync comando + emisión SAS
+        W->>Q: dequeue siguiente
+        W->>B: POST /comandos/RegistrarHallazgo<br/>X-Client-Command-Id: UUIDv7
+        B->>M: AggregateStream(InspeccionId)
+        B->>M: Append HallazgoRegistrado_v1
+        M-->>B: ok (atómico)
+        B->>Z: Generar SAS upload URI<br/>(blobUri definitivo + token TTL=1h)
+        B-->>W: 200 OK { eventoId, sasUploadUri, blobUri }
+        W->>Q: status=confirmado (parcial)
+    end
+
+    rect rgb(243, 229, 245)
+        Note over W,Z: Fase C — Upload directo
+        W->>O: read(adjuntoTempId)
+        O-->>W: blob
+        W->>Z: PUT sasUploadUri (foto)
+        Z-->>W: 201 Created
+    end
+
+    rect rgb(255, 243, 224)
+        Note over W,M: Fase D — Confirmación
+        W->>B: POST /comandos/ConfirmarAdjunto<br/>{ blobUri, sha256 }
+        B->>M: Append AdjuntoConfirmado_v1
+        M-->>B: ok
+        B-->>W: 200 OK
+        W->>O: delete(adjuntoTempId)
+        W->>Q: cleanup
+        W-->>U: read_models actualizado
+        U-->>T: UI muestra "✓ sincronizado"
+    end
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>💡 Por qué 2 fases:</strong> si embebiéramos la foto en el comando, un POST de 50 MB con red intermitente fallaría completo y perderíamos el comando. Separando: el comando viaja liviano, la foto va directo a Blob (que tolera reintentos parciales), y la confirmación es atómica.
+  </div>
+</section>
+
+<!-- =================== SCHEMA CLIENTE =================== -->
+<section class="section" id="schema">
+  <h2>5. Schema en cliente — IndexedDB</h2>
+  <p>Tres object stores. Sólo <code>comandos_pendientes</code> sincroniza al server; los otros dos son locales.</p>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('store-cmd')">comandos_pendientes</button>
+    <button class="tab-btn" onclick="showTab('store-cat')">catalogos</button>
+    <button class="tab-btn" onclick="showTab('store-rm')">read_models</button>
+  </div>
+
+  <div class="tab-content active" id="store-cmd">
+    <h3>Store: <code>comandos_pendientes</code></h3>
+    <p>Cola FIFO por <code>streamId</code>. Sólo se sincroniza este store al server. Indices: <code>(streamId, capturadoEn)</code> para FIFO por stream, <code>status</code> para el worker, <code>(status, capturadoEn)</code> para reintentos.</p>
+    <table>
+      <thead><tr><th>Campo</th><th>Tipo</th><th>Notas</th></tr></thead>
+      <tbody>
+        <tr><td><code>clientCommandId</code></td><td>UUIDv7</td><td>PK. Idempotency key, viaja como <code>X-Client-Command-Id</code></td></tr>
+        <tr><td><code>tipo</code></td><td>string</td><td><code>RegistrarHallazgo</code>, <code>FirmarInspeccion</code>, <code>RegistrarPreop</code>, ...</td></tr>
+        <tr><td><code>streamId</code></td><td>Guid</td><td>InspeccionId / SeguimientoHallazgoId / NovedadPreopId. Index para FIFO por stream</td></tr>
+        <tr><td><code>payload</code></td><td>object</td><td>Datos del comando (ej. para RegistrarHallazgo: parteId, causaFallaId, descripcion, ...)</td></tr>
+        <tr><td><code>capturadoEn</code></td><td>ISO timestamp cliente</td><td>Reconstruye orden causal — el server lo persiste tal cual</td></tr>
+        <tr><td><code>ubicacionGps</code></td><td>UbicacionGps</td><td>Capturada al momento del comando. V-F3 requiere GPS al firmar</td></tr>
+        <tr><td><code>claimsSnapshot</code></td><td>object</td><td><code>{ tecnicoId, capabilities[] }</code> al momento de captura</td></tr>
+        <tr><td><code>status</code></td><td>enum</td><td><code>pendiente</code> | <code>enviando</code> | <code>confirmado</code> | <code>rechazado</code></td></tr>
+        <tr><td><code>intentos</code></td><td>int</td><td>Para backoff exponencial</td></tr>
+        <tr><td><code>ultimoError</code></td><td>string?</td><td>Razón del último 4xx/5xx (V-F#, I-#, mensaje del server)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tab-content" id="store-cat">
+    <h3>Store: <code>catalogos</code></h3>
+    <p>Read-only desde ERP por sync nocturno (ADR-004). Stale-while-revalidate hasta 24h. <strong>No sincroniza al server.</strong></p>
+    <table>
+      <thead><tr><th>Campo</th><th>Notas</th></tr></thead>
+      <tbody>
+        <tr><td><code>tipo</code></td><td>equipos | rutinas | partes | actividades | causas | tipos-falla | repuestos | ubicaciones | obras</td></tr>
+        <tr><td><code>etag</code></td><td>Header del último GET exitoso, alimenta <code>If-None-Match</code> al refrescar</td></tr>
+        <tr><td><code>lastSyncedAt</code></td><td>Para detectar staleness extrema (>7 días → bloquear escritura)</td></tr>
+        <tr><td><code>data</code></td><td>Lista completa del catálogo (denormalizada, optimizada para selectores)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tab-content" id="store-rm">
+    <h3>Store: <code>read_models</code></h3>
+    <p>Vista optimista del trabajo en curso. <strong>Derivada — se reemplaza con la versión autoritativa del server cuando llega vía SignalR push o tras ack.</strong> No sincroniza.</p>
+    <table>
+      <thead><tr><th>Campo</th><th>Notas</th></tr></thead>
+      <tbody>
+        <tr><td><code>streamId</code></td><td>PK. InspeccionId / SeguimientoHallazgoId / etc.</td></tr>
+        <tr><td><code>tipo</code></td><td>Inspeccion | Seguimiento | NovedadPreop</td></tr>
+        <tr><td><code>state</code></td><td>Estado proyectado tras aplicar comandos pendientes sobre snapshot del server</td></tr>
+        <tr><td><code>baseVersion</code></td><td>Versión del agregado server tomada como base. Si avanza por SignalR, se rebaseo</td></tr>
+        <tr><td><code>tieneCambiosPendientes</code></td><td>Bool — para mostrar badge "no sincronizado" en lista de inspecciones</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =================== ANATOMÍA DE UNA JORNADA =================== -->
+<section class="section" id="anatomia">
+  <h2>6. Anatomía de una jornada — estructura física en cliente</h2>
+  <p>Para que el modelo "comandos en cola" sea concreto, esta sección muestra cómo se llena el storage local durante una jornada típica del técnico, hito por hito.</p>
+
+  <h3>6.1 Definición Dexie (TypeScript)</h3>
+  <p>Una sola declaración al arrancar la app define los tres object stores y sus índices:</p>
+  <pre class="codeblock"><code>import Dexie, { Table } from 'dexie';
+
+interface ComandoPendiente {
+  clientCommandId: string;       // UUIDv7 — PK
+  tipo: string;                  // "RegistrarHallazgo", "FirmarInspeccion", ...
+  streamId: string;              // InspeccionId / SeguimientoHallazgoId
+  payload: Record&lt;string, unknown&gt;;
+  capturadoEn: string;           // ISO timestamp cliente
+  ubicacionGps: { lat: number; lon: number; precisionMetros: number; capturadoEn: string };
+  claimsSnapshot: { tecnicoId: number; capabilities: string[] };
+  status: 'pendiente' | 'enviando' | 'confirmado' | 'rechazado';
+  intentos: number;
+  ultimoError?: string;
+}
+
+class InspeccionesDB extends Dexie {
+  comandos_pendientes!: Table&lt;ComandoPendiente, string&gt;;
+  catalogos!: Table&lt;CatalogoCache, string&gt;;
+  read_models!: Table&lt;ReadModel, string&gt;;
+
+  constructor() {
+    super('inspecciones_offline');
+    this.version(1).stores({
+      comandos_pendientes:
+        'clientCommandId, streamId, status, [streamId+capturadoEn], [status+capturadoEn]',
+      catalogos: 'tipo, lastSyncedAt',
+      read_models: 'streamId, tipo, tieneCambiosPendientes',
+    });
+  }
+}
+
+export const db = new InspeccionesDB();</code></pre>
+  <p><code>[streamId+capturadoEn]</code> es índice compuesto que habilita lectura FIFO por stream para el sync worker.</p>
+
+  <h3>6.2 OPFS para fotos (no en IndexedDB)</h3>
+  <p>Las fotos van al <strong>Origin Private File System</strong> vía <code>navigator.storage.getDirectory()</code>. Ineficiente meterlas en IndexedDB cuando hay binarios pesados (5-10 MB c/u).</p>
+  <pre class="codeblock"><code>/adjuntos_pendientes/
+  ├── {adjuntoTempId-1}.jpg     (~3 MB)
+  ├── {adjuntoTempId-2}.jpg
+  └── {adjuntoTempId-3}.jpg
+/adjuntos_subiendo/
+  └── {adjuntoTempId-N}.jpg     (movido cuando arranca PUT a Blob)</code></pre>
+  <p>Cuando el upload SAS confirma (<code>AdjuntoConfirmado_v1</code> recibido), el archivo se elimina del OPFS.</p>
+
+  <h3>6.3 Storyboard — diagrama de la jornada</h3>
+  <p>Hitos temporales: técnico abre app → inicia inspección offline → captura hallazgo con fotos → firma → vuelve la red → worker vacía la cola.</p>
+
+  <div class="diagram-wrapper tall">
+    <div class="controls">
+      <button onclick="zoomDiagram('jornada-mmd', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('jornada-mmd', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('jornada-mmd')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('jornada-mmd')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="jornada-mmd">
+sequenceDiagram
+    autonumber
+    participant T as 👤 Técnico
+    participant U as 📱 PWA
+    participant Q as 📦 IndexedDB
+    participant O as 💾 OPFS
+    participant N as 🌐 Red
+    participant B as 🔧 Backend
+
+    rect rgb(232, 245, 233)
+        Note over T,B: 8:00 — Apertura PWA (online)
+        T->>U: Abre app
+        U->>Q: Lee catalogos (9 stores)
+        U->>Q: Lee read_models (vacío)
+        N-->>U: Catálogos refrescados >24h
+        U->>Q: Refresh catalogos (ETag/If-None-Match)
+    end
+
+    rect rgb(255, 243, 224)
+        Note over T,B: 8:30 — Inicia inspección (entra zona muerta)
+        T->>U: Tap equipo CARGADOR-EX-201
+        U->>Q: insert IniciarInspeccion (status=pendiente)
+        U->>Q: insert read_models (estado=Iniciada, tieneCambios=true)
+        U-->>T: UI muestra "pendiente sync"
+    end
+
+    rect rgb(243, 229, 245)
+        Note over T,O: 9:00 — Hallazgo H1 con 2 fotos (offline)
+        T->>U: Captura H1 + 2 fotos
+        U->>O: write foto-a1.jpg (3.2 MB)
+        U->>O: write foto-a2.jpg (2.8 MB)
+        U->>Q: insert RegistrarHallazgo<br/>(adjuntosTempIds: [a1, a2])
+        U->>Q: update read_models<br/>(state.hallazgos += H1)
+        U-->>T: H1 visible local con badge pendiente
+    end
+
+    rect rgb(227, 242, 253)
+        Note over T,B: 11:00 — Firma (todavía offline)
+        T->>U: Diagnóstico + dictamen + firma
+        U->>Q: insert FirmarInspeccion
+        U-->>T: UI: 4 comandos en cola, 6 MB OPFS
+    end
+
+    rect rgb(200, 230, 201)
+        Note over T,B: 11:15 — Vuelve la red, worker arranca
+        N-->>U: online event
+        loop FIFO por streamId ins-9c2
+            U->>Q: read próximo comando pendiente
+            U->>B: POST /comandos/{tipo}<br/>X-Client-Command-Id
+            B-->>U: 200 OK [+ sasUploadUri si hay foto]
+            opt si hay adjunto
+                U->>O: read foto
+                U->>B: PUT sasUploadUri (Azure Blob)
+                U->>B: POST /comandos/ConfirmarAdjunto
+                U->>O: delete foto
+            end
+            U->>Q: delete comando confirmado
+        end
+        B-->>U: SignalR push (read_models autoritativo)
+        U->>Q: replace read_models (baseVersion bumped, tieneCambios=false)
+        U-->>T: ✓ Inspección sincronizada
+    end
+    </div>
+  </div>
+
+  <h3>6.4 Estado de los stores en cada hito</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Hito</th>
+        <th><code>comandos_pendientes</code></th>
+        <th><code>read_models</code></th>
+        <th>OPFS</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>8:00</strong> abre app</td>
+        <td>vacío</td>
+        <td>vacío</td>
+        <td>vacío</td>
+      </tr>
+      <tr>
+        <td><strong>8:30</strong> inicia inspección</td>
+        <td>1 (IniciarInspeccion)</td>
+        <td>1 (estado=Iniciada)</td>
+        <td>vacío</td>
+      </tr>
+      <tr>
+        <td><strong>9:00</strong> hallazgo H1 + 2 fotos</td>
+        <td>2 (+ RegistrarHallazgo)</td>
+        <td>1 (state.hallazgos = [H1])</td>
+        <td>2 archivos (~6 MB)</td>
+      </tr>
+      <tr>
+        <td><strong>11:00</strong> firma</td>
+        <td>3 (+ FirmarInspeccion)</td>
+        <td>1 (state.estado=Firmada local)</td>
+        <td>2 archivos (~6 MB)</td>
+      </tr>
+      <tr>
+        <td><strong>11:15</strong> sync completo</td>
+        <td>vacío</td>
+        <td>1 (baseVersion=3, tieneCambios=false)</td>
+        <td>vacío</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>6.5 Persistencia entre cierres de la PWA</h3>
+  <div class="callout ok">
+    <strong>IndexedDB y OPFS persisten en disco</strong>, no son memoria de sesión. Si el técnico cierra la pestaña, reinicia el celular, o pasa una semana sin abrir la app — al reabrir, todo está como lo dejó (comandos en cola con su <code>intentos</code>/<code>ultimoError</code>, fotos en OPFS, read_models intactos).
+  </div>
+
+  <p>Lo único que <strong>no</strong> persiste son las variables JS en memoria (estado de React, etc.). Por eso el bootstrap al arrancar la app hace 4 pasos:</p>
+
+  <pre class="codeblock"><code>async function bootstrap() {
+  await db.open();                                  // 1. reconectar a IndexedDB
+
+  const inspeccionesActivas = await db.read_models  // 2. reanimar UI desde
+    .where('tipo').equals('Inspeccion')             //    proyecciones locales
+    .toArray();                                     //    (no llama al server todavía)
+  setUIFromReadModels(inspeccionesActivas);
+
+  startSyncWorker();                                // 3. levantar worker; si hay red,
+                                                    //    empieza a vaciar la cola
+  refreshCatalogosIfStale();                        // 4. en paralelo, refrescar
+                                                    //    catálogos si pasaron >24h
+}</code></pre>
+
+  <p>El storage local se pierde <strong>solo</strong> si: (a) el usuario limpia datos del browser, (b) el browser hace eviction por presión de cuota agresiva, (c) el usuario desinstala la PWA. Caso (b) lo mitigamos monitoreando <code>navigator.storage.estimate()</code> y bloqueando suavemente al técnico al llegar a &lt;20 % libre.</p>
+
+  <h3>6.6 Tamaños esperados</h3>
+  <table>
+    <thead><tr><th>Stream típico</th><th>Comandos pendientes</th><th>OPFS adjuntos</th><th>Bytes IndexedDB</th></tr></thead>
+    <tbody>
+      <tr><td>Inspección con 5 hallazgos × 2 fotos</td><td>~10</td><td>10 archivos × ~3 MB ≈ 30 MB</td><td>~50 KB</td></tr>
+      <tr><td>Jornada de 3 inspecciones</td><td>~30</td><td>~90 MB</td><td>~150 KB</td></tr>
+      <tr><td>Cache catálogos completos</td><td>—</td><td>—</td><td>~5-15 MB</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>💡 La cola no es un log histórico.</strong> Cuando un comando queda <code>confirmado</code>, se elimina inmediatamente. La cola es solo trabajo pendiente. El historial autoritativo vive en Marten (server).
+  </div>
+
+  <h3>6.7 Comportamiento por plataforma — iOS vs Android</h3>
+  <p>PWA es un estándar web, pero <strong>el comportamiento real del storage local difiere significativamente</strong> entre iOS Safari y Android Chrome/Edge. Esto afecta decisiones operativas del rollout.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Aspecto</th>
+        <th>🤖 Android (Chrome/Edge/Samsung)</th>
+        <th>🍎 iOS Safari (iPhone/iPad)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>IndexedDB</td><td>✅ Robusto, persistencia confiable</td><td>✅ Funciona desde iOS 17.4 (marzo 2024)</td></tr>
+      <tr><td>OPFS</td><td>✅ Completo (Chrome 102+)</td><td>✅ Soportado desde iOS 16+</td></tr>
+      <tr><td>Cuota típica</td><td>~60 % del disco libre (típicamente GB)</td><td>~1 GB nominal, expandible con <code>persist()</code> sin garantía</td></tr>
+      <tr><td>Background Sync API</td><td>✅ Funciona en background</td><td>❌ <strong>NO existe en iOS Safari</strong></td></tr>
+      <tr><td>Periodic Background Sync</td><td>✅ Chrome/Edge</td><td>❌ NO existe</td></tr>
+      <tr><td>Web Push</td><td>✅ Siempre</td><td>✅ Solo si está instalada (Add to Home Screen), iOS 16.4+</td></tr>
+      <tr><td>Service Worker</td><td>✅ Robusto</td><td>⚠️ Funciona pero con bugs históricos</td></tr>
+      <tr><td><code>storage.persist()</code></td><td>✅ Suele concederse</td><td>⚠️ Suele rechazarse</td></tr>
+      <tr><td>Eviction por inactividad (ITP)</td><td>❌ No aplica</td><td>⚠️ <strong>7 días sin abrir → wipe del storage</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout err">
+    <strong>⚠️ Riesgo crítico iOS — regla de 7 días.</strong> Si el técnico no abre la PWA por 7 días consecutivos, Safari borra automáticamente <strong>todo</strong> el storage de origen (IndexedDB, OPFS, localStorage, cookies). Es política deliberada de Apple (Intelligent Tracking Prevention), no bug. Si el técnico se va de vacaciones 10 días con comandos pendientes en cola, el trabajo se pierde sin recuperación cliente-side. PWA instalada (Add to Home Screen) tiene reloj ITP separado y algo más permisivo.
+  </div>
+
+  <div class="callout warn">
+    <strong>iOS sin Background Sync.</strong> La cola solo se vacía con app en foreground. Si el técnico cierra la app antes de que vuelva la red, la cola espera al próximo abrir manual.
+  </div>
+
+  <div class="callout warn">
+    <strong>Cuotas más conservadoras en iOS.</strong> Una jornada de 90 MB cabe; un técnico que arrastra 3-4 jornadas sin sincronizar puede topar antes que en Android.
+  </div>
+
+  <h4 style="margin-top: 18px; color: var(--text); font-size: 14px;">Mitigaciones de código</h4>
+  <pre class="codeblock"><code>async function ensurePersistence() {
+  // 1. Pedir persistencia explícita (Android la concede, iOS a veces)
+  const granted = await navigator.storage.persist();
+
+  // 2. Detectar plataforma y mostrar warnings dirigidos
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+  if (isIOS &amp;&amp; !isStandalone) {
+    showBanner('Para trabajar offline, instala la app: ' +
+               'Compartir → Añadir a pantalla de inicio');
+  }
+
+  // 3. Métricas de salud de cola — alertar si se acerca al riesgo iOS
+  const oldestPending = await db.comandos_pendientes
+    .where('status').equals('pendiente')
+    .first();
+  if (oldestPending &amp;&amp; diasSinSincronizar(oldestPending) &gt; 4) {
+    showWarning(
+      `Hay trabajo sin sincronizar hace ${dias} días. ` +
+      `iOS borra el storage tras 7 días sin abrir la app.`
+    );
+  }
+}</code></pre>
+
+  <h4 style="margin-top: 18px; color: var(--text); font-size: 14px;">Acciones operativas (vinculantes para el rollout)</h4>
+  <ol>
+    <li><strong>Requisito de instalación PWA</strong> en runbook del técnico — la app debe estar agregada a pantalla de inicio antes de salir a campo.</li>
+    <li><strong>Heartbeat diario</strong> vía push notification (iOS 16.4+ soporta push en PWAs instaladas) — abre la app brevemente y dispara sync, manteniendo el reloj ITP reseteado.</li>
+    <li><strong>Alerta de cola estancada</strong> a partir del día 4 sin sync (banner + push si la app no se abre).</li>
+    <li><strong>Métrica server-side</strong> "técnicos con datos no sincronizados &gt;5 días" → backoffice los contacta proactivamente.</li>
+    <li><strong>Decisión default:</strong> aceptar iOS con mitigaciones; reevaluar si emerge pérdida real de datos en operación.</li>
+  </ol>
+
+  <h4 style="margin-top: 18px; color: var(--text); font-size: 14px;">Camino de evolución si iOS resulta inaceptable</h4>
+  <ul>
+    <li><strong>Capacitor / PWA-wrapper nativo iOS</strong> — la app sigue siendo React/MUI pero compilada como app nativa con storage nativo (Core Data / SQLite) sin ITP. Costo: ~2-3 semanas + Apple Developer ($99/año) + distribución TestFlight/App Store. La lógica del ADR-008 (cola, sync, idempotencia) se reutiliza tal cual.</li>
+    <li><strong>Restringir iOS a uso solo-online</strong> y obligar Android para campo offline. Requiere alineación con cliente piloto.</li>
+  </ul>
+
+  <div class="callout ok">
+    <strong>✅ Lo bueno:</strong> los técnicos con Android tienen experiencia offline robusta sin caveats. El módulo está diseñado para que <em>la lógica</em> funcione idéntica en ambas plataformas; lo que cambia son los riesgos de pérdida y las métricas de monitoreo.
+  </div>
+</section>
+
+<!-- =================== MODOS DE FALLA =================== -->
+<section class="section" id="fallas">
+  <h2>7. Modos de falla y mitigaciones</h2>
+  <p>Matriz de fallas por capa del flujo end-to-end con sus mitigaciones aplicadas. Documento de referencia operacional — consultar al diagnosticar incidentes y al revisar el diseño en cada slice de Fase 3.</p>
+
+  <h3>7.1 Capa 1 — Captura en cliente offline</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>GPS no disponible (interior, túnel)</td><td>Captura en background mientras llena wizard; bloqueo solo al firmar (V-F3). UX explícita</td><td>Si firma en zona sin GPS, no puede cerrar — aceptado</td></tr>
+      <tr><td>Clock skew del celular (hora desincronizada)</td><td><code>capturadoEn</code> cliente + <code>recibidoEn</code> server, ambos persistidos. Causalidad por orden de llegada al stream</td><td>Skew &gt;24h: server puede rechazar como sospecha de fraude</td></tr>
+      <tr><td>Borrado accidental antes de sincronizar</td><td>Soft delete local; si comando original aún no se envió, se cancela sin viajar; si ya se envió, viaja <code>EliminarHallazgo</code> con soft delete server-side</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.2 Capa 2 — Almacenamiento local (IndexedDB / OPFS)</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td><code>QuotaExceededError</code> al insertar</td><td>Monitor <code>navigator.storage.estimate()</code>; bloqueo suave a &lt;20 % libre; compresión JPEG cliente-side antes de OPFS</td><td>Técnico que arrastra 4+ jornadas puede saturar</td></tr>
+      <tr><td>Browser eviction agresivo</td><td><code>navigator.storage.persist()</code> al bootstrap; métrica server "técnicos sin sync &gt;5 días" para outreach</td><td>iOS ITP 7 días — riesgo real, mitigado por heartbeat push y PWA instalada (§6.7)</td></tr>
+      <tr><td>Crash de la app a mitad de write</td><td>IndexedDB es transaccional — el commit es all-or-nothing; al rearrancar la cola está coherente</td><td>—</td></tr>
+      <tr><td>Schema Dexie cambió (app actualizada)</td><td>Dexie migrations; comandos viejos validados al sincronizar contra schema vigente</td><td>Versionar <code>tipo</code> (<code>RegistrarHallazgo_v1</code> / <code>_v2</code>) si se rompen contratos</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.3 Capa 3 — Cola y orden FIFO</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>Múltiples workers reordenan envíos del mismo stream</td><td>Web Locks API (<code>navigator.locks.request('inspecciones-sync')</code>) — solo un worker activo</td><td>—</td></tr>
+      <tr><td><code>FirmarInspeccion</code> se envía sin que <code>RegistrarHallazgo2</code> se confirmara</td><td>Stop-on-error por stream; secuencial dentro del stream</td><td>—</td></tr>
+      <tr><td>Comando huérfano (referencia stream que no existe)</td><td>Cliente: borrado en cascada al cancelar <code>IniciarInspeccion</code>. Server: 404/422 si llega huérfano</td><td>—</td></tr>
+      <tr><td>Cola con comando muy viejo (10 días pendiente)</td><td>Alerta al técnico desde día 4; métrica server-side</td><td>iOS ITP día 7 puede borrar antes de poder enviar</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.4 Capa 4 — Transmisión HTTP cliente→server</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>Timeout — comando no se sabe si llegó</td><td><strong>Idempotencia con <code>clientCommandId</code></strong> (UUIDv7 + Wolverine <code>MessageId</code>); retry seguro, server devuelve 409 con resultado original</td><td>—</td></tr>
+      <tr><td>401 token expirado</td><td>Refresh token TTL=24h. Si expiró: pausa cola, pide re-login</td><td>Jornadas &gt;24h sin red: trabajo bloqueado hasta re-login. Camino evolución: <code>claimsSnapshot</code> server-side</td></tr>
+      <tr><td>403 claims insuficientes (rol cambió)</td><td>Server valida claims al procesar; rechazo con UX clara</td><td>—</td></tr>
+      <tr><td>5xx backend caído</td><td>Backoff exponencial 1, 2, 4, 8, ..., 60s</td><td>Si supera 24h con 5xx persistente, técnico ve "no podemos sincronizar — contactá soporte"</td></tr>
+      <tr><td>Body POST cortado a mitad</td><td>Idempotencia + retry — TCP/HTTP capa baja garantiza all-or-nothing del POST</td><td>—</td></tr>
+      <tr><td>Conexión cae después de procesar pero antes del ack</td><td>Server commiteó, cliente reintenta, dedup devuelve 409 con resultado original</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.5 Capa 5 — Dedup y recepción en server</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>Cliente reenvía después de TTL del envelope expirado</td><td>Wolverine envelope TTL=30 días en MVP. <strong>Defensa en profundidad:</strong> handlers usan claves de negocio (<code>HallazgoId</code>, <code>AdjuntoId</code> — generados en cliente, viajan en payload) — el aggregate rechaza duplicados aunque envelope haya expirado</td><td>Casos &gt;30 días requieren disciplina en handlers; comandos sin clave natural pueden colar duplicado</td></tr>
+      <tr><td><code>MessageId</code> colisiona accidentalmente (UUID colisión)</td><td>UUIDv7 — probabilidad de colisión despreciable (~10⁻³⁶)</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.6 Capa 6 — Invariantes en handler</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>V-F# / I-# violada (firma sin GPS, dictamen incompatible con seguimiento, etc.)</td><td>422 con código de invariante; stop-on-error por stream; UX muestra al técnico qué falló</td><td>—</td></tr>
+      <tr><td>Conflicto con eventos ocurridos durante el offline (otro firmó antes)</td><td>422; cliente hace catch-up via pull al reconectar; banner "esto cambió mientras estabas offline"</td><td>El técnico puede tener que re-decidir o descartar trabajo</td></tr>
+      <tr><td>Race condition entre dos handlers concurrentes en el mismo stream</td><td>Marten <code>AppendOptimistic</code> — concurrencia optimista. Segundo handler recibe <code>ConcurrencyException</code>, Wolverine retry automático con versión actualizada</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.7 Capa 7 — Persistencia atómica (Marten + Wolverine)</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>Postgres rechaza commit (deadlock, constraint)</td><td>Wolverine retry; si persiste → dead letter <code>wolverine.dead_letter</code></td><td>Operativo: alerta de DLQ en runbook</td></tr>
+      <tr><td>Proceso crashea entre <code>Append</code> y <code>SaveChanges</code></td><td>Nada commiteado; Wolverine reentrega; handler corre de nuevo (idempotente porque envelope tampoco se guardó)</td><td>—</td></tr>
+      <tr><td>Proceso crashea después de <code>SaveChanges</code> pero antes del 200</td><td>Cliente reintenta; dedup devuelve 409 con resultado original</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.8 Capa 8 — Adjuntos (SAS upload a Blob)</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>SAS expira antes de upload (red lenta)</td><td>TTL SAS = 1h. Cliente solicita <code>RefrescarSasUpload</code> si expira; server valida que blob no exista aún</td><td>—</td></tr>
+      <tr><td>Upload parcial cortado</td><td>Azure Block Blob soporta resume con misma SAS si TTL vigente; si no, refresh</td><td>—</td></tr>
+      <tr><td><code>ConfirmarAdjunto</code> enviado pero foto nunca llegó al Blob</td><td>Server hace HEAD al Blob antes de aceptar <code>ConfirmarAdjunto</code>; rechaza si no existe</td><td>—</td></tr>
+      <tr><td>Foto subida pero <code>ConfirmarAdjunto</code> nunca llega (cliente murió)</td><td>Cron diario de limpieza: blobs huérfanos sin <code>AdjuntoConfirmado_v1</code> en &gt;24h se borran</td><td>Costo de storage marginal</td></tr>
+      <tr><td>Cliente perdió la foto local antes de subir (eviction iOS)</td><td><strong>Trabajo perdido sin recuperación</strong> — la foto solo vivía en OPFS</td><td>Mitigación: heartbeat agresivo iOS</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.9 Capa 9 — Outbox al ERP (cubierto por ADR-006)</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>ERP rechaza permanentemente (4xx)</td><td>Dead letter Wolverine; alerta backoffice; <code>M-1 GenerarOT</code> con UI de reintento manual (técnico)</td><td>—</td></tr>
+      <tr><td>ERP éxito pero sin confirmación</td><td>Idempotency-Key (ADR-003); MYE debe aceptar replay con misma key</td><td>Requiere disciplina en MYE — riesgo de duplicado si MYE no respeta idempotencia</td></tr>
+      <tr><td>VPN caída prolongada</td><td>Outbox sigue acumulando; al reconectar drena en orden</td><td>Si dura días, dashboard de outbox con alarma</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.10 Capa 10 — Notificación de retorno (SignalR push)</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>Cliente desconectado cuando llega push</td><td><strong>SignalR no es persistente</strong> — al reconectar hace pull explícito (<code>GET desde-version={baseVersion}</code>)</td><td>Banner "novedades desde tu última sync"</td></tr>
+      <tr><td>Hub SignalR caído</td><td>Cliente cae a polling cada 30s sobre el endpoint REST de status del comando</td><td>Latencia mayor pero correctitud preservada</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.11 Capa 11 — Reconciliación cliente</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td>Read_model local divergió del server (alguien editó por API directa)</td><td>Bootstrap hace pull autoritativo; cada respuesta trae versión actual; cliente compara y refresca si discrepa</td><td>—</td></tr>
+      <tr><td>Comando confirmado pero respuesta no actualiza UI</td><td>Cliente persiste status <code>confirmado</code> y refresca read_model en próximo bootstrap si push perdido</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.12 Capa 12 — Plataforma específica</h3>
+  <table>
+    <thead><tr><th>Modo de falla</th><th>Mitigación</th><th>Gap reconocido</th></tr></thead>
+    <tbody>
+      <tr><td><strong>iOS ITP 7 días — wipe completo</strong></td><td>Push heartbeat diario; PWA instalada obligatoria; alerta cliente día 4; métrica server "sin sync &gt;5 días"</td><td><strong>No mitigable 100 % web-side</strong> — camino evolución: Capacitor wrapper</td></tr>
+      <tr><td>iOS sin Background Sync</td><td>Sync solo con app abierta; UX explícita</td><td>Aceptado: técnico debe abrir app para drenar</td></tr>
+      <tr><td>Cuota iOS más conservadora</td><td>Compresión JPEG agresiva en iOS específicamente</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.13 Patrones de mitigación transversales</h3>
+  <p>Cinco mecanismos cubren la mayoría de los modos de falla anteriores:</p>
+  <ol>
+    <li><strong>Idempotencia end-to-end</strong> — <code>clientCommandId</code> UUIDv7 → Wolverine <code>MessageId</code> → claves de negocio en handlers (<code>HallazgoId</code>, <code>AdjuntoId</code>). Defiende contra retries, dedup expirado y crashes parciales.</li>
+    <li><strong>Atomicidad transaccional</strong> — un solo <code>SaveChangesAsync</code> commitea eventos + envelope + outbox + proyecciones inline. Regla CLAUDE.md no negociable.</li>
+    <li><strong>Stop-on-error por stream</strong> — aísla problemas a un stream sin bloquear la jornada del técnico ni otros streams.</li>
+    <li><strong>Pull al bootstrap + push en vivo</strong> — SignalR no es source of truth, solo optimización. Catch-up vía REST garantiza eventual consistency aunque se pierdan pushes.</li>
+    <li><strong>Defensa en profundidad</strong> — cada capa asume que la anterior puede fallar: cliente reintenta, server deduplica, handlers validan claves de negocio, blob hace HEAD antes de confirmar, cron limpia huérfanos.</li>
+  </ol>
+
+  <h3>7.14 Gaps documentados sin mitigación al 100 %</h3>
+  <p>Estos gaps son aceptados conscientemente para v1.0 y tienen camino de evolución claro:</p>
+
+  <div class="callout err">
+    <strong>iOS ITP 7 días.</strong> Mitigaciones reducen incidencia pero no eliminan riesgo de pérdida de cola. Camino: Capacitor wrapper iOS.
+  </div>
+  <div class="callout warn">
+    <strong>Jornadas offline &gt;24h.</strong> Refresh token expira; trabajo bloqueado hasta re-login online. Camino: <code>claimsSnapshot</code> server-side (opción b del manejo de auth offline).
+  </div>
+  <div class="callout warn">
+    <strong>Foto perdida en OPFS antes de subir.</strong> No recuperable. Mitigación parcial: UI muestra adjunto pendiente y técnico puede volver a tomar foto.
+  </div>
+  <div class="callout warn">
+    <strong>MYE no respeta Idempotency-Key.</strong> Riesgo de duplicado en ERP si MYE no implementa correctamente ADR-003. Fuera de control del módulo — requiere disciplina del equipo MYE.
+  </div>
+</section>
+
+<!-- =================== DECISIONES =================== -->
+<section class="section" id="decisiones">
+  <h2>8. Decisiones críticas y trade-offs</h2>
+
+  <h3>Por qué comandos y no eventos en cliente</h3>
+  <ul>
+    <li>Las invariantes del agregado (V-F1..V-F8, I-1..I-11) requieren validación contra el estado actual del stream — el cliente no es autoritativo de ese estado.</li>
+    <li>Multi-técnico en la misma inspección (§15.2 modelo): dos técnicos offline emitiendo eventos paralelos rompen la causalidad. Comandos serializados por el server resuelven esto.</li>
+    <li>Replay: si el cliente generó <code>HallazgoRegistrado_v1</code> y el server espera <code>_v2</code>, el rebuild rompe. Comandos son contrato versionable más estable.</li>
+  </ul>
+
+  <h3>Por qué stop-on-error por stream (no global, no continue)</h3>
+  <ul>
+    <li><strong>Global stop:</strong> un rechazo en la inspección X bloquearía la inspección Y de otro equipo — blast radius excesivo.</li>
+    <li><strong>Continue tras error:</strong> si <code>RegistrarHallazgo2</code> falla y seguimos con <code>FirmarInspeccion</code>, el firmar también falla porque el hallazgo no entró → cascada de rechazos confusos.</li>
+    <li><strong>Stop por stream</strong> aísla el problema y le da al técnico la oportunidad de corregir solo lo que falló.</li>
+  </ul>
+
+  <h3>Trade-offs aceptados</h3>
+  <div class="callout warn">
+    <strong>iOS Safari sin Background Sync API.</strong> En iPad/iPhone el sync solo ocurre con app abierta. Si los técnicos usan iOS, deben volver a la app (o mantenerla en foreground) para vaciar la cola. Reevaluar en operación real con feedback de campo.
+  </div>
+  <div class="callout warn">
+    <strong>Refresh token TTL=24h limita ventana offline real.</strong> Jornadas >24h sin red requieren re-auth. v1.1 podría promover a <code>claimsSnapshot</code> server-side (requiere ampliar ADR-002).
+  </div>
+  <div class="callout warn">
+    <strong>Conflictos requieren intervención humana.</strong> No hay merge automático tipo CRDT. Aceptable porque el dominio (firmar inspección, generar OT) no es merge-friendly.
+  </div>
+  <div class="callout">
+    <strong>Cuota IndexedDB / OPFS.</strong> Una jornada larga: 100 fotos × 5 MB ≈ 500 MB. Cabe holgado en cuota típica (~60% del disco libre), pero monitoreamos con <code>navigator.storage.estimate()</code> y bloqueo suave al técnico al llegar a <20% libre.
+  </div>
+</section>
+
+<!-- =================== REFERENCIAS =================== -->
+<section class="section" id="referencias">
+  <h2>9. Referencias cruzadas</h2>
+  <ul>
+    <li><a href="00-investigacion-mercado.md">00-investigacion-mercado.md §9.16</a> — ADR-008 narrativo (este HTML es su equivalente interactivo)</li>
+    <li><a href="00-investigacion-mercado.md">§9.15 ADR-004</a> — Sync de catálogos (lectura, complementario a este ADR)</li>
+    <li><a href="01-modelo-dominio.md">§14 ADR-005</a> — SignalR push + SAS upload de adjuntos</li>
+    <li><a href="01-modelo-dominio.md">§16 ADR-006</a> — Outbox del servidor (resiliencia ERP, distinto de cola del cliente)</li>
+    <li><a href="01-modelo-dominio.md">§15 modelo</a> — Agregados, eventos e invariantes del dominio</li>
+    <li><a href="02i-workflow-tecnica-nodos.html">02i</a> · <a href="02j-workflow-monitoreo-nodos.html">02j</a> · <a href="02k-workflow-seguimientos-nodos.html">02k</a> — Workflows que generan los comandos sincronizados aquí</li>
+    <li><strong>Stack web:</strong> <code>idb</code> / <code>Dexie.js</code> (IndexedDB), OPFS (Origin Private File System), Background Sync API (Chrome/Android)</li>
+  </ul>
+</section>
+
+<footer>
+  <p>📄 Equivalente HTML del ADR-008 (<code>00-investigacion-mercado.md §9.16</code>) · Mermaid v10 · Generado 2026-05-04</p>
+</footer>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    fontFamily: 'Roboto, sans-serif',
+    fontSize: '14px',
+    primaryColor: '#E3F2FD',
+    primaryTextColor: '#1A1A1A',
+    primaryBorderColor: '#1976D2',
+    lineColor: '#5F6368',
+    actorBkg: '#E3F2FD',
+    actorBorder: '#1976D2',
+    actorTextColor: '#1A1A1A',
+    actorLineColor: '#90A4AE',
+    signalColor: '#1A1A1A',
+    signalTextColor: '#1A1A1A',
+    labelBoxBkgColor: '#FFF3E0',
+    labelBoxBorderColor: '#EF6C00',
+    noteBkgColor: '#FFF8E1',
+    noteBorderColor: '#F57C00',
+    noteTextColor: '#1A1A1A',
+  },
+  flowchart: {
+    htmlLabels: true,
+    useMaxWidth: false,
+    nodeSpacing: 40,
+    rankSpacing: 55,
+  },
+  sequence: {
+    useMaxWidth: false,
+    actorMargin: 90,
+    boxMargin: 25,
+    messageMargin: 80,
+    noteMargin: 30,
+    width: 180,
+    height: 60,
+    mirrorActors: false,
+    boxTextMargin: 12,
+    wrap: true,
+    wrapPadding: 18,
+    diagramMarginX: 50,
+    diagramMarginY: 30,
+  },
+  state: {
+    useMaxWidth: false,
+    nodeSpacing: 50,
+    rankSpacing: 70,
+  }
+});
+
+let panZoomInstances = {};
+
+function applyNaturalSize(svg) {
+  // Mermaid genera SVG con width="100%" y viewBox. height: auto lo escala
+  // proporcional al ancho del contenedor → aplasta verticalmente.
+  // Forzamos las dimensiones absolutas del viewBox.
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  if (vb && vb.width && vb.height) {
+    svg.setAttribute('width', vb.width);
+    svg.setAttribute('height', vb.height);
+    svg.style.width = vb.width + 'px';
+    svg.style.height = vb.height + 'px';
+    svg.style.maxWidth = 'none';
+  }
+}
+
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.querySelectorAll('.mermaid').forEach(el => {
+      const svg = el.querySelector('svg');
+      if (svg) {
+        applyNaturalSize(svg);
+        try {
+          panZoomInstances[el.id] = svgPanZoom(svg, {
+            zoomEnabled: true, controlIconsEnabled: false,
+            fit: false, center: false, minZoom: 0.3, maxZoom: 5,
+            zoomScaleSensitivity: 0.3
+          });
+        } catch (e) { console.warn('Pan-zoom failed for', el.id, e); }
+      }
+    });
+  }, 800);
+});
+
+function zoomDiagram(id, factor) {
+  if (panZoomInstances[id]) panZoomInstances[id].zoomBy(factor);
+}
+function resetZoom(id) {
+  if (panZoomInstances[id]) {
+    panZoomInstances[id].resetZoom();
+    panZoomInstances[id].fit();
+    panZoomInstances[id].center();
+  }
+}
+function fullscreenDiagram(id) {
+  const wrapper = document.getElementById(id).closest('.diagram-wrapper');
+  if (wrapper.requestFullscreen) wrapper.requestFullscreen();
+}
+
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+
+</body>
+</html>

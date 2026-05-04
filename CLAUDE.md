@@ -10,7 +10,7 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 - **Modelo de dominio:** `Inspecciones/docs/01-modelo-dominio.md` §15 (fuente de verdad).
 - **Contrato de APIs ERP:** `Inspecciones/docs/06-contrato-apis-erp.md` (15 obligatorios MVP + 3 condicionales + 9 diferidos).
 - **Diagramas de flujo:** `02f` técnica · `02g` monitoreo · `02h` seguimientos (narrativos) + `02i/02j/02k` workflows basados en nodos (Markdown + HTML interactivos con Mermaid).
-- **ADRs:** ADR-001 a ADR-005 en `00-investigacion-mercado.md §9`; ADR-003 ampliado en `01-modelo-dominio.md §13`; ADR-005 en `§14`; **ADR-006 (resiliencia outbox para integraciones ERP) en `§16`**; **ADR-007 (OT manual con capability gate) en `§17`**.
+- **ADRs:** ADR-001 a ADR-005 en `00-investigacion-mercado.md §9`; ADR-003 ampliado en `01-modelo-dominio.md §13`; ADR-005 en `§14`; **ADR-006 (resiliencia outbox para integraciones ERP) en `§16`**; **ADR-007 (OT manual con capability gate) en `§17`**; **ADR-008 (cola de comandos offline cliente PWA) en `00-investigacion-mercado.md §9.16` + diagrama interactivo `09-adr-008-offline-cliente.html`**.
 
 ### Refinamientos vigentes (sesión 2026-05-04)
 

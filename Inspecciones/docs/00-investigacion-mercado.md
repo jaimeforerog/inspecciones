@@ -1417,6 +1417,535 @@ Si la operación demanda mejor responsividad (ej. en operaciones grandes con cam
 
 ---
 
+## 9.16 ADR-008 — Almacenamiento local offline cliente PWA y sincronización de comandos (2026-05-04)
+
+**Estado:** Aceptada (firmado 2026-05-04).
+
+### Contexto
+
+ADR-004 cubre lectura de catálogos en cliente con stale-while-revalidate. ADR-006 cubre el **outbox del servidor** para que las llamadas al ERP sobrevivan caídas de VPN. **Gap detectado en sesión 2026-05-04:** no hay decisión documentada sobre cómo el técnico graba trabajo en campo cuando no hay conectividad cliente↔backend del módulo (zonas muertas en obra, túneles, plantas subterráneas, áreas rurales).
+
+El gap toca tres riesgos concretos:
+
+- **Pérdida de captura:** una inspección de 3-4 horas con 20 hallazgos y 80 fotos no puede depender de conectividad continua sin perder trabajo.
+- **Bloqueo operativo del preop:** el operador no puede operar el equipo si no logra registrar la novedad — sin offline aquí, una zona muerta detiene producción.
+- **Modelo de consistencia:** al ser Event Sourcing con invariantes fuertes (V-F1..V-F8, I-1..I-11, "PuedeOperar incompatible con seguimiento"), las colisiones offline **no son resolubles automáticamente** por CRDTs/last-write-wins — requieren decisión humana.
+
+### Decisión
+
+**El cliente almacena comandos (intenciones), no eventos (hechos).** Los eventos solo los produce el servidor tras validar invariantes en el agregado. El cliente sincroniza enviando comandos, el servidor decide qué eventos persistir en Marten.
+
+#### Diseño en cinco componentes
+
+**1. Storage local en cliente (PWA).**
+
+- **IndexedDB** vía `idb` o `Dexie.js` para datos estructurados (no `localStorage`: 5 MB cap y API síncrona bloqueante).
+- **OPFS (Origin Private File System)** para adjuntos cuando esté disponible, **IndexedDB blobs** como fallback. Más eficiente para fotos pesadas (5-10 MB cada una) que IndexedDB plano.
+- Tres object stores:
+
+| Store | Contenido | Se sincroniza al server |
+|---|---|---|
+| `comandos_pendientes` | Cola FIFO por stream, fuente única de sincronización | ✅ Sí |
+| `catalogos` | Equipos, rutinas, partes, actividades, causas, tipos falla, repuestos (M-1..M-3b, M-17) con `etag` y `lastSyncedAt` | ❌ No (read-only desde ERP, ADR-004) |
+| `read_models` | Vista optimista para el UI durante offline (inspección con sus hallazgos aplicados localmente) | ❌ No (derivada — se reemplaza con versión autoritativa del server cuando llega) |
+
+**2. Forma del comando en cola.**
+
+```
+{
+  clientCommandId: UUIDv7,        // idempotency key, se reusa al reintentar
+  tipo: "RegistrarHallazgo" | "IniciarInspeccion" | ...,
+  streamId: Guid,                 // InspeccionId / SeguimientoHallazgoId / etc.
+  payload: { ... },
+  capturadoEn: timestamp cliente, // reconstruye orden causal
+  ubicacionGps: UbicacionGps,     // capturada al emitir, no al sincronizar
+  claimsSnapshot: { tecnicoId, capabilities }, // claims al momento de captura
+  status: "pendiente" | "enviando" | "confirmado" | "rechazado",
+  intentos: int,
+  ultimoError: string?
+}
+```
+
+**3. Sincronización: comando-por-comando, secuencial por stream, paralelo entre streams.**
+
+- Dentro de un mismo `streamId`, los comandos van en orden FIFO (`capturadoEn` ascendente). Imprescindible: cada comando depende del estado dejado por el anterior.
+- Entre streams diferentes (otra inspección, otro equipo), las colas avanzan en paralelo.
+- **Stop-on-error por stream:** si un comando es rechazado por el agregado (HTTP 422), la cola de **ese stream** se pausa hasta que el técnico decida (corregir y reintentar, o descartar). Las demás colas siguen.
+
+**4. Idempotencia end-to-end.**
+
+- `clientCommandId` (UUIDv7, generado en cliente) viaja como `MessageId` de Wolverine en el header HTTP.
+- Wolverine deduplica contra su tabla de mensajes. Reintentos del cliente (tras timeout/5xx) caen en 409 con el resultado original — no doble-escritura.
+- Regla CLAUDE.md ("múltiples eventos al mismo stream son atómicos por construcción") se preserva: un comando = un `SaveChangesAsync()` = N eventos atómicos.
+
+**5. Adjuntos en dos fases (alineado con pattern SAS de ADR-005).**
+
+- Fase A (al capturar offline): foto se almacena en OPFS/IDB con `adjuntoTempId: Guid`. Comando del hallazgo viaja con `adjuntoTempId` en payload.
+- Fase B (al sincronizar): server recibe comando, devuelve **SAS de upload** + `blobUri` definitivo. Cliente sube directo a Azure Blob, después confirma a server con un comando `ConfirmarAdjunto`.
+- Soft delete: si el técnico borra una foto antes de sincronizar, el `adjuntoTempId` se elimina local; si la borra después, viaja un `EliminarAdjunto` que el server reconcilia.
+
+#### Manejo de auth offline
+
+El JWT/session del host PWA Sinco MYE puede expirar mientras el técnico está offline. Dos opciones consideradas:
+
+- **(a) Refresh token de TTL extendido cacheado** — operativamente simple, pero requiere que ADR-002 lo soporte (hoy tentativo).
+- **(b) Validación server-side contra `claimsSnapshot` + `capturadoEn`** — el server valida que las claims **eran válidas al momento de captura**, no al momento de sync. Más correcto para offline real (jornadas de 12h+), pero requiere extender ADR-002.
+
+**Decisión:** opción (a) para v1.0 con TTL refresh = 24h. Promover a (b) si emergen jornadas offline >24h en operación real.
+
+#### Cuotas y monitoreo
+
+- `navigator.storage.estimate()` al arranque y cada N comandos. Bloqueo suave al técnico cuando queda <20 % del cupo (típicamente ~60 % del disco libre).
+- Una jornada larga puede generar 100 fotos × 5 MB = 500 MB; debe caber holgadamente en cuota de IndexedDB/OPFS.
+- Métrica de salud cliente: `comandos_pendientes.count`, `comandos_pendientes.oldestAgeHours`. Si edad >12 h, alertar al técnico ("hay trabajo sin sincronizar de hace mucho").
+
+#### Conflictos y rechazos
+
+| Tipo de respuesta | Acción cliente |
+|---|---|
+| `200 OK` / `202 Accepted` | Marcar `confirmado`, eliminar de cola, refrescar `read_models` con versión server |
+| `409 Conflict` (dedup idempotencia) | Tratar como `confirmado` — ya estaba aplicado |
+| `422 Unprocessable Entity` (invariante violada) | Marcar `rechazado`, **STOP de la cola del stream**, mostrar al técnico con razón (V-F# o I-#) |
+| `401 Unauthorized` | Pausar cola, intentar refresh token, reanudar |
+| `5xx` o timeout | `intentos++`, backoff exponencial (1s, 2s, 4s, 8s, ..., max 60s) |
+
+**Nunca silenciar rechazos.** Es la clase de bug más cara en offline parcial.
+
+### Razones
+
+- **Comandos vs eventos preserva la autoridad del stream.** En este dominio las invariantes no son resolubles automáticamente (`PuedeOperar` incompatible con seguimiento, firmar requiere diagnóstico+dictamen, etc.). El servidor debe ser el único que valida y produce eventos.
+- **IndexedDB + OPFS es el stack web estándar para offline-first.** Sin librerías exóticas (PowerSync, ElectricSQL, RxDB) que asumen modelos de consistencia incompatibles con este dominio.
+- **`clientCommandId` como `MessageId` aprovecha infraestructura Wolverine ya existente** — la dedup tabla del outbox del servidor (ADR-006) cubre también este caso sin código adicional.
+- **Stop-on-error por stream limita el blast radius:** un hallazgo rechazado pausa solo esa inspección, no la jornada completa del técnico.
+- **Adjuntos en 2 fases (comando + SAS upload) está ya alineado con ADR-005** — no introduce nuevo patrón, reutiliza el existente.
+
+### Trade-offs aceptados conscientemente
+
+- **iOS Safari no tiene Background Sync API.** En iPad/iPhone, la sincronización solo ocurre cuando la app está abierta. Si los técnicos usan iOS, asumir que deben volver a la app (o mantenerla en foreground) para que la cola se vacíe. Si esto es operativamente inaceptable, requerir Android/Chromium en MVP y reevaluar al haber feedback real.
+- **Conflictos requieren intervención humana.** No hay merge automático. Aceptable porque el dominio lo justifica (decisiones técnicas no son merge-friendly).
+- **Read models locales son optimistas.** El técnico ve la inspección "tal como él la dejó" antes de que el server valide; si el server rechaza después, hay un momento de "lo veía pero no quedó". UX debe tratar esto explícitamente (badge "pendiente sync" hasta confirmar).
+- **Refresh token TTL=24h limita la ventana offline real.** Si un técnico está offline >24h, debe reautenticarse antes de poder sincronizar. v1.1 podría promover a `claimsSnapshot` server-side.
+- **Cuota de IndexedDB no es ilimitada.** Si un técnico encadena 3 jornadas offline con muchas fotos, puede saturar antes del sync. La métrica de cuota mitiga; el bloqueo suave es prevención.
+
+### Implementación técnica
+
+**Lado cliente (frontend PWA, workstream A):**
+
+- Wrapper `ICommandQueue` que abstrae IndexedDB (con `idb`/`Dexie`).
+- Servicio `OfflineSyncWorker` (Web Worker o Service Worker) con loop: leer cola → POST → manejar respuesta → reintentar.
+- Hook `useOptimisticInspeccion(streamId)` que combina `read_models` local + comandos pendientes para UI consistente.
+- UI badges: `pendiente` (gris), `enviando` (azul), `confirmado` (verde — auto-desaparece), `rechazado` (rojo, requiere acción).
+
+**Lado servidor (backend módulo, workstream C):**
+
+- Header HTTP `X-Client-Command-Id` mapeado a `MessageId` de Wolverine.
+- Dedup automática por Wolverine — handlers no necesitan código extra.
+- Endpoint genérico `/comandos/{tipo}` o endpoints específicos por comando (decisión a tomar al entrar en Fase 3).
+- SignalR push (ADR-005) para resultados que llegan tras outbox del ERP — el cliente puede correlacionar con `clientCommandId` original.
+
+**Lado infra:**
+
+- Sin cambios en Marten ni en el outbox de Wolverine. El patrón se monta encima.
+
+### Reglas operativas (vinculantes)
+
+1. **El cliente nunca emite eventos.** Si en code review aparece un `Append(Stream, EventoX)` invocado desde la PWA, es bug y se rechaza.
+2. **`clientCommandId` es UUIDv7**, generado en cliente, inmutable en reintentos.
+3. **`capturadoEn` es timestamp cliente** — el server lo persiste tal cual para reconstrucción causal. La hora del server se usa solo para auditoría (`recibidoEn`).
+4. **Adjuntos siempre en 2 fases.** Nunca embebidos en payload del comando.
+5. **`ubicacionGps` se captura en el momento del comando** (offline), no al sincronizar — sino la coordenada queda inútil (V-F3 requiere GPS al firmar).
+6. **Stop-on-error por stream**, nunca por jornada — un rechazo no bloquea otras inspecciones.
+
+### Aplica a los siguientes comandos
+
+Todos los comandos de escritura del módulo. Cobertura crítica MVP:
+
+| Comando | Stream | Crítico offline |
+|---|---|---|
+| `IniciarInspeccion` | `InspeccionId` | ✅ |
+| `RegistrarHallazgo` | `InspeccionId` | ✅ (alta frecuencia campo) |
+| `EliminarHallazgo` | `InspeccionId` | ✅ |
+| `AsignarRepuesto` | `InspeccionId` | ✅ |
+| `ConfirmarAdjunto` | `InspeccionId` o `SeguimientoHallazgoId` | ✅ (depende de upload SAS) |
+| `FirmarInspeccion` | `InspeccionId` | ✅ (terminal del flujo offline) |
+| `IniciarSeguimiento` | `SeguimientoHallazgoId` | ✅ |
+| `RegistrarPreop` | `NovedadPreopId` | ✅ (bloqueo operativo del operador) |
+| `GenerarOT` | `InspeccionId` | ❌ Online-only (jefe de campo en backoffice — sin necesidad offline) |
+| `RechazarGenerarOT` | `InspeccionId` | ❌ Online-only |
+
+### Camino de evolución
+
+Si emergen requisitos no cubiertos:
+
+1. **Jornadas offline >24h:** promover `claimsSnapshot` server-side (opción b), requiere cambio en ADR-002.
+2. **iOS sin foreground sync no es viable:** evaluar Capacitor/PWA-wrapper que dé Background Sync nativo, o requerir Android.
+3. **Conflictos frecuentes que el técnico no entiende:** elaborar UX de "diff preview" antes del sync (mostrar qué cambió en backend mientras estaba offline).
+4. **Cuota saturada en práctica:** comprimir fotos cliente-side antes de almacenar, o forzar sync parcial cuando hay red débil intermitente.
+5. **Volumen de comandos por stream alto (>1000 hallazgos en una inspección):** evaluar batching en sync (mantener orden, pero un POST con N comandos). No-op para MVP — los volúmenes esperados son <50 hallazgos por inspección.
+
+### Anatomía de una jornada — estructura física en cliente
+
+Para que el modelo "comandos en cola" sea concreto, esta sección muestra cómo se llena el storage local durante una jornada típica del técnico.
+
+#### Definición Dexie de la BD (TypeScript)
+
+```typescript
+import Dexie, { Table } from 'dexie';
+
+interface ComandoPendiente {
+  clientCommandId: string;       // UUIDv7 — PK
+  tipo: string;                  // "RegistrarHallazgo", "FirmarInspeccion", ...
+  streamId: string;              // InspeccionId / SeguimientoHallazgoId
+  payload: Record<string, unknown>;
+  capturadoEn: string;           // ISO timestamp cliente
+  ubicacionGps: { lat: number; lon: number; precisionMetros: number; capturadoEn: string };
+  claimsSnapshot: { tecnicoId: number; capabilities: string[] };
+  status: 'pendiente' | 'enviando' | 'confirmado' | 'rechazado';
+  intentos: number;
+  ultimoError?: string;
+}
+
+interface CatalogoCache {
+  tipo: string;                  // "equipos", "rutinas", "partes", ...
+  etag: string;
+  lastSyncedAt: string;
+  data: unknown[];
+}
+
+interface ReadModel {
+  streamId: string;
+  tipo: 'Inspeccion' | 'Seguimiento' | 'NovedadPreop';
+  state: unknown;                // proyección local optimista
+  baseVersion: number;           // versión del agregado server tomada como base
+  tieneCambiosPendientes: boolean;
+}
+
+class InspeccionesDB extends Dexie {
+  comandos_pendientes!: Table<ComandoPendiente, string>;
+  catalogos!: Table<CatalogoCache, string>;
+  read_models!: Table<ReadModel, string>;
+
+  constructor() {
+    super('inspecciones_offline');
+    this.version(1).stores({
+      comandos_pendientes:
+        'clientCommandId, streamId, status, [streamId+capturadoEn], [status+capturadoEn]',
+      catalogos: 'tipo, lastSyncedAt',
+      read_models: 'streamId, tipo, tieneCambiosPendientes',
+    });
+  }
+}
+```
+
+`[streamId+capturadoEn]` es índice compuesto que habilita lectura FIFO por stream (`db.comandos_pendientes.where('[streamId+capturadoEn]').between(...)`).
+
+#### OPFS para fotos (no en IndexedDB)
+
+Las fotos van al **Origin Private File System** vía `navigator.storage.getDirectory()`. Estructura:
+
+```
+/adjuntos_pendientes/
+  ├── {adjuntoTempId-1}.jpg     // ~3 MB
+  ├── {adjuntoTempId-2}.jpg
+  └── {adjuntoTempId-3}.jpg
+/adjuntos_subiendo/
+  └── {adjuntoTempId-N}.jpg     // movido aquí cuando arranca el PUT a Blob
+```
+
+Cuando el upload SAS confirma (`AdjuntoConfirmado_v1` recibido), el archivo se elimina del OPFS.
+
+#### Storyboard real — jornada del técnico
+
+**8:00 — abre PWA por primera vez del día (online).** Catálogos del refresh nocturno ya cargados. Cola vacía.
+
+```
+catalogos: 9 registros (equipos, rutinas, partes, causas, tipos-falla, ...)
+comandos_pendientes: vacío
+read_models: vacío
+OPFS: vacío
+```
+
+**8:30 — inicia inspección del equipo CARGADOR-EX-201 (a partir de aquí, offline en obra).**
+
+```
+comandos_pendientes:
+  { clientCommandId: "0193...a4f", tipo: "IniciarInspeccion",
+    streamId: "ins-9c2...", status: "pendiente", capturadoEn: "08:30:12",
+    payload: { equipoId: 4521, rutinaTecnicaId: 18 }, ... }
+
+read_models:
+  { streamId: "ins-9c2...", tipo: "Inspeccion", baseVersion: 0,
+    state: { estado: "Iniciada", hallazgos: [], ... },
+    tieneCambiosPendientes: true }
+```
+
+**9:00 — agrega hallazgo H1 con 2 fotos.**
+
+```
+OPFS:
+  /adjuntos_pendientes/foto-a1.jpg  (3.2 MB)
+  /adjuntos_pendientes/foto-a2.jpg  (2.8 MB)
+
+comandos_pendientes (+1 nuevo):
+  { tipo: "RegistrarHallazgo", streamId: "ins-9c2...", capturadoEn: "09:00:43",
+    payload: { hallazgoId: "h-3e1...", parteId: 88, causaFallaId: 12,
+               descripcion: "Fuga aceite hidráulico cilindro derecho",
+               adjuntosTempIds: ["foto-a1", "foto-a2"] }, ... }
+
+read_models actualizado:
+  state.hallazgos: [{ hallazgoId: "h-3e1...", descripcion: "...", adjuntos: [pendientes] }]
+```
+
+**11:00 — firma.** Total cola en este momento: 4 comandos. Total OPFS: 2 archivos (~6 MB).
+
+```
+comandos_pendientes (+1):
+  { tipo: "FirmarInspeccion", streamId: "ins-9c2...", capturadoEn: "11:00:08",
+    payload: { diagnostico: "...", dictamen: "RequiereIntervencion" }, ... }
+```
+
+**11:15 — vuelve la red.** Worker arranca y procesa la cola del stream `ins-9c2...` en orden FIFO:
+
+1. `POST /comandos/IniciarInspeccion` → 200 OK → fila eliminada de `comandos_pendientes`.
+2. `POST /comandos/RegistrarHallazgo` → 200 OK + `sasUploadUri-1`, `sasUploadUri-2`. Worker hace `PUT foto-a1.jpg` y `PUT foto-a2.jpg` directo a Azure Blob, después `POST /comandos/ConfirmarAdjunto` × 2 → fotos borradas de OPFS, fila eliminada.
+3. `POST /comandos/FirmarInspeccion` → 200 OK → fila eliminada.
+
+`read_models` actualizado vía SignalR push con la `baseVersion` del server. `tieneCambiosPendientes: false`. Jornada cerrada.
+
+#### Persistencia entre cierres de la PWA
+
+Tanto IndexedDB como OPFS **persisten en disco**, no son memoria de sesión. Si el técnico:
+
+- Cierra la pestaña → al reabrir, todo está como lo dejó.
+- Reinicia el celular → al reabrir, todo está como lo dejó.
+- Pasa una semana sin abrir la app → al abrir, los comandos siguen en cola (con su `intentos` y `ultimoError`), las fotos en OPFS.
+
+Lo único que **no** persiste son las variables JS en memoria (estado de React, etc.). Por eso el bootstrap al arrancar la app es:
+
+```typescript
+async function bootstrap() {
+  await db.open();                                  // 1. reconectar a IndexedDB
+
+  const inspeccionesActivas = await db.read_models  // 2. reanimar UI desde
+    .where('tipo').equals('Inspeccion')             //    proyecciones locales
+    .toArray();
+  setUIFromReadModels(inspeccionesActivas);
+
+  startSyncWorker();                                // 3. levantar worker; vacía cola si hay red
+
+  refreshCatalogosIfStale();                        // 4. en paralelo, refrescar catálogos >24h
+}
+```
+
+Se pierde el storage local **solo** si: (a) el usuario limpia datos del browser, (b) el browser hace eviction por presión de cuota agresiva, (c) el usuario desinstala la PWA. Caso (b) es por eso que monitoreamos `navigator.storage.estimate()` y bloqueamos suavemente al técnico al llegar a <20 % libre.
+
+#### Tamaños esperados
+
+| Stream típico | Comandos pendientes | OPFS adjuntos | Bytes IndexedDB |
+|---|---|---|---|
+| Inspección con 5 hallazgos × 2 fotos | ~10 | 10 archivos × ~3 MB = 30 MB | ~50 KB |
+| Jornada de 3 inspecciones | ~30 | ~90 MB | ~150 KB |
+| Cache catálogos completos | — | — | ~5-15 MB |
+
+Cuando un comando queda `confirmado`, se elimina inmediatamente — la cola **no es un log histórico**, es trabajo pendiente. El historial autoritativo vive en Marten en el server.
+
+#### Comportamiento por plataforma (iOS vs Android)
+
+PWA es un estándar web, pero **el comportamiento real del storage local difiere significativamente** entre iOS Safari y Android Chrome/Edge. Esto afecta decisiones operativas y mitigaciones del módulo.
+
+**Comparativa:**
+
+| Aspecto | Android (Chrome/Edge/Samsung) | iOS Safari (iPhone/iPad) |
+|---|---|---|
+| IndexedDB | ✅ Robusto, persistencia confiable | ✅ Funciona (resuelto desde iOS 17.4, marzo 2024) |
+| OPFS | ✅ Completo (Chrome 102+) | ✅ Soportado desde iOS 16+ |
+| Cuota | ~60 % del disco libre (típicamente GB) | ~1 GB nominal, expandible con `persist()` pero menos garantizado |
+| Background Sync API | ✅ Funciona en background | ❌ **NO existe en iOS Safari** |
+| Periodic Background Sync | ✅ Chrome/Edge | ❌ NO existe |
+| Web Push | ✅ Siempre | ✅ Solo si la PWA está **instalada** (Add to Home Screen), iOS 16.4+ |
+| Service Worker | ✅ Robusto | ⚠️ Funciona pero con bugs históricos |
+| `navigator.storage.persist()` | ✅ Suele concederse, evita eviction | ⚠️ Suele rechazarse, no garantía |
+| Eviction por inactividad (ITP) | ❌ No aplica | ⚠️ **7 días de inactividad → wipe completo del storage de origen** |
+
+**Riesgos específicos iOS:**
+
+1. **Regla de 7 días de inactividad (ITP — Intelligent Tracking Prevention).** Si el técnico no abre la PWA por 7 días consecutivos, Safari **borra automáticamente todo el storage de origen**: IndexedDB, OPFS, localStorage, cookies. Es política deliberada de Apple, no bug. Implicaciones para el módulo: técnico de vacaciones 10 días con comandos pendientes en cola → trabajo perdido sin posibilidad de recuperación cliente-side. Mitigación parcial: PWA instalada (Add to Home Screen) tiene reloj ITP separado y algo más permisivo.
+2. **Sin Background Sync.** Ya enunciado en este ADR — la cola **solo se vacía con app en foreground**. Si el técnico cierra la app antes de que vuelva la red, la cola espera al próximo abrir manual.
+3. **Cuotas más conservadoras.** Una jornada de 90 MB cabe; un técnico que arrastra 3-4 jornadas sin sincronizar puede topar antes que en Android.
+4. **PWA "no instalada" vs "instalada".** En Safari sin instalar (solo abierta como pestaña): storage compartido con Safari general, ITP más agresivo, sin push. **Hay que forzar instalación** como condición operativa.
+
+**Mitigaciones de código:**
+
+```typescript
+async function ensurePersistence() {
+  // 1. Pedir persistencia explícita (Android la concede, iOS a veces)
+  const granted = await navigator.storage.persist();
+
+  // 2. Detectar plataforma y mostrar warnings dirigidos
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+  if (isIOS && !isStandalone) {
+    showBanner('Para trabajar offline, instala la app: Compartir → Añadir a pantalla de inicio');
+  }
+
+  // 3. Métricas de salud de cola — alertar si se acerca al riesgo iOS
+  const oldestPending = await db.comandos_pendientes
+    .where('status').equals('pendiente')
+    .first();
+  if (oldestPending && diasSinSincronizar(oldestPending) > 4) {
+    showWarning(
+      `Hay trabajo sin sincronizar hace ${dias} días. ` +
+      `iOS borra el storage tras 7 días sin abrir la app.`
+    );
+  }
+}
+```
+
+**Acciones operativas (vinculantes para el rollout):**
+
+1. **Requisito de instalación PWA** en runbook del técnico — la app debe estar agregada a pantalla de inicio antes de salir a campo.
+2. **Heartbeat diario** vía push notification (iOS 16.4+ lo soporta para PWAs instaladas) — abre la app brevemente y dispara sync, mantiene el reloj ITP reseteado.
+3. **Alerta de cola estancada** a partir del día 4 sin sync (banner + push si la app no se abre).
+4. **Métrica server-side** "técnicos con datos no sincronizados >5 días" — backoffice los contacta proactivamente.
+5. **Decisión pendiente:** ¿restringir MVP a Android, o aceptar el riesgo iOS con mitigaciones? Posición default: **aceptar iOS con mitigaciones** y reevaluar si emerge pérdida real de datos.
+
+**Camino de evolución si iOS resulta inaceptable:**
+
+Si en operación real se pierden datos por la regla de 7 días:
+
+1. **Capacitor / PWA-wrapper con shell nativo iOS** — la app sigue siendo React/MUI pero compilada como app nativa, lo que da storage nativo (Core Data / SQLite) sin ITP. Costo: ~2-3 semanas + Apple Developer account ($99/año) + distribución por TestFlight o App Store. La lógica del ADR-008 (cola de comandos, sync, idempotencia) se reutiliza tal cual — Capacitor solo cambia la capa de storage subyacente.
+2. **Restringir iOS a uso solo-online** y obligar Android para campo offline. Requiere alineación con cliente piloto.
+
+#### Modos de falla y mitigaciones
+
+Esta matriz cubre los modos de falla por capa del flujo end-to-end y las mitigaciones aplicadas. Documento de referencia operacional — consultar al diagnosticar incidentes y al revisar el diseño en cada slice de Fase 3.
+
+##### Capa 1 — Captura en cliente offline
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| GPS no disponible (interior, túnel) | Captura en background mientras llena wizard; bloqueo solo al firmar (V-F3). UX explícita | Si firma en zona sin GPS, no puede cerrar — aceptado |
+| Clock skew del celular (hora desincronizada) | `capturadoEn` cliente + `recibidoEn` server, ambos persistidos. Causalidad por orden de llegada al stream | Skew >24h: server puede rechazar como sospecha de fraude |
+| Borrado accidental antes de sincronizar | Soft delete local; si comando original aún no se envió, se cancela sin viajar; si ya se envió, viaja `EliminarHallazgo` con soft delete server-side (regla CLAUDE.md) | — |
+
+##### Capa 2 — Almacenamiento local (IndexedDB / OPFS)
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| `QuotaExceededError` al insertar | Monitor `navigator.storage.estimate()`; bloqueo suave a <20 % libre; compresión JPEG cliente-side antes de OPFS | Técnico que arrastra 4+ jornadas puede saturar |
+| Browser eviction agresivo | `navigator.storage.persist()` al bootstrap; métrica server "técnicos sin sync >5 días" para outreach | iOS ITP 7 días — riesgo real, mitigado por heartbeat push y PWA instalada (sección anterior) |
+| Crash de la app a mitad de write | IndexedDB es transaccional — el commit es all-or-nothing; al rearrancar la cola está coherente | — |
+| Schema Dexie cambió (app actualizada) | Dexie migrations; comandos viejos validados al sincronizar contra schema vigente | Versionar `tipo` (`RegistrarHallazgo_v1` / `_v2`) si se rompen contratos |
+
+##### Capa 3 — Cola y orden FIFO
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| Múltiples workers reordenan envíos del mismo stream | Web Locks API (`navigator.locks.request('inspecciones-sync')`) — solo un worker activo | — |
+| `FirmarInspeccion` se envía sin que `RegistrarHallazgo2` se confirmara | Stop-on-error por stream; secuencial dentro del stream | — |
+| Comando huérfano (referencia stream que no existe) | Cliente: borrado en cascada al cancelar `IniciarInspeccion`. Server: 404/422 si llega huérfano | — |
+| Cola con comando muy viejo (10 días pendiente) | Alerta al técnico desde día 4; métrica server-side | iOS ITP día 7 puede borrar antes de poder enviar |
+
+##### Capa 4 — Transmisión HTTP cliente→server
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| Timeout — comando no se sabe si llegó | **Idempotencia con `clientCommandId`** (UUIDv7 + Wolverine `MessageId`); retry seguro, server devuelve 409 con resultado original | — |
+| 401 token expirado | Refresh token TTL=24h. Si expiró: pausa cola, pide re-login | Jornadas >24h sin red: trabajo bloqueado hasta re-login. Camino evolución: `claimsSnapshot` server-side (opción b) |
+| 403 claims insuficientes (rol cambió) | Server valida claims al procesar; rechazo con UX clara | — |
+| 5xx backend caído | Backoff exponencial 1, 2, 4, 8, ..., 60s | Si supera ventana de 24h con 5xx persistente, técnico ve "no podemos sincronizar — contactá soporte" |
+| Body POST cortado a mitad | Idempotencia + retry — TCP/HTTP capa baja garantiza all-or-nothing del POST | — |
+| Conexión cae después de procesar pero antes del ack | Server commiteó, cliente reintenta, dedup devuelve 409 con resultado original | — |
+
+##### Capa 5 — Dedup y recepción en server
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| Cliente reenvía después de TTL del envelope expirado | Wolverine envelope TTL=30 días en MVP. **Defensa en profundidad:** handlers usan claves de negocio (`HallazgoId`, `AdjuntoId` — generados en cliente y viajan en payload) — el aggregate rechaza duplicados aunque envelope haya expirado | Casos >30 días requieren disciplina en handlers; comandos sin clave natural pueden colar duplicado |
+| `MessageId` colisiona accidentalmente (UUID colisión) | UUIDv7 — probabilidad de colisión despreciable (~10⁻³⁶) | — |
+
+##### Capa 6 — Invariantes en handler
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| V-F# / I-# violada (firma sin GPS, dictamen incompatible con seguimiento, etc.) | 422 con código de invariante; stop-on-error por stream; UX muestra al técnico qué falló | — |
+| Conflicto con eventos ocurridos durante el offline (otro firmó antes) | 422; cliente hace catch-up via pull al reconectar; banner "esto cambió mientras estabas offline" | El técnico puede tener que re-decidir o descartar trabajo |
+| Race condition entre dos handlers concurrentes en el mismo stream | Marten `AppendOptimistic` — concurrencia optimista. Segundo handler recibe `ConcurrencyException`, Wolverine retry automático con versión actualizada | — |
+
+##### Capa 7 — Persistencia atómica (Marten + Wolverine)
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| Postgres rechaza commit (deadlock, constraint) | Wolverine retry; si persiste → dead letter `wolverine.dead_letter` | Operativo: alerta de DLQ en runbook |
+| Proceso crashea entre `Append` y `SaveChanges` | Nada commiteado; Wolverine reentrega; handler corre de nuevo (idempotente porque envelope tampoco se guardó) | — |
+| Proceso crashea después de `SaveChanges` pero antes del 200 | Cliente reintenta; dedup devuelve 409 con resultado original | — |
+
+##### Capa 8 — Adjuntos (SAS upload a Blob)
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| SAS expira antes de upload (red lenta) | TTL SAS = 1h. Cliente solicita `RefrescarSasUpload` si expira; server valida que blob no exista aún | — |
+| Upload parcial cortado | Azure Block Blob soporta resume con misma SAS si TTL vigente; si no, refresh | — |
+| `ConfirmarAdjunto` enviado pero foto nunca llegó al Blob | Server hace HEAD al Blob antes de aceptar `ConfirmarAdjunto`; rechaza si no existe | — |
+| Foto subida pero `ConfirmarAdjunto` nunca llega (cliente murió) | Cron diario de limpieza: blobs huérfanos sin `AdjuntoConfirmado_v1` referenciándolos en >24h se borran | Costo de storage marginal |
+| Cliente perdió la foto local antes de subir (eviction iOS) | **Trabajo perdido sin recuperación** — la foto solo vivía en OPFS | Mitigación: heartbeat agresivo iOS |
+
+##### Capa 9 — Outbox al ERP (cubierto por ADR-006)
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| ERP rechaza permanentemente (4xx) | Dead letter Wolverine; alerta backoffice; `M-1 GenerarOT` con UI de reintento manual (técnico) | — |
+| ERP éxito pero sin confirmación | Idempotency-Key (ADR-003); MYE debe aceptar replay con misma key | Requiere disciplina en MYE — riesgo de duplicado si MYE no respeta idempotencia |
+| VPN caída prolongada | Outbox sigue acumulando; al reconectar drena en orden | Si dura días, dashboard de outbox con alarma |
+
+##### Capa 10 — Notificación de retorno (SignalR push)
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| Cliente desconectado cuando llega push | **SignalR no es persistente** — al reconectar hace pull explícito (`GET desde-version={baseVersion}`) | Banner "novedades desde tu última sync" |
+| Hub SignalR caído | Cliente cae a polling cada 30s sobre el endpoint REST de status del comando | Latencia mayor pero correctitud preservada |
+
+##### Capa 11 — Reconciliación cliente
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| Read_model local divergió del server (alguien editó por API directa) | Bootstrap hace pull autoritativo; cada respuesta trae versión actual; cliente compara y refresca si discrepa | — |
+| Comando confirmado pero respuesta no actualiza UI | Cliente persiste status `confirmado` y refresca read_model en próximo bootstrap si push perdido | — |
+
+##### Capa 12 — Plataforma específica
+
+| Modo de falla | Mitigación | Gap reconocido |
+|---|---|---|
+| **iOS ITP 7 días — wipe completo** | Push heartbeat diario; PWA instalada obligatoria; alerta cliente día 4; métrica server "sin sync >5 días" | **No mitigable 100 % web-side** — camino evolución: Capacitor wrapper |
+| iOS sin Background Sync | Sync solo con app abierta; UX explícita | Aceptado: técnico debe abrir app para drenar |
+| Cuota iOS más conservadora | Compresión JPEG agresiva en iOS específicamente | — |
+
+##### Patrones de mitigación transversales
+
+Cinco mecanismos cubren la mayoría de los modos de falla anteriores:
+
+1. **Idempotencia end-to-end** — `clientCommandId` UUIDv7 → Wolverine `MessageId` → claves de negocio en handlers (`HallazgoId`, `AdjuntoId`). Defiende contra retries, dedup expirado y crashes parciales.
+2. **Atomicidad transaccional** — un solo `SaveChangesAsync` commitea eventos + envelope + outbox + proyecciones inline. Regla CLAUDE.md no negociable.
+3. **Stop-on-error por stream** — aísla problemas a un stream sin bloquear la jornada del técnico ni otros streams.
+4. **Pull al bootstrap + push en vivo** — SignalR no es source of truth, solo optimización. Catch-up vía REST garantiza eventual consistency aunque se pierdan pushes.
+5. **Defensa en profundidad** — cada capa asume que la anterior puede fallar: cliente reintenta, server deduplica, handlers validan claves de negocio, blob hace HEAD antes de confirmar, cron limpia huérfanos.
+
+##### Gaps documentados sin mitigación al 100 %
+
+Estos gaps son aceptados conscientemente para v1.0 y tienen camino de evolución claro:
+
+- **iOS ITP 7 días.** Mitigaciones reducen incidencia pero no eliminan riesgo de pérdida de cola. Camino: Capacitor wrapper iOS.
+- **Jornadas offline >24h.** Refresh token expira; trabajo bloqueado hasta re-login online. Camino: `claimsSnapshot` server-side (opción b del manejo de auth offline).
+- **Foto perdida en OPFS antes de subir.** No recuperable. Mitigación parcial: UI muestra adjunto pendiente y técnico puede volver a tomar foto.
+- **MYE no respeta Idempotency-Key.** Riesgo de duplicado en ERP si MYE no implementa correctamente ADR-003. Fuera de control del módulo — requiere disciplina del equipo MYE.
+
+### Diagrama interactivo
+
+Ver [`09-adr-008-offline-cliente.html`](09-adr-008-offline-cliente.html) — flujo cliente offline → cola → sync → eventos en Marten + estados de un comando + flujo de adjuntos en 2 fases + anatomía de una jornada.
+
+---
+
 ## 10. Preguntas abiertas para la siguiente conversación
 
 **Sobre el preoperacional (acceso confirmado):**
