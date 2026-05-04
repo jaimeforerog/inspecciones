@@ -537,6 +537,7 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
         "nivel": 1
       }
     ],
+    "rutinaTecnicaId": "rt-001-bull-motor",
     "rutinasMonitoreoIds": [
       "rm-001-elec",
       "rm-002-trans",
@@ -546,9 +547,9 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
   ```
 - **Convenciones del shape**:
   - **Partes**: estructura **plana con `padreId`** (no árbol anidado JSON). `padreId=null` → raíz. `nivel` (0..2) para indentar sin caminar el árbol. Sin filtro de estado — todas las partes devueltas son válidas para inspección. Mismo formato que tenía M-4.
-  - **`rutinasMonitoreoIds`**: array de **referencias** (strings o guids) al catálogo `RutinaMonitoreoLocal` (sincronizado vía §3.4 / catálogo de rutinas-monitoreo). El módulo NO recibe los items embebidos aquí — los resuelve client-side contra la cache local. **Esto evita redundancia** (50 BULLDOZERs no replican las 3 rutinas idénticas).
-  - **Asignación per-equipo**: la lista representa las rutinas **asignadas explícitamente a este equipo** en el ERP. Dos equipos del mismo grupo pueden tener listas distintas (ver §12.11.5 punto 4 del modelo). Para MVP solo aplica monitoreo (Fase 2); en MVP la lista llega vacía o se omite.
-  - **Sin `rutinasTecnicasIds`**: rutina técnica MVP se deriva del grupo automáticamente (no asignación explícita per-equipo, sin cambio respecto al MVP histórico).
+  - **`rutinaTecnicaId`** (decisión 2026-05-04, opción β): id (singular) de la rutina técnica asignada al equipo en el ERP. Cardinalidad **1 por equipo** (única). Resuelta contra `RutinaTecnicaLocal` (sync vía M-17 §3.4). El handler `IniciarInspeccion` la lee directamente (técnico no elige). Si el equipo no tiene rutina técnica asignada, el campo es `null` y el inicio de inspección queda bloqueado por invariante I-I2 (`01-modelo-dominio.md §15.7`).
+  - **`rutinasMonitoreoIds`**: array de **referencias** (strings o guids) al catálogo `RutinaMonitoreoLocal` (sincronizado vía M-16 / catálogo de rutinas-monitoreo). Cardinalidad **2-3 por equipo** (típico). El módulo NO recibe los items embebidos aquí — los resuelve client-side contra la cache local. **Esto evita redundancia** (50 BULLDOZERs no replican las 3 rutinas idénticas).
+  - **Asignación per-equipo (ambos campos)**: representan las rutinas **asignadas explícitamente a este equipo** en el ERP. Dos equipos del mismo grupo pueden tener listas distintas (decisión 2026-05-04). Para MVP solo aplica `rutinaTecnicaId`; `rutinasMonitoreoIds` queda vacío hasta Fase 2.
 - **Errors**: `404` si no existe o no es accesible al usuario.
 - **🚧 TODO con David** (ver `07-preguntas-destrabar-followups.md` pregunta 6): confirmar la forma de la relación equipo↔rutinas en MYE (¿columna en `Equipo`, tabla intermedia, otra entidad?) y el endpoint actual o a construir.
 
@@ -573,6 +574,7 @@ Sincronizados nocturnamente vía cron + `If-Modified-Since` (ADR-004). Soporte d
 | M-14 | GET | `/api/v1/catalogos/grupos` | ⏸ | **Diferido** — filtro por grupo en M-3 ya está diferido; M-3 trae `grupo` como string denormalizado | (sin proyección local en MVP) |
 | M-15 | GET | `/api/v1/catalogos/unidades-medidor` | ⏸ | **Diferido** — ningún campo del modelo referencia `UnidadMedidorId`; en MVP `unidad` viaja como string denormalizado en `medidores[]` (P-2). Reactivar con bloque rutinas-driven | (sin proyección local en MVP) |
 | M-16 | GET | `/api/v1/catalogos/rutinas-monitoreo` | ⏸ | **Diferido a Fase 2** — catálogo completo de definiciones de rutinas de monitoreo (sin filtro por grupo, decisión 2026-05-04). La asignación equipo↔rutinas vive en M-3b; este endpoint trae solo las definiciones (items + rangos + calificaciones). | `RutinaMonitoreoLocal` |
+| M-17 | GET | `/api/v1/catalogos/rutinas` | 🚧 | **Crítico MVP — agregado 2026-05-04.** Catálogo de definiciones de rutinas técnicas. Cierra el gap de sync que el modelo asumía pero no estaba en el contrato. La asignación equipo↔rutina técnica vive en M-3b (`rutinaTecnicaId`); este endpoint trae las definiciones para resolver el id contra `RutinaTecnicaLocal`. | `RutinaTecnicaLocal` |
 
 #### M-10 `GET /api/v1/catalogos/causas-falla`
 
@@ -653,6 +655,52 @@ Catálogo cerrado de unidades para los medidores de equipos (referenciado por P-
   ```
 - **Notas**: igual que el catálogo de partes — el ERP puede agregar unidades pero los códigos existentes son inmutables (ADR-004). Ventana de staleness aceptada: 24h.
 - **Sync**: nocturna + `If-Modified-Since`/`ETag` con `304 Not Modified` cuando aplique.
+
+#### M-17 `GET /api/v1/catalogos/rutinas` (decisión 2026-05-04 — crítico MVP)
+
+> **Origen:** la revisión por flujos del 2026-05-04 detectó que el modelo (§12.11.1) asumía la existencia de un sync nocturno de rutinas técnicas, pero el contrato lo tenía diferido a post-MVP (M-6/M-7 ⏸). Sin sync, el handler `IniciarInspeccion` no podía resolver `Equipo.RutinaTecnicaId` contra una proyección local. Este endpoint cierra el gap.
+
+Catálogo de definiciones de rutinas técnicas. Sincronizado nocturnamente con el patrón estándar (ADR-004, stale-while-revalidate, ETag/`If-Modified-Since`). Alimenta `RutinaTecnicaLocal`.
+
+- **Estructura**: catálogo plano. Items embebidos por rutina (parte fijada a nivel rutina, items son actividades sobre esa parte).
+- **Sin filtro por grupo ni por equipo**: trae **todas** las rutinas técnicas activas. La asignación equipo↔rutina vive en M-3b (`rutinaTecnicaId` singular, decisión 2026-05-04 opción β).
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      {
+        "rutinaId": "rt-001-bull-motor",
+        "codigo": "INSP. BULL.MOTOR",
+        "nombre": "Inspección técnica Bulldozer — Motor",
+        "tipo": "Tecnica",
+        "grupoMantenimiento": "BULLDOZER",
+        "parteId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+        "parteCodigo": "MOTOR",
+        "items": [
+          {
+            "itemId": "it-bull-motor-001",
+            "actividadId": "act-001",
+            "instruccion": "Verificar nivel de aceite en mirilla con motor frío",
+            "obligatorio": true
+          },
+          {
+            "itemId": "it-bull-motor-002",
+            "actividadId": "act-002",
+            "instruccion": null,
+            "obligatorio": false
+          }
+        ]
+      }
+    ],
+    "totalCount": 47
+  }
+  ```
+- **`tipo`**: discriminador escalable. En MVP siempre `"Tecnica"`. Si el ERP tiene rutinas con otros tipos (preoperacional, mantenimiento), **el endpoint debe filtrarlos server-side y devolver solo `Tecnica`** — el módulo solo consume rutinas técnicas. Alternativamente, `GET /catalogos/rutinas?tipo=tecnica` con filtro explícito; el módulo asume el primer caso (filtrado implícito server-side).
+- **Solo rutinas activas**: el ERP filtra server-side y nunca devuelve descontinuadas. Módulo conserva descontinuadas en `RutinaTecnicaLocal` (no las borra al desaparecer del response) para resolver historiales — ADR-004.
+- **Cache headers obligatorios**: `ETag` + `Last-Modified` → `304 Not Modified` cuando no hay cambios. Sync nocturno con stale-while-revalidate hasta 24h.
+- **Inmutabilidad de IDs**: tanto `rutinaId` como `itemId` son inmutables una vez publicados (ADR-004). El historial de `InspeccionIniciada_v1` snapshotea `RutinaId` + `RutinaCodigo` para audit; cambiar el id rompe la trazabilidad.
+- **Items son metadata sugerida en MVP libre**: el flujo MVP (§15) no recorre items — el técnico decide qué inspeccionar libremente. Los items existen para reportería futura ("partes/actividades aplicables al equipo según la rutina") pero no son obligatorios al ejecutar la inspección. El sync puede aceptar `items: []` vacío sin impacto operativo en MVP.
+- **🚧 TODO con David** (ver `07-preguntas-destrabar-followups.md` pregunta 5 + nueva entrada): confirmar que el ERP soporta el filtrado por `tipo=Tecnica` (server-side o vía query) y que la cardinalidad real es 1 rutina técnica por equipo.
 
 #### M-16 `GET /api/v1/catalogos/rutinas-monitoreo` (Fase 2 — diferido)
 
@@ -787,11 +835,11 @@ Sync nocturno del catálogo completo de insumos. Alimenta la proyección local `
 | Preoperacional | 6 (P-1..P-6) | Equipo del preop | 🚧 todos bloqueados |
 | MYE núcleo (operaciones) | 2 (M-1, M-2) | Equipo MYE | 🚧 + 🟣 fallback |
 | MYE núcleo (lecturas) | 5 (M-3, M-3b, M-5..M-7) | Equipo MYE | M-3 + M-3b activos (🚧); M-4 ❌ eliminado/absorbido por M-3b (decisión 2026-05-04); M-5, M-6, M-7 ⏸ diferidos al bloque rutinas-driven (post-MVP) |
-| MYE núcleo (catálogos) | 9 (M-8..M-16) | Equipo MYE | M-10, M-11, M-13 activos (🚧); M-8, M-9, M-12, M-14, M-15, M-16 ⏸ diferidos (M-16 entra en Fase 2) |
+| MYE núcleo (catálogos) | 10 (M-8..M-17) | Equipo MYE | M-10, M-11, M-13, M-17 activos (🚧 — M-17 nuevo crítico MVP 2026-05-04); M-8, M-9, M-12, M-14, M-15, M-16 ⏸ diferidos (M-16 entra en Fase 2) |
 | Inventario | 2 (I-1, I-2) | Equipo inventario | 🚧 todos bloqueados |
 | User master / RRHH | 2 (U-1, U-2) | Equipo seguridad/IT | 🟣 condicional ADR-002 |
 
-**Total:** 26 endpoints (con M-3b nuevo + M-16 nuevo, M-4 eliminado) — 14 obligatorios MVP + 3 condicionales (M-2 fallback ADR-003; U-1, U-2 según ADR-002) + 9 diferidos al post-MVP (M-5, M-6, M-7 — bloque rutinas-driven; M-8, M-9 — catálogos globales de partes/actividades; M-12 — ubicaciones; M-14 — grupos; M-15 — unidades-medidor; M-16 — rutinas-monitoreo Fase 2).
+**Total:** 27 endpoints (con M-3b nuevo + M-16 nuevo + M-17 nuevo, M-4 eliminado) — 15 obligatorios MVP (incluye M-17 nuevo) + 3 condicionales (M-2 fallback ADR-003; U-1, U-2 según ADR-002) + 9 diferidos al post-MVP (M-5, M-6, M-7 — bloque rutinas-driven; M-8, M-9 — catálogos globales de partes/actividades; M-12 — ubicaciones; M-14 — grupos; M-15 — unidades-medidor; M-16 — rutinas-monitoreo Fase 2).
 
 **Cuellos de botella esperados:**
 
@@ -841,6 +889,8 @@ Este archivo unifica versiones contradictorias previas:
 | 2026-04-28 | P-5 (`/preop/novedades/{id}/descartar`) emerge | Refactor §15: `NovedadPreopDescartada_v1` evento dedicado |
 | 2026-05-04 | M-3b (detalle equipo con partes + rutinasMonitoreoIds) creado, M-4 eliminado/absorbido | Consolidación equipo+partes+rutinas en una sola llamada |
 | 2026-05-04 | M-16 (catálogo `rutinas-monitoreo` sin filtro) reemplaza el `?grupo=` planteado inicialmente | Corrección Jaime 2026-05-04: rutinas se asignan per-equipo en ERP, no por grupo |
+| 2026-05-04 | M-3b extendido con `rutinaTecnicaId: Guid` (singular). Cardinalidad técnica = 1 rutina por equipo, asignación per-equipo (opción β confirmada 2026-05-04) | Refinamiento Jaime: rutina técnica única por equipo, no derivada del grupo |
+| 2026-05-04 | M-17 (catálogo `/catalogos/rutinas`) creado como crítico MVP. Cierra gap detectado en revisión por flujos: el modelo asumía sync que el contrato no tenía | Hallazgo 1 de la revisión por flujos del 2026-05-04 |
 
 ---
 
@@ -858,6 +908,8 @@ Lista de cosas que faltan acordar con cada equipo Sinco antes de implementar:
 - [ ] **MYE núcleo**: confirmar valores del catálogo cerrado de `estado` en M-3 (asumido `operativo | en-mantenimiento | fuera-de-servicio | inactivo` — adivinanza).
 - [ ] **MYE núcleo**: refinar lista de campos del item de M-3 (`marca`, `modelo`, `anio`, `numeroSerie`, `numeroEconomico` propuestos — pueden faltar o sobrar).
 - [ ] **MYE núcleo (M-3b + M-16)**: confirmar la relación equipo↔rutinas-monitoreo en MYE — ¿columna en `Equipo` con array de ids, tabla intermedia, otra entidad? ¿Existe endpoint actual que devuelva las rutinas asignadas a un equipo, o es a construir? ¿La asignación admite distintas rutinas por contexto (técnica vs monitoreo) o es un solo set por equipo con discriminador? Ver `07-preguntas-destrabar-followups.md` pregunta 6 actualizada.
+- [ ] **MYE núcleo (M-3b + M-17)**: confirmar la relación equipo↔rutina técnica en MYE. **Hipótesis del módulo (2026-05-04 opción β)**: campo `Equipo.rutinaTecnicaId: Guid` con cardinalidad 1 (única rutina técnica por equipo). Preguntas concretas en `07-preguntas-destrabar-followups.md` pregunta 5 actualizada.
+- [ ] **MYE núcleo (M-17)**: confirmar que el ERP soporta el filtro `tipo=Tecnica` en el catálogo de rutinas (server-side implícito o vía query string). El módulo solo consume rutinas técnicas; rutinas preoperacionales y de mantenimiento no deben aparecer en el response.
 - [ ] **Inventario**: validar que I-1 soporta filtrado por `parteId` (compatibilidad).
 - [ ] **Inventario**: cuál es el catálogo cerrado de unidades (`Unidad` field).
 - [ ] **Seguridad/IT**: confirmar si U-1/U-2 son necesarios o el host PWA ya propaga lo requerido.

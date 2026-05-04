@@ -1764,33 +1764,59 @@ GET  /api/v1/admin/usuarios?desde={lastSync}
 
 Decisión del usuario: eliminar el enum `TipoRutina` del modelo del módulo (todas las rutinas que el módulo consume son técnicas implícitamente) y agregar un nuevo enum `TipoInspeccion` al aggregate `Inspeccion` que distingue qué flujo se está ejecutando.
 
-#### 12.11.1 Eliminación de `TipoRutina` del modelo del módulo
+#### 12.11.1 `Rutina` técnica — modelo final (refinado 2026-05-04)
 
-**Razón:** el campo `Tipo` en el `Rutina` aggregate generaba confusión. Mezclaba dos conceptos:
-- Metadato del catálogo del ERP (donde Sinco organiza sus rutinas como Preoperacional, Mantenimiento, etc.).
-- Flujo operativo (qué hace el técnico).
+> **Refinamiento 2026-05-04 (correcciones Jaime):**
+> - Eliminar `RutinaPadreId` (no existe en el ERP real).
+> - Agregar `ParteId` + `ParteCodigo` a `Rutina` como variables separadas (la parte mayor a la que aplica la rutina).
+> - Agregar `Tipo: TipoRutina` discriminador escalable. En MVP solo aplica `Tecnica`; el campo queda preparado para tipos futuros (`PostMantenimiento`, `Certificacion`) sin migrar el catálogo. **NO se unifica con `RutinaMonitoreo`** — esa entidad permanece separada por las razones operativas en §12.11.5 (lifecycle distinto del item, comandos hermanos, evento `InspeccionIniciada_v1` con shape distinto).
+> - Cardinalidad: **una rutina técnica por equipo** (única). La asignación es **explícita per-equipo en el ERP** (mismo mecanismo que monitoreo, pero con cardinalidad 1 vs N). El `M-3b` del contrato (`GET /equipos/{id}`) trae `rutinaTecnicaId: Guid` (singular) además de `rutinasMonitoreoIds: Guid[]` (plural Fase 2).
 
-**Decisión:** el módulo nuevo solo conoce **rutinas técnicas**. Las rutinas preoperacionales y de mantenimiento existen en el catálogo de Sinco, pero **no son consumidas por el módulo de inspecciones técnicas**:
+**Razón histórica para distinguir rutinas técnicas vs otras:** el módulo nuevo solo conoce **rutinas técnicas** (y rutinas de monitoreo en Fase 2 — entidad separada). Las rutinas preoperacionales y de mantenimiento existen en el catálogo de Sinco, pero **no son consumidas por este módulo**:
 
 - Las rutinas preoperacionales viven en el módulo Preoperacional de Sinco MYE (otro flujo, otro consumidor).
 - Las rutinas de mantenimiento viven en MYE núcleo o módulo de planificación (otro flujo, otro consumidor).
 
-El endpoint que el módulo consume filtra del lado ERP: `GET /api/v1/rutinas-tecnicas?grupo={g}` o `GET /api/v1/rutinas?tipo=tecnica&grupo={g}`. La selección del filtro se documenta en §9.13 / §12.9.7.
-
-**Cambios al value object `Rutina` (final):**
+**Estructura final:**
 
 ```csharp
+public enum TipoRutina
+{
+    Tecnica            // MVP — único valor activo. Discriminador escalable a futuros tipos
+                       // (PostMantenimiento, Certificacion, etc.) si emergen.
+}
+
 public sealed record Rutina(
     Guid RutinaId,
-    string Codigo,                          // "INSP. BULL"
+    string Codigo,                          // "INSP. BULL.MOTOR"
     string Nombre,
-    string GrupoMantenimiento,              // único atributo de aplicabilidad
-    Guid? RutinaPadreId,                    // si hay derivación entre rutinas
+    TipoRutina Tipo,                        // Tecnica en MVP
+    string GrupoMantenimiento,              // "BULLDOZER" — descriptor de aplicabilidad
+    Guid ParteId,                           // parte mayor a la que aplica la rutina
+    string ParteCodigo,                     // denormalizado — "MOTOR"
     IReadOnlyList<ItemRutina> Items,
     DateTime SincronizadoEn);
 
-// El enum TipoRutina se elimina del modelo del módulo.
+public sealed record ItemRutina(
+    Guid ItemId,
+    Guid ActividadId,                       // qué hay que hacer en este item
+    string? Instruccion,                    // texto guía opcional
+    bool Obligatorio);
 ```
+
+**Cambios respecto a versión previa:**
+- ❌ `RutinaPadreId` eliminado (no existe en el ERP).
+- ✅ `Tipo: TipoRutina` agregado (escalabilidad — un solo valor `Tecnica` en MVP).
+- ✅ `ParteId` + `ParteCodigo` agregados a `Rutina` — la rutina cubre una parte mayor del equipo.
+- ✅ `ItemRutina` simplificado — sin `ParteId` (la parte ya está fijada a nivel rutina). Si emerge necesidad de sub-partes, se agrega `ParteId` opcional como cambio aditivo.
+
+**Endpoint del catálogo (vigente al 2026-05-04):** `GET /api/v1/catalogos/rutinas` — sync nocturno, alimenta `RutinaTecnicaLocal`. Cierra el "Hallazgo 1" detectado en la revisión por flujos del 2026-05-04 (rutina técnica MVP sin sync claro previo). Detalle del contrato: §3.4 catálogos de `06-contrato-apis-erp.md`.
+
+**Asignación equipo ↔ rutina técnica (decisión 2026-05-04):**
+- **Mecanismo:** asignación explícita per-equipo en el ERP. `M-3b` trae `Equipo.rutinaTecnicaId: Guid` directamente.
+- **Cardinalidad:** 1 rutina técnica por equipo (única). Caso degenerado de N=1 respecto al patrón per-equipo de monitoreo (N=2-3).
+- **Resolución del handler `IniciarInspeccion`:** lee `Equipo.RutinaTecnicaId` desde `EquipoLocal` (poblado por M-3b). No requiere selector — el técnico no elige.
+- **Validación I-I2 actualizada:** la rutina técnica del equipo existe en `RutinaTecnicaLocal` y tiene `Tipo = TipoRutina.Tecnica`. Sin rutina asignada → bloqueo en el inicio (mensaje accionable).
 
 #### 12.11.2 Nuevo enum `TipoInspeccion` en el aggregate
 
@@ -1937,11 +1963,12 @@ Ejemplos del archivo `inspeccion.xlsx`:
 
 | Aspecto | Rutina técnica (MVP) | Rutina de monitoreo (Fase 2) |
 |---|---|---|
-| Asignación equipo↔rutina | Una sola rutina por grupo, derivada automáticamente del grupo del equipo | **Asignación explícita en el ERP por equipo** — 2 a 3 rutinas por equipo, configuradas individualmente |
-| Cardinalidad | **Una sola** rutina por equipo | **2–3 rutinas** por equipo (típico) |
-| Selección al iniciar | Derivada automáticamente del grupo (técnico no elige) | **El técnico elige** entre las rutinas asignadas a ese equipo |
-| Items | Lista de partes aplicables (filtro) | Lista de items con evaluación esperada (checklist real) |
-| Flujo del técnico | Libre — el técnico decide qué inspeccionar | Estructurado — el técnico recorre los items de la rutina elegida |
+| Asignación equipo↔rutina | **Asignación explícita en el ERP per-equipo** (decisión 2026-05-04 — cambio respecto al MVP histórico que asumía derivación por grupo) | **Asignación explícita en el ERP per-equipo** — mismo mecanismo, distinta cardinalidad |
+| Cardinalidad | **1 rutina por equipo** (única). `M-3b` trae `rutinaTecnicaId: Guid` singular | **2–3 rutinas** por equipo (típico). `M-3b` trae `rutinasMonitoreoIds: Guid[]` plural |
+| Selección al iniciar | **Auto-resuelta** por el handler desde `Equipo.RutinaTecnicaId` (técnico no elige — única) | **El técnico elige** entre las rutinas asignadas a ese equipo (selector en UX) |
+| Items | Items con `ActividadId` (qué hacer) — sin medición | Items con `EvaluacionEsperada` (numérica con rango O cualitativa Bueno/Regular/Malo) |
+| Snapshot en evento | NO se snapshotean items en `InspeccionIniciada_v1` (flujo libre) | SÍ se snapshotean items en `InspeccionIniciada_v1.ItemsSnapshot` (FueraDeRango se calcula contra rango snapshoteado) |
+| Flujo del técnico | Libre — el técnico decide qué inspeccionar; los items son metadata sugerida para reportería | Estructurado — el técnico recorre los items de la rutina elegida; sistema dispara hallazgos automáticos |
 
 **5. Eventos nuevos del aggregate `Inspeccion` cuando `Tipo=Monitoreo`:**
 
@@ -3689,38 +3716,47 @@ I-I1  Una sola inspección abierta por equipo
       sobre el mismo equipo aunque la OT del flujo anterior siga pendiente
       de aprobación (estado derivado EsperandoAprobacionOT, ADR-007 §17).
 
-I-I2  Equipo debe tener rutina técnica para poder ser inspeccionado
-      ────────────────────────────────────────────────────────────
-      Confirmada por Jaime el 2026-04-30 a partir del análisis de los datos
-      de los 27 clientes ERP (ver `08-volumenes-clientes-erp.md` si existe,
-      o el resumen en chat de la sesión 2026-04-30).
+I-I2  Equipo debe tener rutina técnica asignada para poder ser inspeccionado
+      ─────────────────────────────────────────────────────────────────
+      Confirmada por Jaime el 2026-04-30. Refinada el 2026-05-04: la
+      asignación es **per-equipo en el ERP**, no derivada del grupo
+      (decisión 2026-05-04 — opción β). Cardinalidad 1 (única).
 
       Regla: el handler de IniciarInspeccion rechaza la creación si
-      `ObtenerRutinaTecnicaPorGrupo(equipo.GrupoMantenimiento)` devuelve
-      null. La rutina determina las partes aplicables del grupo (§12.10).
-      Sin rutina no hay catálogo de partes y los hallazgos no podrían
-      cumplir I-H1 (ParteEquipoId obligatorio). Por tanto, la falta de
-      rutina es bloqueante en el inicio, no un caso a manejar tarde.
+      `Equipo.RutinaTecnicaId` (campo del detalle del equipo M-3b) es
+      null o si la rutina referenciada no existe en `RutinaTecnicaLocal`.
+      Sin rutina asignada no hay catálogo de partes y los hallazgos no
+      podrían cumplir I-H1 (ParteEquipoId obligatorio). Por tanto, la
+      falta de rutina es bloqueante en el inicio, no un caso a manejar
+      tarde.
 
-      Mensaje del rechazo (DomainException): "No hay rutina técnica
-      configurada para el grupo {GrupoMantenimiento}. Contacta al admin
-      del catálogo de rutinas en Sinco para activar la rutina del grupo
-      antes de inspeccionar este equipo."
+      Validaciones derivadas (también del handler):
+        - rutina.Tipo == TipoRutina.Tecnica (defensa para cuando emerjan
+          tipos futuros como PostMantenimiento; en MVP siempre se cumple).
+        - rutina existe en RutinaTecnicaLocal (sync vía /catalogos/rutinas).
+
+      Mensaje del rechazo (DomainException): "El equipo {EquipoCodigo}
+      no tiene rutina técnica asignada en el ERP. Contacta al admin
+      del catálogo en Sinco para asignar una rutina técnica al equipo
+      antes de inspeccionar."
 
       Implicaciones operativas:
         - Datos del ERP (corte 2026-04-30) muestran equipos sin partes
           en la hoja "Partes por Equipo" de varios clientes. La hipótesis
-          es que esos equipos están en grupos sin rutina configurada;
+          es que esos equipos no tienen rutina técnica asignada;
           esta invariante los bloquea limpiamente sin código especial.
-        - UX: el endpoint `GET /equipos` (paso 4.5) puede exponer un flag
-          `tieneRutina` para que el frontend deshabilite el botón
-          "Iniciar inspección" en equipos sin rutina, evitando el rechazo
-          tardío. Es opcional — el backend siempre rechaza.
+        - UX: el detalle del equipo (M-3b) puede exponer `rutinaTecnicaId`
+          null para que el frontend deshabilite el botón "Iniciar
+          inspección" antes del rechazo del backend. El backend siempre
+          rechaza, el frontend mejora la UX evitando llamadas perdidas.
 
-      Test obligatorio: equipo cuyo grupo no tiene rutina → 422 con
-      mensaje accionable. Equipo con rutina vacía (sin items): caso
-      edge no priorizado en MVP — la rutina es responsabilidad del ERP,
-      asumimos que si existe, tiene items. Followup si emerge en piloto.
+      Test obligatorio: equipo sin rutina asignada → 422 con mensaje
+      accionable. Equipo con rutina asignada cuya rutina no existe en
+      catálogo (sync stale) → 422 con mensaje "rutina referenciada no
+      sincronizada — refresca catálogos". Equipo con rutina vacía (sin
+      items): caso edge no priorizado en MVP — los items en técnica
+      MVP son metadata sugerida (no se recorren); la rutina sin items
+      se acepta como template trivial.
 
 I-I3  Rango válido de FechaReportada (decisión 2026-04-30, cierre #2)
       ────────────────────────────────────────────────────────────────

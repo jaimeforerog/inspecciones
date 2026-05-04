@@ -151,9 +151,14 @@ Sin embargo, el mock (image10) muestra un seguimiento con badge **"Con seguimien
 
 ---
 
-### Pregunta 5 — Granularidad real de rutinas técnicas en clientes outlier (análisis 2026-04-30)
+### Pregunta 5 — Asignación equipo↔rutina técnica + outliers de catálogo (análisis 2026-04-30, refinada 2026-05-04)
 
-**Contexto:** del análisis de los 27 clientes ERP (`08-volumenes-clientes-erp.md`) emergen 3 outliers donde el ratio rutinas/equipos ≥ 1.7 — incoherente con la decisión §12.10/§12.11 del modelo ("una rutina técnica por grupo de mantenimiento"):
+**Decisiones cerradas 2026-05-04 (Jaime):**
+- Cardinalidad: **1 rutina técnica por equipo** (única). Diferente de monitoreo Fase 2 que admite 2-3 por equipo.
+- Mecanismo: **asignación explícita per-equipo en el ERP** (opción β confirmada). El campo `Equipo.rutinaTecnicaId: Guid` viaja en M-3b (`GET /equipos/{id}`).
+- Modelo de `Rutina`: ver §12.11.1 — sin `RutinaPadreId`, con `ParteId` + `ParteCodigo` + `Tipo: TipoRutina` discriminador.
+
+**Contexto restante:** del análisis de los 27 clientes ERP (`08-volumenes-clientes-erp.md`) emergen 3 outliers donde el ratio rutinas/equipos ≥ 1.7. Si la cardinalidad confirmada es 1 rutina técnica por equipo, ratio ~1 sería esperado. Los outliers tienen ratios ~2 — la diferencia necesita explicación:
 
 | Cliente | Equipos | Rutinas | Ratio |
 |---|---:|---:|---:|
@@ -161,18 +166,26 @@ Sin embargo, el mock (image10) muestra un seguimiento con badge **"Con seguimien
 | PAVIMENTOS COLOMBIA | 990 | **1941** | 1.96 |
 | EXPLANAN | 92 | 159 | 1.73 |
 
+**Hipótesis nuevas (post 2026-05-04):**
+- **(i)** Las cifras incluyen **rutinas de monitoreo Fase 2** ya cargadas en el catálogo (típico 2-3 por equipo). Si PAVIMENTOS tiene 990 rutinas técnicas (1 por equipo) + ~1000 rutinas monitoreo (~1 por equipo en promedio si solo algunos tienen) ≈ 1990. Ratio ~2.
+- **(ii)** El catálogo **mezcla tipos** que el módulo no debería consumir (preoperacional, mantenimiento). El endpoint M-17 debe filtrar server-side `tipo=Tecnica` para que el módulo solo reciba lo que aplica.
+- **(iii)** Hay **rutinas históricas / inactivas** que el sync debe filtrar (mismo patrón que causas-falla descontinuadas — ADR-004).
+
 **Pregunta concreta:**
 
-1. ¿Cómo es posible que PAVIMENTOS COLOMBIA tenga **1,941 rutinas técnicas** para 990 equipos? ¿Tienen rutinas por modelo/marca dentro del grupo (ej. una para D11T, otra para D65PX2 dentro del grupo BULLDOZER)?
-2. ¿El catálogo de rutinas del ERP **incluye rutinas inactivas / legacy** que el módulo debería filtrar? Si sí, ¿qué campo del DTO indica "activa"? (Sería análogo al `activo=false` de ADR-004 reglas operativas.)
-3. ¿La cifra "Rutinas" de la hoja Excel **mezcla tipos** (técnica + monitoreo + post-mantenimiento + certificación + otros), o ya viene filtrada por `tipo=tecnica`? Esto define qué endpoint del ERP usa el módulo: §9.13 `GET /api/v1/rutinas-tecnicas?grupo={g}` o `GET /api/v1/rutinas?tipo=tecnica&grupo={g}`.
-4. ¿Estos clientes (FUNDACIONES, PAVIMENTOS, EXPLANAN) tienen un **modo operativo distinto** del resto (más maquinaria especializada, normativa diferente, certificaciones que requieren rutinas múltiples por equipo)?
+1. ¿Confirmás la **cardinalidad 1 rutina técnica por equipo** en MYE? Es decir, ¿la entidad `Equipo` tiene exactamente UN `rutinaTecnicaId` (puede ser null si no asignada)? Si la realidad es que un equipo puede tener N rutinas técnicas asignadas, hay que cambiar el contrato de M-3b a `rutinaTecnicaIds: Guid[]` (plural) — análogo a monitoreo.
+2. ¿El campo de asignación rutina técnica en `Equipo` **ya existe** en MYE, o es a construir? Si existe, ¿cómo se llama (ej. `RutinaTecnicaId`, `RutinaInspeccionId`, `RutinaPrincipalId`)?
+3. ¿Cómo se gestiona la asignación operativamente? ¿UI administrativa en la web del ERP, sync con sistema externo, intervención técnica en BD?
+4. ¿El catálogo de rutinas del ERP **mezcla tipos** (técnica + preoperacional + monitoreo + mantenimiento + certificación) bajo una sola entidad con discriminador, o cada tipo está en una entidad propia? Esto define la forma del endpoint M-17 (`?tipo=Tecnica` filtro vs entidad `RutinaTecnica` separada).
+5. ¿Cómo explicas los outliers (PAVIMENTOS 1.96, FUNDACIONES 1.97, EXPLANAN 1.73)? ¿Hipótesis (i)/(ii)/(iii) arriba, o algo distinto?
+6. ¿El catálogo incluye rutinas inactivas / legacy? Si sí, ¿qué campo del DTO indica "activa"? (Sería análogo al `activo=false` de ADR-004.)
 
 **Qué desbloquea:**
-- Confirmación o ajuste de la decisión §12.10 ("una rutina técnica por grupo"). Si la respuesta es (1) — rutinas por modelo dentro de grupo — el modelo debe extender `Rutina` con campo de aplicabilidad por modelo, o cambiar la cardinalidad. Si es (2) o (3), basta con filtrar correctamente del lado ERP.
-- Selección informada del cliente piloto (Fase 9.1). Si los outliers son casos atípicos, conviene que el piloto sea un cliente "promedio" (ratio < 1) para validar el flujo principal antes de exponer el módulo a casos complejos.
+- Confirmación final del modelo `Rutina` técnica (§12.11.1) y del shape de M-3b.
+- Definición precisa del filtro server-side de M-17 (`tipo=Tecnica` implícito o explícito).
+- Selección informada del cliente piloto (Fase 9.1). Si los outliers son casos atípicos, conviene que el piloto sea un cliente "promedio" (ratio cercano a 1).
 
-**Bloquea:** validación final del modelo de rutina técnica antes de slice 3.32 (sync de catálogos). **No bloquea** el slice 3.36 (`POST /inspecciones`), que opera sobre la rutina ya sincronizada sin asumir cardinalidad.
+**Bloquea:** validación final del modelo de rutina técnica antes del slice de sync de catálogos (paso 3.32). **No bloquea** el slice 3.36 (`POST /inspecciones`), que opera sobre la rutina ya sincronizada.
 
 ---
 
