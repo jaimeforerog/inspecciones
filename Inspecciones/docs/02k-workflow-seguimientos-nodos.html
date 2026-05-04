@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow seguimientos (SeguimientoHallazgo) — diagrama basado en nodos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<style>
+:root {
+  --primary: #0D47A1; --primary-dark: #062B66; --primary-light: #E3F2FD;
+  --bg: #F5F7FA; --surface: #FFFFFF; --text: #1A1A1A;
+  --text-secondary: #5F6368; --text-muted: #9AA0A6; --divider: #E0E4E9;
+  --lane-tec: #E3F2FD; --lane-tec-border: #1976D2;
+  --lane-front: #E8F5E9; --lane-front-border: #388E3C;
+  --lane-back: #FFF3E0; --lane-back-border: #EF6C00;
+  --lane-saga: #F3E5F5; --lane-saga-border: #7B1FA2;
+  --lane-erp: #FFEBEE; --lane-erp-border: #D32F2F;
+  --lane-stor: #F5F5F5; --lane-stor-border: #757575;
+  --ok: #C8E6C9; --warn: #FFF8E1; --err: #FFCDD2; --end: #ECEFF1;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-2: 0 4px 8px rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Roboto', sans-serif; background: #ECEFF1; color: var(--text); padding: 24px 16px 64px; line-height: 1.55; }
+.page-header { max-width: 1400px; margin: 0 auto 24px; text-align: center; padding: 24px; background: linear-gradient(135deg, var(--primary-light) 0%, #FFFFFF 100%); border-radius: 12px; box-shadow: var(--shadow-1); }
+.page-header h1 { font-weight: 500; font-size: 26px; color: #263238; margin-bottom: 6px; }
+.page-header p { color: var(--text-secondary); font-size: 14px; max-width: 900px; margin: 0 auto; }
+.page-header .meta { display: inline-flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center; font-size: 12px; }
+.page-header .meta span { background: rgba(13,71,161,.08); padding: 4px 10px; border-radius: 12px; color: var(--primary-dark); }
+.toc { max-width: 1400px; margin: 0 auto 24px; background: var(--surface); border-radius: 8px; padding: 12px 20px; box-shadow: var(--shadow-1); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.toc strong { color: var(--text-secondary); font-size: 13px; margin-right: 8px; }
+.toc a { text-decoration: none; color: var(--primary); padding: 4px 10px; border-radius: 6px; font-size: 13px; transition: background 0.15s; }
+.toc a:hover { background: var(--primary-light); }
+.section { max-width: 1400px; margin: 0 auto 24px; background: var(--surface); border-radius: 12px; padding: 24px 28px; box-shadow: var(--shadow-1); }
+.section h2 { font-weight: 500; font-size: 20px; color: var(--primary-dark); border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; margin-bottom: 16px; }
+.section h3 { font-weight: 500; font-size: 16px; color: var(--text); margin: 18px 0 10px; padding-left: 10px; border-left: 4px solid var(--primary); }
+.section p { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; }
+.section ul, .section ol { margin-left: 24px; margin-bottom: 10px; color: var(--text-secondary); font-size: 14px; }
+.section li { margin-bottom: 4px; }
+.section code { font-family: 'Roboto Mono', monospace; font-size: 12.5px; background: #F1F5F9; padding: 1px 6px; border-radius: 3px; color: #1E40AF; }
+.section a { color: var(--primary); }
+.lane-legend { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 20px; }
+.lane-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 16px; font-size: 12.5px; border: 2px solid; font-weight: 500; }
+.lane-chip.tec { background: var(--lane-tec); border-color: var(--lane-tec-border); color: var(--lane-tec-border); }
+.lane-chip.front { background: var(--lane-front); border-color: var(--lane-front-border); color: var(--lane-front-border); }
+.lane-chip.back { background: var(--lane-back); border-color: var(--lane-back-border); color: var(--lane-back-border); }
+.lane-chip.saga { background: var(--lane-saga); border-color: var(--lane-saga-border); color: var(--lane-saga-border); }
+.lane-chip.erp.disabled { background: var(--lane-stor); border-color: var(--lane-stor-border); color: var(--lane-stor-border); text-decoration: line-through; opacity: 0.6; }
+.lane-chip.stor.disabled { background: var(--lane-stor); border-color: var(--lane-stor-border); color: var(--lane-stor-border); text-decoration: line-through; opacity: 0.6; }
+.diagram-wrapper { background: #FAFBFC; border: 1px solid var(--divider); border-radius: 8px; padding: 16px; margin: 16px 0; position: relative; overflow: hidden; }
+.diagram-wrapper .controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 10; }
+.diagram-wrapper .controls button { background: var(--surface); border: 1px solid var(--divider); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 16px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-1); }
+.diagram-wrapper .controls button:hover { background: var(--primary-light); color: var(--primary); }
+.diagram-wrapper .mermaid { display: flex; justify-content: center; min-height: 200px; }
+.diagram-wrapper svg { max-width: 100%; height: auto !important; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; background: var(--surface); }
+table th { background: var(--primary-light); color: var(--primary-dark); text-align: left; padding: 10px 12px; font-weight: 500; border-bottom: 2px solid var(--primary); }
+table td { padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text); vertical-align: top; }
+table tr:nth-child(even) td { background: #FAFBFC; }
+table code { font-size: 11.5px; }
+.callout { background: var(--lane-tec); border-left: 4px solid var(--lane-tec-border); padding: 12px 16px; border-radius: 4px; margin: 12px 0; font-size: 13px; }
+.callout.warn { background: var(--warn); border-color: #F57C00; }
+.callout.err { background: var(--err); border-color: var(--lane-erp-border); }
+.callout.ok { background: var(--ok); border-color: #388E3C; }
+footer { max-width: 1400px; margin: 24px auto 0; padding: 16px 24px; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-1); font-size: 12px; color: var(--text-muted); text-align: center; }
+footer a { color: var(--primary); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Workflow — Seguimientos (<code style="font-size:.85em">SeguimientoHallazgo</code>)</h1>
+  <p>Aggregate paralelo a <code>Inspeccion</code>. Apertura automática post-firma → vida útil con SLA progresivo → resolución/escalación en inspección posterior del mismo equipo.</p>
+  <div class="meta">
+    <span>📄 Equivalente HTML del doc Markdown 02k</span>
+    <span>📅 Última revisión: 2026-05-04</span>
+    <span>🔗 Modelo: §15.8 + §15.9</span>
+    <span>🚫 0 endpoints ERP directos</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>📑 Secciones:</strong>
+  <a href="#carriles">Carriles</a>
+  <a href="#apertura">Apertura</a>
+  <a href="#vida-util">Vida útil + SLA</a>
+  <a href="#resolucion">Resolución / escalación</a>
+  <a href="#atomicidad">Atomicidad cross-aggregate</a>
+  <a href="#errores">Compensaciones</a>
+  <a href="#referencias">Referencias</a>
+</nav>
+
+<section class="section" id="carriles">
+  <h2>1. Carriles y notación</h2>
+  <p>Misma convención que <code>02i</code> y <code>02j</code>. <strong>Aspecto distintivo:</strong> el seguimiento es invisible al ERP — los carriles 🏢 ERP y 💾 Storage NO se usan en este workflow.</p>
+  <div class="lane-legend">
+    <span class="lane-chip tec">👤 Técnico</span>
+    <span class="lane-chip front">📱 Frontend PWA</span>
+    <span class="lane-chip back">🔧 Backend módulo</span>
+    <span class="lane-chip saga">⏰ Saga / Outbox</span>
+    <span class="lane-chip erp disabled">🏢 ERP — NO usado</span>
+    <span class="lane-chip stor disabled">💾 Storage — NO usado</span>
+  </div>
+  <div class="callout"><strong>0 endpoints ERP directos:</strong> la integración con el ERP ocurre <em>antes</em> (<code>P-5</code> al asignar la novedad como seguimiento) o <em>después</em> (<code>M-1</code> si el escalado genera OT al firmar la inspección N+k). El seguimiento mismo es puramente local al módulo Marten.</div>
+</section>
+
+<section class="section" id="apertura">
+  <h2>2. Apertura automática (saga al firmar inspección N)</h2>
+  <p>La saga <code>CerrarInspeccionSaga</code> reacciona a <code>InspeccionFirmada_v1</code> y, por cada hallazgo elegible, abre un nuevo aggregate.</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('apertura', 1.2)">+</button>
+      <button onclick="zoomDiagram('apertura', 0.8)">−</button>
+      <button onclick="resetZoom('apertura')">⟲</button>
+    </div>
+    <div class="mermaid" id="apertura">
+flowchart TD
+    Start((1. Trigger:<br/>InspeccionFirmada_v1<br/>de inspección N)):::lBack
+    N2[2. Saga<br/>CerrarInspeccionSaga]:::lSaga
+    N3[(3. Cargar aggregate<br/>InspeccionTecnica)]:::lSaga
+    N4[(4. Iterar hallazgos)]:::lSaga
+    N5{5. ¿AccionRequerida=<br/>RequiereSeguimiento?}:::lSaga
+    N6[6. Generar SeguimientoId<br/>Guid v7]:::lSaga
+    N7[7. Append SeguimientoAbierto_v1<br/>en stream nuevo]:::lBack
+    N8((8. Estado=Abierto)):::lBack
+    N9{9. ¿Más?}:::lSaga
+    N10[10. Continúa flujo<br/>de cierre principal]:::lBack
+    EndOpen((End apertura:<br/>aggregate(s) vivo(s))):::lOk
+
+    Start --> N2 --> N3 --> N4 --> N5
+    N5 -- Sí --> N6 --> N7 --> N8 --> N9
+    N5 -- No --> N9
+    N9 -- Sí --> N5
+    N9 -- No --> N10 --> EndOpen
+
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lSaga fill:#F3E5F5,stroke:#7B1FA2,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+    </div>
+  </div>
+
+  <div class="callout"><strong>Atomicidad de N7:</strong> la saga procesa todos los hallazgos elegibles en un único <code>SaveChangesAsync</code> — todos los <code>SeguimientoAbierto_v1</code> quedan o ninguno.</div>
+</section>
+
+<section class="section" id="vida-util">
+  <h2>3. Vida útil — SLA progresivo + job nocturno</h2>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('vida', 1.2)">+</button>
+      <button onclick="zoomDiagram('vida', 0.8)">−</button>
+      <button onclick="resetZoom('vida')">⟲</button>
+    </div>
+    <div class="mermaid" id="vida">
+flowchart TD
+    Vida((Estado=Abierto<br/>esperando acción)):::lBack
+    S1{S1. Edad?}:::lFront
+    S2[(S2. Badge azul<br/>'Abierto'<br/>0–30 días)]:::lFront
+    S3[(S3. Badge naranja<br/>'Atención'<br/>30–90 días)]:::lFront
+    S4[(S4. Badge rojo<br/>'Vencido'<br/>+90 días)]:::lFront
+
+    Vida --> S1
+    S1 -- 0-30 --> S2 --> Vida
+    S1 -- 30-90 --> S3 --> Vida
+    S1 -- +90 --> S4 --> Job
+
+    Job[Job. Wolverine scheduled<br/>nocturno]:::lSaga
+    J1[J1. Resolver destinatarios SLA]:::lSaga
+    J2[(J2. DestinatariosAlertasSlaPorEquipo)]:::lSaga
+    J3{J3. ¿Lista vacía?}:::lSaga
+    J4((J4. AlertaSlaSinDestinatario_v1<br/>obs)):::lBack
+    J5[J5. Email diario a<br/>destinatarios]:::lSaga
+    J6[(J6. Hasta resolver/escalar)]:::lSaga
+
+    Job --> J1 --> J2 --> J3
+    J3 -- Sí --> J4 --> Vida
+    J3 -- No --> J5 --> J6 --> Vida
+
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lSaga fill:#F3E5F5,stroke:#7B1FA2,color:#000
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Bucket</th><th>Badge</th><th>Acción del sistema</th></tr></thead>
+    <tbody>
+      <tr><td>0–30 días</td><td>🔵 azul "Abierto"</td><td>Solo visualización</td></tr>
+      <tr><td>30–90 días</td><td>🟠 naranja "Atención"</td><td>Solo visualización</td></tr>
+      <tr><td>+90 días</td><td>🔴 rojo "Vencido"</td><td>Email diario a destinatarios SLA + visualización</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn"><strong>Lo que NO ocurre:</strong> NO se genera OT automática (faltan datos: tipo/causa de falla, repuestos). NO se bloquea inspección si hay seguimientos vencidos. NO se cambia estado del aggregate por tiempo (siempre requiere acción humana).</div>
+</section>
+
+<section class="section" id="resolucion">
+  <h2>4. Resolución / escalación (en inspección N+k posterior)</h2>
+  <p>Patrón unificado §15.9 — los <strong>mismos 3 botones</strong> con los mismos colores (verde/amarillo/rojo) que el técnico ve en hallazgo manual y novedad preop.</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('resolucion', 1.2)">+</button>
+      <button onclick="zoomDiagram('resolucion', 0.8)">−</button>
+      <button onclick="resetZoom('resolucion')">⟲</button>
+      <button onclick="fullscreenDiagram('resolucion')">⛶</button>
+    </div>
+    <div class="mermaid" id="resolucion">
+flowchart TD
+    StartK((K1. Inspección N+k<br/>EnEjecucion sobre equipo)):::lTec
+    K2[K2. Banner<br/>'M seguimientos previos']:::lFront
+    K3[K3. Tap '↻ Traer de seguimiento']:::lTec
+    K4[(K4. Query Marten<br/>SeguimientosAbiertosPorEquipoView)]:::lFront
+    K5[K5. Pantalla 2 lista]:::lFront
+    K6[K6. Tap en card]:::lTec
+    K7{K7. ¿Acción?}:::lTec
+
+    StartK --> K2 --> K3 --> K4 --> K5 --> K6 --> K7
+
+    K7 -- ✓ Sin intervención<br/>verde --> R1
+    K7 -- ↻ Seguimiento<br/>amarillo --> X1
+    K7 -- ⚠ Intervención<br/>rojo --> E1
+
+    R1[R1. Modal motivo<br/>obligatorio]:::lTec
+    R2[R2. POST ResolverSeguimiento]:::lFront
+    R3[R3. Handler valida I-S3]:::lBack
+    R4((R4. SeguimientoResuelto_v1<br/>Estado=Resuelto - terminal)):::lBack
+    R5[R5. Card desaparece]:::lFront
+    EndR((End R:<br/>Resuelto)):::lOk
+    R1 --> R2 --> R3 --> R4 --> R5 --> EndR
+
+    X1[X1. Toast<br/>'Marcado como revisado']:::lFront
+    X2[X2. Card resaltada]:::lFront
+    X3[X3. NO emite evento<br/>I-S4]:::lBack
+    EndX((End X:<br/>Sin cambio)):::lOk
+    X1 --> X2 --> X3 --> EndX
+
+    E1[E1. Wizard hallazgo<br/>2 pasos]:::lTec
+    E2[E2. Paso 1: parte+actividad+<br/>RequiereIntervencion]:::lTec
+    E3[E3. Paso 2: tipo+causa+<br/>acción correctiva]:::lTec
+    E4[E4. POST EscalarSeguimiento]:::lFront
+    E5[E5. Handler valida<br/>I-S1, I-S2, I-S3]:::lBack
+    E6[E6. Generar HallazgoId]:::lBack
+    E7((E7. ATÓMICO cross-aggregate:<br/>SeguimientoEscalado_v1<br/>+ HallazgoRegistrado_v1<br/>Origen=Seguimiento)):::lBack
+    E8[E8. Card desaparece de seguimientos]:::lFront
+    E9[E9. Hallazgo en inspección N+k]:::lFront
+    E10{E10. ¿Adjuntar foto?}:::lTec
+    E11[E11. Sub-C de 02i]:::lTec
+    E12[E12. Continuar inspección]:::lTec
+    EndE((End E:<br/>Escalado - aggregate terminal)):::lOk
+    E1 --> E2 --> E3 --> E4 --> E5 --> E6 --> E7 --> E8 --> E9 --> E10
+    E10 -- Sí --> E11 --> E12
+    E10 -- No --> E12
+    E12 --> EndE
+
+    classDef lTec fill:#E3F2FD,stroke:#1976D2,color:#000
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+    </div>
+  </div>
+</section>
+
+<section class="section" id="atomicidad">
+  <h2>5. Atomicidad cross-aggregate de la escalación (E7 detallado)</h2>
+  <p>La escalación es el único punto donde <strong>dos aggregates distintos se modifican en una transacción</strong> (invariante I-S2 §15.8.7).</p>
+
+  <div class="callout"><strong>Trazabilidad bidireccional resultante:</strong>
+    <ul style="margin-top:8px;">
+      <li><code>SeguimientoEscalado_v1.HallazgoEscaladoId</code> → forward al nuevo hallazgo.</li>
+      <li><code>HallazgoRegistrado_v1.SeguimientoOrigenId</code> → backward al seguimiento original.</li>
+      <li>Permite reconstruir "este hallazgo viene del seguimiento S, abierto en la inspección X meses atrás" sin proyecciones laterales.</li>
+    </ul>
+  </div>
+
+  <pre style="background: #1E293B; color: #E2E8F0; padding: 16px; border-radius: 8px; font-family: 'Roboto Mono', monospace; font-size: 12px; overflow-x: auto; line-height: 1.5;">
+┌──────────────────────────────────────────────────────────┐
+│ Comando EscalarSeguimiento                                │
+│   ├─ SeguimientoId    (del aggregate seguimiento)         │
+│   ├─ InspeccionCierreId (donde nace el hallazgo nuevo)    │
+│   └─ datos del hallazgo (parte, actividad, etc.)          │
+└──────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌──────────────────────────────────────────────────────────┐
+│ Handler EscalarSeguimientoHandler (Wolverine)             │
+│                                                            │
+│  Stream "seguimiento-{SeguimientoId}":                    │
+│    └─ Append SeguimientoEscalado_v1                        │
+│        + HallazgoEscaladoId  (forward link)               │
+│        + InspeccionCierreId                                │
+│                                                            │
+│  Stream "inspeccion-{InspeccionCierreId}":                │
+│    └─ Append HallazgoRegistrado_v1                         │
+│        + Origen=Seguimiento  (backward link)              │
+│        + SeguimientoOrigenId={SeguimientoId}              │
+│        + AccionRequerida=RequiereIntervencion              │
+│                                                            │
+│  await session.SaveChangesAsync()  ◀── único, atómico     │
+└──────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+   Si falla: NI seguimiento escalado NI hallazgo nuevo.
+   Coherencia preservada por construcción.</pre>
+</section>
+
+<section class="section" id="errores">
+  <h2>6. Compensaciones / paths de error</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Origen</th><th>Destino</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td>Re-emisión sobre estado terminal (I-S3)</td><td>R3, E5</td><td>DomainException</td><td>"Seguimiento ya cerrado" — refrescar lista</td></tr>
+      <tr><td><code>HallazgoEscaladoId</code> apunta a no-RequiereIntervencion (I-S1)</td><td>E5</td><td>DomainException</td><td>Wizard E1-E3 fuerza <code>RequiereIntervencion</code></td></tr>
+      <tr><td>Cross-aggregate inconsistencia (I-S2)</td><td>E7</td><td>Marten rollback</td><td>SaveChanges falla → ningún evento queda</td></tr>
+      <tr><td>Lista de destinatarios SLA vacía</td><td>J3</td><td>J4</td><td>Evento de observabilidad — alertar al equipo de operaciones</td></tr>
+      <tr><td>Hallazgo escalado luego se cancela</td><td>—</td><td>—</td><td>El <code>SeguimientoEscalado_v1</code> NO se revierte. Si emerge necesidad, evaluar <code>ReabrirSeguimiento</code> (cambio aditivo).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Idempotencia y atomicidad</h3>
+  <table>
+    <thead><tr><th>Nodo</th><th>Garantía</th><th>Mecanismo</th></tr></thead>
+    <tbody>
+      <tr><td>N7 (apertura ×N)</td><td>Atomicidad</td><td>1 SaveChangesAsync para todos los seguimientos elegibles. Cada SeguimientoId es Guid v7 nuevo.</td></tr>
+      <tr><td>R4</td><td>Idempotente vía I-S3</td><td>Re-emisión sobre Estado≠Abierto lanza excepción</td></tr>
+      <tr><td>E7</td><td>Atomicidad cross-stream</td><td>Único <code>SaveChangesAsync</code> para 2 streams (regla dura <code>CLAUDE.md</code> + I-S2)</td></tr>
+      <tr><td>Job (escaneo nocturno)</td><td>Idempotente por construcción</td><td>Si emerge spam, agregar tracking de "último email enviado" por seguimiento</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" id="referencias">
+  <h2>7. Referencias cruzadas</h2>
+  <ul>
+    <li><a href="02h-flujo-seguimientos.md">02h — flowchart narrativo + state diagram (lectura)</a></li>
+    <li><a href="02i-workflow-tecnica-nodos.html">02i — workflow nodos técnica (HTML)</a></li>
+    <li><a href="02j-workflow-monitoreo-nodos.html">02j — workflow nodos monitoreo (HTML)</a></li>
+    <li><a href="02d-wireframes-seguimientos.html">02d — wireframes UX seguimientos</a></li>
+    <li><code>01-modelo-dominio.md §15.8</code> — aggregate <code>SeguimientoHallazgo</code> completo</li>
+    <li><code>01-modelo-dominio.md §15.9</code> — patrón unificado de 3 opciones</li>
+    <li><code>01-modelo-dominio.md §15.12.4</code> — proyección <code>SeguimientosAbiertosPorEquipoView</code></li>
+  </ul>
+</section>
+
+<footer>
+  <p>📄 Equivalente HTML del doc Markdown <code>02k-workflow-seguimientos-nodos.md</code> · Mermaid v10 · Generado 2026-05-04</p>
+</footer>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: { fontFamily: 'Roboto, sans-serif', fontSize: '13px', primaryColor: '#E3F2FD', primaryTextColor: '#1A1A1A', primaryBorderColor: '#1976D2', lineColor: '#5F6368' },
+  flowchart: { htmlLabels: true, useMaxWidth: false, nodeSpacing: 35, rankSpacing: 50 }
+});
+
+let panZoomInstances = {};
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.querySelectorAll('.mermaid').forEach(el => {
+      const svg = el.querySelector('svg');
+      if (svg) {
+        try {
+          panZoomInstances[el.id] = svgPanZoom(svg, { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, minZoom: 0.3, maxZoom: 5 });
+        } catch (e) {}
+      }
+    });
+  }, 800);
+});
+
+function zoomDiagram(id, factor) { if (panZoomInstances[id]) panZoomInstances[id].zoomBy(factor); }
+function resetZoom(id) { if (panZoomInstances[id]) { panZoomInstances[id].resetZoom(); panZoomInstances[id].fit(); panZoomInstances[id].center(); } }
+function fullscreenDiagram(id) { const wrapper = document.getElementById(id).closest('.diagram-wrapper'); if (wrapper.requestFullscreen) wrapper.requestFullscreen(); }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow inspección de monitoreo (Fase 2) — diagrama basado en nodos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<style>
+:root {
+  --primary: #0D47A1; --primary-dark: #062B66; --primary-light: #E3F2FD;
+  --bg: #F5F7FA; --surface: #FFFFFF; --text: #1A1A1A;
+  --text-secondary: #5F6368; --text-muted: #9AA0A6; --divider: #E0E4E9;
+  --lane-tec: #E3F2FD; --lane-tec-border: #1976D2;
+  --lane-front: #E8F5E9; --lane-front-border: #388E3C;
+  --lane-back: #FFF3E0; --lane-back-border: #EF6C00;
+  --lane-saga: #F3E5F5; --lane-saga-border: #7B1FA2;
+  --lane-erp: #FFEBEE; --lane-erp-border: #D32F2F;
+  --lane-stor: #F5F5F5; --lane-stor-border: #757575;
+  --ok: #C8E6C9; --warn: #FFF8E1; --err: #FFCDD2; --end: #ECEFF1;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-2: 0 4px 8px rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Roboto', sans-serif; background: #ECEFF1; color: var(--text); padding: 24px 16px 64px; line-height: 1.55; }
+.page-header { max-width: 1400px; margin: 0 auto 24px; text-align: center; padding: 24px; background: linear-gradient(135deg, var(--primary-light) 0%, #FFFFFF 100%); border-radius: 12px; box-shadow: var(--shadow-1); }
+.page-header h1 { font-weight: 500; font-size: 26px; color: #263238; margin-bottom: 6px; }
+.page-header p { color: var(--text-secondary); font-size: 14px; max-width: 900px; margin: 0 auto; }
+.page-header .meta { display: inline-flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center; font-size: 12px; }
+.page-header .meta span { background: rgba(13,71,161,.08); padding: 4px 10px; border-radius: 12px; color: var(--primary-dark); }
+.tag-fase2 { display: inline-block; background: var(--lane-back-border); color: white; padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 500; margin-top: 8px; }
+.toc { max-width: 1400px; margin: 0 auto 24px; background: var(--surface); border-radius: 8px; padding: 12px 20px; box-shadow: var(--shadow-1); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.toc strong { color: var(--text-secondary); font-size: 13px; margin-right: 8px; }
+.toc a { text-decoration: none; color: var(--primary); padding: 4px 10px; border-radius: 6px; font-size: 13px; transition: background 0.15s; }
+.toc a:hover { background: var(--primary-light); }
+.section { max-width: 1400px; margin: 0 auto 24px; background: var(--surface); border-radius: 12px; padding: 24px 28px; box-shadow: var(--shadow-1); }
+.section h2 { font-weight: 500; font-size: 20px; color: var(--primary-dark); border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; margin-bottom: 16px; }
+.section h3 { font-weight: 500; font-size: 16px; color: var(--text); margin: 18px 0 10px; padding-left: 10px; border-left: 4px solid var(--primary); }
+.section p { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; }
+.section ul, .section ol { margin-left: 24px; margin-bottom: 10px; color: var(--text-secondary); font-size: 14px; }
+.section li { margin-bottom: 4px; }
+.section code { font-family: 'Roboto Mono', monospace; font-size: 12.5px; background: #F1F5F9; padding: 1px 6px; border-radius: 3px; color: #1E40AF; }
+.section a { color: var(--primary); }
+.lane-legend { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 20px; }
+.lane-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 16px; font-size: 12.5px; border: 2px solid; font-weight: 500; }
+.lane-chip.tec { background: var(--lane-tec); border-color: var(--lane-tec-border); color: var(--lane-tec-border); }
+.lane-chip.front { background: var(--lane-front); border-color: var(--lane-front-border); color: var(--lane-front-border); }
+.lane-chip.back { background: var(--lane-back); border-color: var(--lane-back-border); color: var(--lane-back-border); }
+.lane-chip.saga { background: var(--lane-saga); border-color: var(--lane-saga-border); color: var(--lane-saga-border); }
+.lane-chip.erp { background: var(--lane-erp); border-color: var(--lane-erp-border); color: var(--lane-erp-border); }
+.lane-chip.stor { background: var(--lane-stor); border-color: var(--lane-stor-border); color: var(--lane-stor-border); }
+.diagram-wrapper { background: #FAFBFC; border: 1px solid var(--divider); border-radius: 8px; padding: 16px; margin: 16px 0; position: relative; overflow: hidden; }
+.diagram-wrapper .controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 10; }
+.diagram-wrapper .controls button { background: var(--surface); border: 1px solid var(--divider); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 16px; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-1); }
+.diagram-wrapper .controls button:hover { background: var(--primary-light); color: var(--primary); }
+.diagram-wrapper .mermaid { display: flex; justify-content: center; min-height: 200px; }
+.diagram-wrapper svg { max-width: 100%; height: auto !important; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; background: var(--surface); }
+table th { background: var(--primary-light); color: var(--primary-dark); text-align: left; padding: 10px 12px; font-weight: 500; border-bottom: 2px solid var(--primary); }
+table td { padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text); vertical-align: top; }
+table tr:nth-child(even) td { background: #FAFBFC; }
+table code { font-size: 11.5px; }
+.tab-bar { display: flex; gap: 4px; border-bottom: 2px solid var(--divider); margin-bottom: 16px; flex-wrap: wrap; }
+.tab-btn { background: none; border: none; cursor: pointer; padding: 10px 18px; font-family: 'Roboto', sans-serif; font-size: 13px; font-weight: 500; color: var(--text-secondary); border-radius: 6px 6px 0 0; transition: all 0.15s; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.tab-btn.active { color: var(--primary-dark); border-bottom-color: var(--primary); background: var(--primary-light); }
+.tab-btn:hover:not(.active) { background: var(--bg); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.callout { background: var(--lane-tec); border-left: 4px solid var(--lane-tec-border); padding: 12px 16px; border-radius: 4px; margin: 12px 0; font-size: 13px; }
+.callout.warn { background: var(--warn); border-color: #F57C00; }
+.callout.err { background: var(--err); border-color: var(--lane-erp-border); }
+.callout.ok { background: var(--ok); border-color: #388E3C; }
+footer { max-width: 1400px; margin: 24px auto 0; padding: 16px 24px; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-1); font-size: 12px; color: var(--text-muted); text-align: center; }
+footer a { color: var(--primary); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Workflow — Inspección de monitoreo (Fase 2)</h1>
+  <p>Diagrama tipo workflow engine para el flujo estructurado de Monitoreo: el técnico recorre items del checklist, captura mediciones contra rangos esperados, y el sistema dispara hallazgos automáticos.</p>
+  <span class="tag-fase2">FASE 2 — todavía no implementado en código (roadmap 10.4)</span>
+  <div class="meta">
+    <span>📄 Equivalente HTML del doc Markdown 02j</span>
+    <span>📅 Última revisión: 2026-05-04</span>
+    <span>🔗 Modelo: §12.11.5</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>📑 Secciones:</strong>
+  <a href="#carriles">Carriles</a>
+  <a href="#workflow-principal">Workflow principal</a>
+  <a href="#sub-workflows">Sub-workflows</a>
+  <a href="#diferencias">Diferencias con técnica</a>
+  <a href="#errores">Compensaciones</a>
+  <a href="#idempotencia">Idempotencia</a>
+  <a href="#referencias">Referencias</a>
+</nav>
+
+<section class="section" id="carriles">
+  <h2>1. Carriles y notación</h2>
+  <p>Misma convención que <code>02i</code>. 6 carriles posibles, mismos colores. <strong>Diferencia notable:</strong> monitoreo NO toca el preop — el carril 🏢 ERP solo aparece en M-3, M-3b, M-W-1 y los M-1/M-1b atípicos.</p>
+  <div class="lane-legend">
+    <span class="lane-chip tec">👤 Técnico</span>
+    <span class="lane-chip front">📱 Frontend PWA</span>
+    <span class="lane-chip back">🔧 Backend módulo</span>
+    <span class="lane-chip saga">⏰ Saga / Outbox</span>
+    <span class="lane-chip erp">🏢 ERP on-prem</span>
+    <span class="lane-chip stor">💾 Azure Blob</span>
+  </div>
+</section>
+
+<section class="section" id="workflow-principal">
+  <h2>2. Workflow principal</h2>
+  <p>~73 nodos: inicio con selector de rutina (entre 2-3 asignadas), loop de items del checklist, sagas post-firma, bifurcación (típicamente sin OT, atípicamente con OT si hay manual con intervención).</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('main', 1.2)">+</button>
+      <button onclick="zoomDiagram('main', 0.8)">−</button>
+      <button onclick="resetZoom('main')">⟲</button>
+      <button onclick="fullscreenDiagram('main')">⛶</button>
+    </div>
+    <div class="mermaid" id="main">
+flowchart TD
+    Start((1. Inicio)):::lTec
+    N2[2. Buscar equipo]:::lTec
+    N3[3. GET /equipos?q=<br/>M-3]:::lFront
+    N6[6. GET /equipos/codigo<br/>M-3b]:::lFront
+    N7[(7. EquipoLocal<br/>+ rutinasMonitoreoIds)]:::lFront
+    N8{8. ¿rutinasMonitoreoIds<br/>≠ vacío?}:::lFront
+    End2A((2A. End: Bloqueado<br/>'sin rutinas asignadas')):::lEnd
+    N9[9. Modal 'Iniciar inspección']:::lTec
+    N10{10. Tipo}:::lTec
+    N11[11. → flujo técnica 02i]:::lTec
+    N12[12. Selector de rutina<br/>cards 2-3]:::lTec
+    N13[(13. Resolver contra<br/>RutinaMonitoreoLocal)]:::lFront
+    N14[14. Tap card]:::lTec
+    N17[17. GPS + fecha + medidores]:::lTec
+    N18[18. POST IniciarInspeccionMonitoreo]:::lFront
+    N19[19. Handler valida:<br/>I-I1, I-I3, RutinaId ∈ Equipo,<br/>≥1 item]:::lBack
+    N20((20. InspeccionIniciada_v1<br/>Tipo=Monitoreo<br/>+ ItemsSnapshot)):::lBack
+
+    Start --> N2 --> N3 --> N6 --> N7 --> N8
+    N8 -- No --> End2A
+    N8 -- Sí --> N9 --> N10
+    N10 -- Tecnica --> N11
+    N10 -- Monitoreo --> N12 --> N13 --> N14 --> N17 --> N18 --> N19 --> N20 --> Loop
+
+    Loop{21. ¿Próximo item<br/>o terminar?}:::lTec
+    N22[Sub-A:<br/>Numérico]:::lTec
+    N23[Sub-B:<br/>Cualitativo]:::lTec
+    N24[Sub-C:<br/>Omitir]:::lTec
+    N25[Sub-D:<br/>Foto al ItemId]:::lTec
+
+    Loop -- Numérico --> N22 --> Loop
+    Loop -- Cualitativo --> N23 --> Loop
+    Loop -- Omitir --> N24 --> Loop
+    Loop -- Foto --> N25 --> Loop
+    Loop -- Recorrido completo --> N30
+
+    N30{30. ¿Hallazgo<br/>manual?}:::lTec
+    N31[Sub-E:<br/>Hallazgo manual<br/>como 02i sub-B]:::lTec
+    N30 -- Sí --> N31 --> N30
+    N30 -- No --> N40
+
+    N40[40. Diagnóstico + Dictamen]:::lTec
+    N41[41. POST FirmarInspeccion]:::lFront
+    N42{42. V-F1..V-F7?}:::lBack
+    N43[43. Append atómico:<br/>3 eventos]:::lBack
+    N44((44. 3 eventos firma)):::lBack
+    Back42([Volver a corregir]):::lWarn
+    N40 --> N41 --> N42
+    N42 -- No --> Back42 --> N40
+    N42 -- Sí --> N43 --> N44 --> N50
+
+    N50[50. Sagas reaccionan]:::lSaga
+    N51[51. SincronizarDictamenVigenteSaga]:::lSaga
+    N52[52. PUT M-W-1 outbox]:::lSaga
+    N53[53. CerrarInspeccionSaga]:::lSaga
+    N55{55. ¿RequiereSeguimiento?}:::lSaga
+    N56[56. Append SeguimientoAbierto_v1<br/>×N — caso típico monitoreo]:::lSaga
+    N57{57. ¿RequiereIntervencion?}:::lSaga
+
+    N50 --> N51 --> N52
+    N50 --> N53 --> N55
+    N55 -- Sí --> N56 --> N57
+    N55 -- No --> N57
+
+    N57 -- No --> N60
+    N57 -- Sí --> N70
+
+    N60((60. InspeccionCerradaSinOT_v1<br/>caso TÍPICO de monitoreo)):::lBack
+    N61[61. SignalR push]:::lBack
+    End6((6. End:<br/>Sin OT)):::lOk
+    N60 --> N61 --> End6
+
+    N70[70. Aprobación OT atípica<br/>→ flujo 02i nodos N40-N72]:::lBack
+    End7((7. End:<br/>Con OT o rechazada)):::lOk
+    N70 --> End7
+
+    classDef lTec fill:#E3F2FD,stroke:#1976D2,color:#000
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lSaga fill:#F3E5F5,stroke:#7B1FA2,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+    classDef lWarn fill:#FFF8E1,stroke:#F57C00,color:#000
+    classDef lEnd fill:#ECEFF1,stroke:#455A64,color:#000
+    </div>
+  </div>
+</section>
+
+<section class="section" id="sub-workflows">
+  <h2>3. Sub-workflows</h2>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('sub-a')">Sub-A: Numérico</button>
+    <button class="tab-btn" onclick="showTab('sub-b')">Sub-B: Cualitativo</button>
+    <button class="tab-btn" onclick="showTab('sub-c')">Sub-C: Omitir</button>
+    <button class="tab-btn" onclick="showTab('sub-d')">Sub-D: Foto al item</button>
+  </div>
+
+  <div class="tab-content active" id="sub-a">
+    <h3>Sub-A — Capturar item numérico</h3>
+    <div class="callout"><strong>Atomicidad clave:</strong> A8 emite <strong>dos eventos en un único <code>SaveChangesAsync</code></strong> (regla dura <code>CLAUDE.md</code>). Si falla, ni la medición ni el hallazgo quedan. Trazabilidad bidireccional con <code>MedicionOrigenId=ItemId</code>.</div>
+    <div class="diagram-wrapper">
+      <div class="controls">
+        <button onclick="zoomDiagram('subA', 1.2)">+</button>
+        <button onclick="zoomDiagram('subA', 0.8)">−</button>
+        <button onclick="resetZoom('subA')">⟲</button>
+      </div>
+      <div class="mermaid" id="subA">
+flowchart TD
+    A0((Start sub-A)):::lTec
+    A1[A1. Tap item numérico]:::lTec
+    A2[A2. Capturar valor decimal<br/>ej. 10.2 V]:::lTec
+    A3[A3. POST RegistrarMedicion]:::lFront
+    A4[A4. Handler resuelve<br/>EvaluacionEsperada del<br/>ItemsSnapshot]:::lBack
+    A5[A5. Calcular FueraDeRango]:::lBack
+    A6{A6. ¿FueraDeRango?}:::lBack
+    A7((A7. MedicionRegistrada_v1<br/>FueraDeRango=false)):::lBack
+    A8((A8. ATÓMICO:<br/>MedicionRegistrada_v1 + HallazgoRegistrado_v1<br/>Origen=Monitoreo<br/>RequiereSeguimiento)):::lBack
+    AEnd((End sub-A)):::lOk
+
+    A0 --> A1 --> A2 --> A3 --> A4 --> A5 --> A6
+    A6 -- No --> A7 --> AEnd
+    A6 -- Sí --> A8 --> AEnd
+
+    classDef lTec fill:#E3F2FD,stroke:#1976D2,color:#000
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="sub-b">
+    <h3>Sub-B — Capturar item cualitativo (Bueno / Regular / Malo)</h3>
+    <div class="callout"><strong>Decisión 2 §12.11.5:</strong> solo <code>Malo</code> dispara hallazgo automático. <code>Regular</code> queda como dato sin acción inmediata.</div>
+    <div class="diagram-wrapper">
+      <div class="controls">
+        <button onclick="zoomDiagram('subB', 1.2)">+</button>
+        <button onclick="zoomDiagram('subB', 0.8)">−</button>
+        <button onclick="resetZoom('subB')">⟲</button>
+      </div>
+      <div class="mermaid" id="subB">
+flowchart TD
+    B0((Start sub-B)):::lTec
+    B1[B1. Tap item cualitativo]:::lTec
+    B2[B2. Tap radio<br/>Bueno / Regular / Malo]:::lTec
+    B3[B3. POST RegistrarEvaluacionCualitativa]:::lFront
+    B4{B4. ¿Calificación?}:::lBack
+    B5((B5. EvaluacionCualitativaRegistrada_v1)):::lBack
+    B6((B6. ATÓMICO:<br/>EvaluacionCualitativa Malo<br/>+ HallazgoRegistrado_v1<br/>Origen=Monitoreo)):::lBack
+    BEnd((End sub-B)):::lOk
+
+    B0 --> B1 --> B2 --> B3 --> B4
+    B4 -- Bueno o Regular --> B5 --> BEnd
+    B4 -- Malo --> B6 --> BEnd
+
+    classDef lTec fill:#E3F2FD,stroke:#1976D2,color:#000
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="sub-c">
+    <h3>Sub-C — Omitir item</h3>
+    <p>Casos típicos: instrumento descargado, condición externa impide medir, parte inaccesible. <strong>NO dispara hallazgo automático.</strong></p>
+    <div class="diagram-wrapper">
+      <div class="controls">
+        <button onclick="zoomDiagram('subC', 1.2)">+</button>
+        <button onclick="zoomDiagram('subC', 0.8)">−</button>
+        <button onclick="resetZoom('subC')">⟲</button>
+      </div>
+      <div class="mermaid" id="subC">
+flowchart TD
+    C0((Start sub-C)):::lTec
+    C1[C1. Tap menú '⋮' + 'Omitir']:::lTec
+    C2[C2. Modal motivo<br/>≥10 chars]:::lTec
+    C3[C3. POST OmitirItem]:::lFront
+    C4[C4. Handler valida motivo]:::lBack
+    C5((C5. ItemMonitoreoOmitido_v1)):::lBack
+    CEnd((End sub-C)):::lOk
+    C0 --> C1 --> C2 --> C3 --> C4 --> C5 --> CEnd
+
+    classDef lTec fill:#E3F2FD,stroke:#1976D2,color:#000
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="sub-d">
+    <h3>Sub-D — Adjuntar foto al item</h3>
+    <div class="callout"><strong>Diferencia con técnica:</strong> el adjunto se ancla a <code>ItemId</code> (no a <code>HallazgoId</code>). Si el item ya disparó hallazgo automático, las fotos se muestran en la vista del hallazgo vía el link <code>MedicionOrigenId=ItemId</code> — no se duplican.</div>
+    <div class="diagram-wrapper">
+      <div class="controls">
+        <button onclick="zoomDiagram('subD', 1.2)">+</button>
+        <button onclick="zoomDiagram('subD', 0.8)">−</button>
+        <button onclick="resetZoom('subD')">⟲</button>
+      </div>
+      <div class="mermaid" id="subD">
+flowchart TD
+    D0((Start sub-D)):::lTec
+    D1[D1. Tap 'Adjuntar foto'<br/>en card del item]:::lTec
+    D2[D2. POST /sas-tokens]:::lFront
+    D3[D3. Backend genera SAS<br/>TTL 5 min]:::lBack
+    D4[D4. Comprime imagen]:::lFront
+    D5[D5. PUT directo a Blob]:::lStor
+    D6[(D6. Blob guardado)]:::lStor
+    D7[D7. POST AdjuntarArchivo<br/>con ItemId / HallazgoId=null]:::lFront
+    D8[D8. Handler valida:<br/>≤3MB, ≤5/item, idempotencia]:::lBack
+    D9[D9. Validar invariante:<br/>ItemId XOR HallazgoId<br/>+ Aggregate.Tipo=Monitoreo]:::lBack
+    D10((D10. AdjuntoSubido_v1<br/>ItemId rellenado)):::lBack
+    DEnd((End sub-D)):::lOk
+
+    D0 --> D1 --> D2 --> D3 --> D4 --> D5 --> D6 --> D7 --> D8 --> D9 --> D10 --> DEnd
+
+    classDef lTec fill:#E3F2FD,stroke:#1976D2,color:#000
+    classDef lFront fill:#E8F5E9,stroke:#388E3C,color:#000
+    classDef lBack fill:#FFF3E0,stroke:#EF6C00,color:#000
+    classDef lStor fill:#F5F5F5,stroke:#757575,color:#000
+    classDef lOk fill:#C8E6C9,stroke:#388E3C,color:#000
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="diferencias">
+  <h2>4. Diferencias clave con `02i` técnica</h2>
+  <table>
+    <thead><tr><th>Aspecto</th><th>02i técnica</th><th>02j monitoreo</th></tr></thead>
+    <tbody>
+      <tr><td>Asignación rutina↔equipo</td><td><code>rutinaTecnicaId</code> singular</td><td><code>rutinasMonitoreoIds[]</code> plural (2-3)</td></tr>
+      <tr><td>Selector al iniciar</td><td>No (auto-resuelta)</td><td><strong>Sí</strong> — técnico elige entre 2-3 cards</td></tr>
+      <tr><td><code>ItemsSnapshot</code> en evento</td><td>NO</td><td><strong>SÍ</strong> — necesario para FueraDeRango</td></tr>
+      <tr><td>Loop principal</td><td>Backlog (preop + manual + seguimientos)</td><td>Items del checklist (numérico/cualitativo/omitir)</td></tr>
+      <tr><td>Hallazgos automáticos</td><td>NO existen</td><td><strong>SÍ</strong> — fuera de rango / Malo dispara atómicamente</td></tr>
+      <tr><td>Importar novedades preop</td><td>Sí (P-1..P-6)</td><td><strong>No aplica</strong></td></tr>
+      <tr><td>Adjuntos por defecto</td><td>Anclados a <code>HallazgoId</code></td><td>Anclados a <code>ItemId</code> (xor)</td></tr>
+      <tr><td>Cierre típico</td><td>Con OT (M-1, M-1b)</td><td><strong>Sin OT</strong> — seguimientos abiertos</td></tr>
+      <tr><td>Endpoints ERP del flujo</td><td>12 distintos</td><td>6 distintos</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" id="errores">
+  <h2>5. Compensaciones / paths de error</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Origen</th><th>Destino</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td>Sin rutinas asignadas al equipo</td><td>N8</td><td>End 2A</td><td>Contactar admin para asignar rutinas</td></tr>
+      <tr><td>RutinaMonitoreoId no pertenece al equipo</td><td>N19</td><td>DomainException</td><td>Re-cargar M-3b</td></tr>
+      <tr><td>Rutina vacía (sin items)</td><td>N19</td><td>DomainException</td><td>Catálogo inválido — admin</td></tr>
+      <tr><td>V-F1..V-F7 fallan</td><td>N42</td><td>N40</td><td>Volver a corregir</td></tr>
+      <tr><td>OT generación fallida (atípico)</td><td>N70</td><td>retry manual</td><td>Mismo que 02i</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><strong>Items omitidos NO son error</strong> — <code>ItemMonitoreoOmitido_v1</code> es válido al firmar. No bloquea V-F*.</div>
+</section>
+
+<section class="section" id="idempotencia">
+  <h2>6. Idempotencia y atomicidad</h2>
+  <table>
+    <thead><tr><th>Nodo</th><th>Garantía</th><th>Mecanismo</th></tr></thead>
+    <tbody>
+      <tr><td>N20 (<code>InspeccionIniciada_v1</code>)</td><td>Idempotente por <code>InspeccionId</code></td><td>Stream nuevo en Marten</td></tr>
+      <tr><td>Sub-A8 (atómico medición + hallazgo)</td><td>Atomicidad transaccional cross-event</td><td>Único <code>SaveChangesAsync</code> (regla dura <code>CLAUDE.md</code>)</td></tr>
+      <tr><td>Sub-B6 (atómico evaluación + hallazgo)</td><td>Atomicidad transaccional</td><td>Mismo</td></tr>
+      <tr><td>N43 (3 eventos firma)</td><td>Atomicidad transaccional</td><td>Mismo</td></tr>
+      <tr><td>N52 (M-W-1)</td><td>Idempotencia real lado MYE</td><td>Idempotency-Key=<code>InspeccionId</code></td></tr>
+      <tr><td>N56 (<code>SeguimientoAbierto_v1</code> ×N)</td><td>Atomicidad por mismo SaveChangesAsync</td><td>Aggregates paralelos</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" id="referencias">
+  <h2>7. Referencias cruzadas</h2>
+  <ul>
+    <li><a href="02g-flujo-inspeccion-monitoreo.md">02g — flowchart narrativo monitoreo (lectura)</a></li>
+    <li><a href="02i-workflow-tecnica-nodos.html">02i — workflow nodos técnica (HTML)</a></li>
+    <li><a href="02k-workflow-seguimientos-nodos.html">02k — workflow nodos seguimientos (HTML)</a></li>
+    <li><a href="02e-wireframes-monitoreo.html">02e — wireframes UX monitoreo</a></li>
+    <li><code>01-modelo-dominio.md §12.11.5</code> — modelo completo de monitoreo (puntos 1-13)</li>
+    <li><code>06-contrato-apis-erp.md</code> M-3b, M-16</li>
+  </ul>
+</section>
+
+<footer>
+  <p>📄 Equivalente HTML del doc Markdown <code>02j-workflow-monitoreo-nodos.md</code> · Mermaid v10 · Generado 2026-05-04</p>
+</footer>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: { fontFamily: 'Roboto, sans-serif', fontSize: '13px', primaryColor: '#E3F2FD', primaryTextColor: '#1A1A1A', primaryBorderColor: '#1976D2', lineColor: '#5F6368' },
+  flowchart: { htmlLabels: true, useMaxWidth: false, nodeSpacing: 35, rankSpacing: 50 }
+});
+
+let panZoomInstances = {};
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.querySelectorAll('.mermaid').forEach(el => {
+      const svg = el.querySelector('svg');
+      if (svg) {
+        try {
+          panZoomInstances[el.id] = svgPanZoom(svg, { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, minZoom: 0.3, maxZoom: 5 });
+        } catch (e) {}
+      }
+    });
+  }, 800);
+});
+
+function zoomDiagram(id, factor) { if (panZoomInstances[id]) panZoomInstances[id].zoomBy(factor); }
+function resetZoom(id) { if (panZoomInstances[id]) { panZoomInstances[id].resetZoom(); panZoomInstances[id].fit(); panZoomInstances[id].center(); } }
+function fullscreenDiagram(id) { const wrapper = document.getElementById(id).closest('.diagram-wrapper'); if (wrapper.requestFullscreen) wrapper.requestFullscreen(); }
+
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+  setTimeout(() => {
+    const svg = document.querySelector(`#${tabId} svg`);
+    if (svg) {
+      const mermaidEl = document.querySelector(`#${tabId} .mermaid`);
+      if (mermaidEl && mermaidEl.id && !panZoomInstances[mermaidEl.id]) {
+        try {
+          panZoomInstances[mermaidEl.id] = svgPanZoom(svg, { zoomEnabled: true, controlIconsEnabled: false, fit: true, center: true, minZoom: 0.3, maxZoom: 5 });
+        } catch (e) {}
+      }
+    }
+  }, 100);
+}
+</script>
+
+</body>
+</html>
