@@ -2098,7 +2098,7 @@ Un adjunto pertenece a **exactamente uno** de `HallazgoId` o `ItemId` — nunca 
 
 Cuando un item dispara hallazgo automático (`Origen=Monitoreo`), las fotos del item se muestran en la vista del hallazgo vía el link existente `MedicionOrigenId=ItemId` (§12.11.5 punto 6). **No se duplican** ni se "transfieren" — son las mismas fotos vistas desde dos ángulos.
 
-Implementación: el evento `AdjuntoAgregado_v1` gana campo `ItemId: Guid?`. Invariante: `(ItemId == null) XOR (HallazgoId == null)`. El handler `AdjuntarArchivo` recibe uno u otro según el contexto del comando y valida coherencia con el `Tipo` del aggregate (en `Tecnica`, `ItemId` siempre `null`).
+Implementación: el evento `AdjuntoAgregado_v1` gana campo `ItemId: int?` (id del item del catálogo de rutinas-monitoreo, PK del ERP). Invariante: `(ItemId == null) XOR (HallazgoId == null)`. El handler `AdjuntarArchivo` recibe uno u otro según el contexto del comando y valida coherencia con el `Tipo` del aggregate (en `Tecnica`, `ItemId` siempre `null`).
 
 **Trade-off aceptado:** asimetría leve respecto a técnica donde solo aplica `HallazgoId`. Refleja la realidad — solo monitoreo tiene items. Descartadas: opción (a) "solo `HallazgoId`" (perdía evidencia positiva de items Bueno), opción (c) "el técnico elige a qué anclar" (decisión UX innecesaria).
 
