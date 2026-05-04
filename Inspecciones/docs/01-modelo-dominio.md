@@ -4057,19 +4057,125 @@ Campos clave que **debe** exponer:
 
 #### 15.12.2 `AuditoriaInspeccionesView` — vista cross-inspección por proyecto
 
-Audiencia: usuarios con capability `auditar-inspecciones`. Distinto de `DetalleInspeccionView` porque cruza múltiples inspecciones en una bandeja filtrable, no detalla una inspección individual. Read model materializado por proyección Marten que consume eventos de aggregates `InspeccionTecnica` y `SeguimientoHallazgo` y los catálogos locales (proyecto, usuarios autores).
+> **Estado MVP (decisión 2026-05-04):** se materializa desde Fase 3 con **shape mínimo** (campos básicos + indicador `DecisionContradiceReporteOperador` regla (a) sola). Métricas agregadas y campos derivados complejos quedan diferidos a Fase 10 post-piloto.
 
-Endpoint que la sirve: `GET /auditoria/inspecciones?proyecto=&desde=&hasta=&autor=` (paso 3.H del roadmap, nuevo).
+**Audiencia:** usuarios con capability `auditar-inspecciones`. Distinto de `DetalleInspeccionView` porque cruza múltiples inspecciones en una bandeja filtrable, no detalla una inspección individual. El host PWA mapea perfiles ERP (jefe de campo / supervisor / contralor / gerente de mantenimiento) a esta capability.
 
-Por cada inspección cerrada del rango: fila resumen con
+**Read model:** proyección Marten que consume eventos del aggregate `InspeccionTecnica` (16 eventos MVP) + joins con catálogos locales (`ProyectoLocal`, `EquipoLocal`). **No** consume `SeguimientoHallazgo` en MVP — el conteo de seguimientos disparados se difiere a Fase 10 (decisión 2026-05-04 punto 2).
 
-- Equipo, fecha de cierre, usuario firmante, OT generada (sí/no).
-- Conteo de hallazgos por `AccionRequerida`.
-- Conteo de novedades preop verificadas vs. descartadas.
-- **Indicador `DecisionContradiceReporteOperador: bool`**: true si hay ≥1 `NovedadPreopDescartada_v1` en el stream, o si hay ≥1 hallazgo donde el usuario firmante bajó la urgencia respecto a lo reportado por el operador (regla derivada — definir cuando se implemente). Sirve como filtro/orden en el flujo de auditoría.
-- Acceso al detalle (`DetalleInspeccionView`) con motivos completos de cada decisión.
+**Endpoint:** `GET /auditoria/inspecciones?proyecto=&desde=&hasta=&autor=&equipo=&dictamen=&estadoOT=&contradiceReporte=` (paso 3.56 del roadmap).
 
-Métricas agregadas (tasa de descarte por usuario firmante, por operador que reportó) son **diferidas a Fase 10** — útiles cuando hay volumen suficiente, no en MVP.
+##### Filtros del listado
+
+| Query param | Tipo | Acción |
+|---|---|---|
+| `proyecto` | int (multi) | Filtra por uno o más proyectos asignados al auditor |
+| `desde` / `hasta` | DateOnly | Rango de fecha de **firma** de la inspección |
+| `autor` | string (multi) | Username del firmante |
+| `equipo` | string | Búsqueda por código de equipo |
+| `dictamen` | enum (multi) | `Apto` / `AptoConRestricciones` / `NoApto` |
+| `estadoOT` | enum (multi) | `Generada` / `SinOT` / `Fallida` / `Rechazada` / `Cancelada` |
+| `contradiceReporte` | bool | Si true, solo inspecciones con `DecisionContradiceReporteOperador=true` |
+| `page` / `size` | int | Paginación estándar (§1.3 contrato) |
+
+##### Forma del item (MVP shape mínimo)
+
+```csharp
+public sealed record AuditoriaInspeccionItem(
+    Guid InspeccionId,                       // para drill-down a DetalleInspeccionView
+    int ProyectoId,
+    string ProyectoCodigo,
+    string ProyectoNombre,
+    int EquipoId,
+    string EquipoCodigo,
+    string EquipoDescripcion,
+    string FirmadaPor,                       // username del firmante
+    DateTime FirmadaEn,
+    DateOnly FechaReportada,                 // día real de la inspección (input del técnico)
+    DateTime IniciadaEn,                     // para calcular TiempoEjecucion
+    TimeSpan TiempoEjecucion,                // FirmadaEn - IniciadaEn (derivado al servir)
+    DictamenOperacion Dictamen,              // Apto | AptoConRestricciones | NoApto
+    EstadoOT EstadoOT,                       // ver enum abajo
+    int? OTCorrectivaIdSinco,                // poblado si Generada
+    string? OTCorrectivaNumero,              // ej. "OT-123456" si Generada
+    string? MotivoCierreSinOT,               // AutomaticoSinIntervencion | RechazadaPorAprobador
+    HallazgosCounts Hallazgos,
+    NovedadesPreopCounts NovedadesPreop,
+    int RepuestosEstimadosCount,
+    int HallazgosEliminadosCount,            // count soft-deletes — banderazo de auditoría
+    bool DecisionContradiceReporteOperador); // regla (a) sola para MVP — ver abajo
+
+public sealed record HallazgosCounts(
+    int Total,                               // no eliminados
+    int RequiereIntervencion,
+    int RequiereSeguimiento,
+    int NoRequiereIntervencion);
+
+public sealed record NovedadesPreopCounts(
+    int Verificadas,                         // resultaron en HallazgoRegistrado_v1 con Origen=PreOperacional
+    int Descartadas);                        // resultaron en NovedadPreopDescartada_v1
+
+public enum EstadoOT
+{
+    Generada,                                // InspeccionCerrada_v1 con OTCorrectivaIdSinco
+    SinOT,                                   // InspeccionCerradaSinOT_v1 motivo=AutomaticoSinIntervencion
+    Rechazada,                               // InspeccionCerradaSinOT_v1 motivo=RechazadaPorAprobador
+    Fallida,                                 // OTGeneracionFallida_v1 sin retry exitoso
+    Cancelada                                // InspeccionCancelada_v1 (estado terminal alternativo)
+}
+```
+
+##### Definición de `DecisionContradiceReporteOperador` (MVP — regla a sola)
+
+> **Decisión 2026-05-04:** MVP usa **solo regla (a)**. Regla (b) se evalúa en Fase 10 post-piloto.
+
+**Regla (a):** `true` si hay **≥1 evento `NovedadPreopDescartada_v1`** en el stream de la inspección.
+
+**Por qué:** descartar una novedad reportada por el operario es la decisión técnica más fuerte de gobernanza — el técnico explícitamente niega el reporte. Es el caso que más quiere auditar el supervisor.
+
+**Diferido a Fase 10 — regla (b):** "≥1 hallazgo donde el firmante bajó la urgencia respecto a lo reportado por el operador". Requiere que el preop pueble `severidad` en P-2 consistentemente y un mapeo `severidadPreop ↔ AccionRequerida`. Si el piloto muestra que falta cobertura del indicador, se agrega como cambio aditivo (no rompe shape del read model — solo cambia la fórmula).
+
+##### KPIs del header (cards superiores — agregados sobre el rango filtrado)
+
+| KPI | Cálculo |
+|---|---|
+| Total inspecciones cerradas | `count(items)` |
+| Con OT | `count(items where EstadoOT = Generada)` |
+| Sin OT | `count(items where EstadoOT = SinOT)` |
+| Rechazadas | `count(items where EstadoOT = Rechazada)` |
+| Fallidas | `count(items where EstadoOT = Fallida)` |
+| Contradicen reporte | `count(items where DecisionContradiceReporteOperador = true)` |
+| Tiempo medio | `avg(TiempoEjecucion)` |
+| Tasa de descarte preop | `sum(NovedadesPreop.Descartadas) / sum(NovedadesPreop.Verificadas + Descartadas) * 100%` |
+
+##### Eventos consumidos por la proyección
+
+Stream `InspeccionTecnica` (todos los eventos MVP):
+- Lifecycle: `InspeccionIniciada_v1`, `InspeccionFirmada_v1`, `InspeccionCerrada_v1`, `InspeccionCerradaSinOT_v1`, `InspeccionCancelada_v1`
+- Hallazgos: `HallazgoRegistrado_v1`, `HallazgoActualizado_v1`, `HallazgoEliminado_v1`
+- Novedades preop: `NovedadPreopDescartada_v1`
+- Repuestos: `RepuestoEstimado_v1`, `RepuestoActualizado_v1`, `RepuestoRemovido_v1`
+- Firma: `DiagnosticoEmitido_v1`, `DictamenEstablecido_v1`
+- OT: `OTSolicitada_v1`, `OTGeneracionFallida_v1`, `GeneracionOTRechazada_v1`
+
+Joins con catálogos locales: `ProyectoLocal` (codigo + nombre), `EquipoLocal` (codigo + descripcion).
+
+**No** consume `SeguimientoHallazgo` en MVP. **No** consume `AdjuntoSubido_v1`/`AdjuntoEliminado_v1` (los adjuntos se ven en el drill-down, no en la bandeja).
+
+##### Drill-down
+
+Click en fila → `DetalleInspeccionView` (§15.12.1) — endpoint `GET /inspecciones/{id}` con autorización por capability `auditar-inspecciones`. El detalle ya muestra hallazgos eliminados con `MotivoEliminacion`, novedades descartadas con `MotivoDescarte`, etc.
+
+##### Diferido a Fase 10 (post-piloto)
+
+- **`SeguimientosAbiertosCount`** por fila — requiere consumir stream `SeguimientoHallazgo`.
+- **Regla (b)** de `DecisionContradiceReporteOperador` — requiere `severidad` consistente en preop.
+- **Métricas agregadas** por usuario firmante / por operador que reportó (tasa de descarte, etc.).
+- **Workflow de notificación** al operador cuando su novedad es descartada.
+
+##### Wireframe de referencia
+
+`02l-mock-auditoria-inspecciones.html` (decisión 2026-05-04) — mock interactivo con filtros + KPI cards + tabla + drill-down placeholder.
 
 #### 15.12.3 `BandejaTecnicoView` — bandeja "Mis inspecciones"
 

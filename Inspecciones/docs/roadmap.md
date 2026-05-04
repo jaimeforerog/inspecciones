@@ -199,12 +199,18 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 3.55 | Proyección Marten `AuditoriaInspeccionesView` | ⏳ | Consume eventos de `InspeccionTecnica` y `SeguimientoHallazgo`, denormaliza por inspección. Materializa indicador `DecisionContradiceReporteOperador`. |
-| 3.56 | Endpoint `GET /auditoria/inspecciones?proyecto=&desde=&hasta=&autor=` | ⏳ | Bandeja filtrable de inspecciones cerradas en un proyecto. Paginada. Autorización: capability `auditar-inspecciones` (matriz en paso 2.5). |
-| 3.57 | Endpoint `GET /auditoria/inspecciones/{id}` | ⏳ | Atajo al `DetalleInspeccionView` (paso 3.45) con autorización de auditoría. Misma proyección, control de acceso por capability. |
-| 3.58 | Tests de autorización (usuario sin capability `auditar-inspecciones` recibe 403) | ⏳ | Cross-cutting con paso 2.5 |
+| 3.55 | Proyección Marten `AuditoriaInspeccionesView` (MVP shape mínimo, decisión 2026-05-04) | ⏳ | **Shape final §15.12.2.** Consume eventos del aggregate `InspeccionTecnica` (16 eventos MVP) + joins con `ProyectoLocal` y `EquipoLocal`. Materializa: lifecycle, dictamen, `EstadoOT` derivado, conteos de hallazgos por `AccionRequerida`, conteos de novedades preop verificadas/descartadas, `RepuestosEstimadosCount`, `HallazgosEliminadosCount`, indicador `DecisionContradiceReporteOperador` con regla (a) sola (≥1 `NovedadPreopDescartada_v1`). **NO** consume `SeguimientoHallazgo` en MVP (decisión 2026-05-04 punto 2 — diferido a Fase 10). **NO** materializa la regla (b) del indicador (diferida — requiere `severidad` consistente en preop). Tests obligatorios: rebuild desde stream con todas las combinaciones de eventos + verificación de derivación correcta de `EstadoOT` por cada motivo de cierre. |
+| 3.56 | Endpoint `GET /auditoria/inspecciones?proyecto=&desde=&hasta=&autor=&equipo=&dictamen=&estadoOT=&contradiceReporte=` | ⏳ | Bandeja filtrable de inspecciones cerradas. Paginada (§1.3 contrato). Autorización: capability `auditar-inspecciones` (matriz en paso 2.5). KPIs del header agregados sobre el rango filtrado: total, con OT / sin OT / rechazadas / fallidas, contradicen reporte, tiempo medio, tasa de descarte preop. Mock UX en `02l-mock-auditoria-inspecciones.html` (decisión 2026-05-04). Tests obligatorios: cada filtro individualmente + combinaciones, paginación, sort por fecha de firma descendente por defecto. |
+| 3.57 | Endpoint `GET /auditoria/inspecciones/{id}` | ⏳ | Atajo al `DetalleInspeccionView` (paso 3.45) con autorización de auditoría. Misma proyección §15.12.1, control de acceso por capability. |
+| 3.58 | Tests de autorización (usuario sin capability `auditar-inspecciones` recibe 403) | ⏳ | Cross-cutting con paso 2.5. Tests adicionales: usuario con capability ve solo proyectos de su scope, no todas las obras del cliente. |
 
-> **Diferido a Fase 10** (post-MVP): métricas agregadas (tasa de descarte por usuario firmante / por operador que reportó), workflow de notificación al operador cuando su novedad es descartada, wireframe visual de la bandeja de auditoría (`02e-wireframes-auditoria.html`). Ver `FOLLOWUPS.md` cuando aparezca disparador.
+> **Diferido a Fase 10** (post-MVP):
+> - **Regla (b)** de `DecisionContradiceReporteOperador` ("≥1 hallazgo donde el firmante bajó la urgencia respecto al reporte original"). Requiere `severidad` consistente en preop + mapeo `severidadPreop ↔ AccionRequerida`. Aditivo — no rompe shape del read model.
+> - **`SeguimientosAbiertosCount` por fila** — requiere consumir stream `SeguimientoHallazgo`.
+> - **Métricas agregadas** por usuario firmante / por operador que reportó (tasa de descarte, etc.).
+> - **Workflow de notificación** al operador cuando su novedad es descartada.
+>
+> Ver `FOLLOWUPS.md` cuando aparezca disparador (típicamente piloto Fase 9 con feedback de supervisores).
 
 ---
 

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mock — Auditoría de inspecciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #0D47A1;
+  --primary-dark: #062B66;
+  --primary-light: #E3F2FD;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #5F6368;
+  --text-muted: #9AA0A6;
+  --divider: #E0E4E9;
+
+  --ok: #2E7D32;
+  --ok-bg: #E8F5E9;
+  --warn: #EF6C00;
+  --warn-bg: #FFF3E0;
+  --err: #C62828;
+  --err-bg: #FFEBEE;
+  --info: #1565C0;
+  --info-bg: #E3F2FD;
+  --neutral: #757575;
+  --neutral-bg: #F5F5F5;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-2: 0 4px 12px rgba(0,0,0,.08);
+  --shadow-3: 0 8px 24px rgba(0,0,0,.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #ECEFF1;
+  color: var(--text);
+  padding: 24px 16px 48px;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+/* ===== Header ===== */
+.app-header {
+  background: linear-gradient(135deg, var(--primary-light) 0%, #FFFFFF 100%);
+  border-radius: 12px;
+  padding: 20px 28px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.app-header h1 {
+  font-weight: 500;
+  font-size: 22px;
+  color: #263238;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.app-header .subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.header-actions { display: flex; gap: 8px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 6px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--divider); background: var(--surface);
+  color: var(--text); transition: all 0.15s;
+}
+.btn:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary-dark); }
+.btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+.btn.primary:hover { background: var(--primary-dark); }
+
+/* ===== Filtros ===== */
+.filters {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-1);
+}
+.filters-row {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+}
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 18px; cursor: pointer;
+  background: var(--bg); border: 1px solid var(--divider);
+  font-size: 13px; color: var(--text); transition: all 0.15s;
+}
+.filter-chip:hover { background: var(--primary-light); border-color: var(--primary); }
+.filter-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+.filter-chip .count {
+  background: rgba(255,255,255,.25); padding: 1px 7px; border-radius: 10px;
+  font-size: 11px; font-weight: 500;
+}
+.filter-chip.active .count { background: rgba(255,255,255,.3); }
+.filter-chip:not(.active) .count { background: var(--primary); color: white; }
+
+.search-box {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 18px;
+  background: var(--bg); border: 1px solid var(--divider);
+  font-size: 13px; min-width: 180px;
+}
+.search-box input { border: none; outline: none; background: transparent; flex: 1; font-family: inherit; font-size: 13px; }
+
+.date-range {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 18px;
+  background: var(--bg); border: 1px solid var(--divider);
+  font-size: 13px;
+}
+.date-range input { border: none; outline: none; background: transparent; font-family: inherit; font-size: 13px; }
+
+.toggle-filter {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 18px; cursor: pointer;
+  background: var(--err-bg); border: 1px solid var(--err);
+  font-size: 13px; color: var(--err); font-weight: 500;
+}
+.toggle-filter input[type="checkbox"] { accent-color: var(--err); }
+
+/* Active filter pills */
+.active-filters {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px;
+  padding-top: 12px; border-top: 1px dashed var(--divider);
+}
+.active-filters .pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 12px;
+  background: var(--info-bg); color: var(--info);
+  font-size: 12px; font-weight: 500;
+}
+.active-filters .pill .x { cursor: pointer; opacity: 0.6; }
+.active-filters .pill .x:hover { opacity: 1; }
+.active-filters .clear-all {
+  font-size: 12px; color: var(--text-muted); cursor: pointer; align-self: center; margin-left: 4px;
+}
+.active-filters .clear-all:hover { color: var(--err); }
+
+/* ===== KPIs ===== */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.kpi-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-1);
+  border-left: 4px solid var(--neutral);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.kpi-card.primary { border-left-color: var(--primary); }
+.kpi-card.ok { border-left-color: var(--ok); }
+.kpi-card.warn { border-left-color: var(--warn); }
+.kpi-card.err { border-left-color: var(--err); }
+.kpi-card.info { border-left-color: var(--info); }
+.kpi-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+.kpi-card .value { font-size: 28px; font-weight: 500; color: var(--text); margin-top: 4px; }
+.kpi-card .delta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.kpi-card .delta.up { color: var(--ok); }
+.kpi-card .delta.down { color: var(--err); }
+
+/* ===== Tabla ===== */
+.table-wrapper {
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+  margin-bottom: 16px;
+}
+.table-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid var(--divider);
+}
+.table-header h2 { font-size: 15px; font-weight: 500; color: var(--text); }
+.table-header .count { font-size: 13px; color: var(--text-secondary); }
+
+table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+thead th {
+  background: #FAFBFC; color: var(--text-secondary);
+  text-align: left; padding: 10px 14px; font-weight: 500;
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px;
+  border-bottom: 1px solid var(--divider);
+  white-space: nowrap;
+}
+tbody td {
+  padding: 12px 14px; border-bottom: 1px solid var(--divider);
+  color: var(--text); vertical-align: middle;
+}
+tbody tr { transition: background 0.1s; }
+tbody tr:hover { background: var(--primary-light); cursor: pointer; }
+tbody tr:hover td { color: var(--primary-dark); }
+
+.equipo-codigo { font-weight: 500; }
+.equipo-desc { font-size: 11px; color: var(--text-muted); display: block; }
+.proyecto-codigo { font-family: 'Roboto Mono', monospace; font-size: 11px; color: var(--text-secondary); }
+.proyecto-nombre { font-size: 12px; }
+
+.firma-fecha { font-size: 13px; }
+.firma-hora { font-size: 11px; color: var(--text-muted); display: block; }
+
+.firma-por {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 12px;
+  background: var(--neutral-bg); font-size: 12px; color: var(--text-secondary);
+}
+
+.dictamen-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 500; text-transform: uppercase;
+}
+.dictamen-badge.apto { background: var(--ok-bg); color: var(--ok); }
+.dictamen-badge.con-restr { background: var(--warn-bg); color: var(--warn); }
+.dictamen-badge.no-apto { background: var(--err-bg); color: var(--err); }
+
+.estado-ot {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 500;
+}
+.estado-ot.generada { background: var(--ok-bg); color: var(--ok); }
+.estado-ot.sin-ot { background: var(--info-bg); color: var(--info); }
+.estado-ot.rechazada { background: var(--neutral-bg); color: var(--neutral); }
+.estado-ot.fallida { background: var(--err-bg); color: var(--err); }
+.estado-ot .num { font-family: 'Roboto Mono', monospace; font-size: 10px; opacity: 0.85; }
+
+.hallazgos-count {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 12px;
+}
+.hallazgos-count .total { font-weight: 500; }
+.hallazgos-count .breakdown { color: var(--text-muted); font-size: 11px; }
+
+.indicadores { display: inline-flex; gap: 4px; flex-wrap: nowrap; }
+.indicador-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  font-size: 13px; cursor: help;
+}
+.indicador-badge.contradice { background: var(--err-bg); color: var(--err); }
+.indicador-badge.eliminados { background: var(--warn-bg); color: var(--warn); }
+.indicador-badge.descartadas { background: var(--info-bg); color: var(--info); }
+
+.tiempo-ejec {
+  font-family: 'Roboto Mono', monospace; font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ===== Pagination ===== */
+.pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-top: 1px solid var(--divider);
+}
+.pagination .pages { display: flex; gap: 4px; }
+.pagination button {
+  padding: 6px 10px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--divider); background: var(--surface);
+  font-family: inherit; font-size: 13px; min-width: 32px;
+}
+.pagination button:hover { background: var(--primary-light); border-color: var(--primary); }
+.pagination button.active { background: var(--primary); color: white; border-color: var(--primary); }
+.pagination .info { font-size: 12px; color: var(--text-muted); }
+
+/* ===== Drill-down panel (overlay) ===== */
+.drill-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: none; z-index: 100; align-items: flex-end; justify-content: center;
+}
+.drill-overlay.active { display: flex; }
+.drill-panel {
+  background: var(--surface); border-radius: 12px 12px 0 0;
+  width: 100%; max-width: 1100px; max-height: 80vh;
+  padding: 24px 28px; overflow-y: auto;
+  box-shadow: var(--shadow-3);
+  animation: slide-up 0.2s ease-out;
+}
+@keyframes slide-up {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.drill-panel header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--divider);
+}
+.drill-panel h3 { font-size: 18px; font-weight: 500; color: var(--primary-dark); }
+.drill-panel .close { background: none; border: none; cursor: pointer; font-size: 24px; color: var(--text-muted); }
+.drill-panel .close:hover { color: var(--text); }
+.drill-panel .placeholder {
+  background: var(--bg); border: 2px dashed var(--divider); border-radius: 8px;
+  padding: 32px; text-align: center; color: var(--text-secondary); font-size: 13px;
+}
+.drill-panel .placeholder code {
+  background: var(--surface); padding: 2px 6px; border-radius: 3px;
+  font-family: 'Roboto Mono', monospace;
+}
+
+/* ===== Footer / metadata ===== */
+.meta {
+  background: var(--surface); border-radius: 12px;
+  padding: 16px 24px; box-shadow: var(--shadow-1);
+  font-size: 12px; color: var(--text-muted);
+}
+.meta a { color: var(--primary); text-decoration: none; }
+.meta a:hover { text-decoration: underline; }
+.meta strong { color: var(--text-secondary); }
+
+.legend {
+  background: var(--surface); border-radius: 12px;
+  padding: 14px 20px; box-shadow: var(--shadow-1);
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.legend strong { display: inline-block; margin-right: 12px; color: var(--text-secondary); }
+.legend .item {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: 14px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <div>
+      <h1>🏢 Auditoría de inspecciones</h1>
+      <div class="subtitle">Bandeja cross-inspección por proyecto · capability <code>auditar-inspecciones</code></div>
+    </div>
+    <div class="header-actions">
+      <button class="btn">📥 Exportar CSV</button>
+      <button class="btn">📊 Reportes</button>
+      <button class="btn primary">⚙ Configurar</button>
+    </div>
+  </header>
+
+  <!-- ===== FILTROS ===== -->
+  <section class="filters">
+    <div class="filters-row">
+      <span class="search-box">🔍 <input type="text" placeholder="Buscar equipo..." value="D11T"></span>
+      <span class="date-range">📅 <input type="text" value="2026-04-01"> — <input type="text" value="2026-04-30"></span>
+      <span class="filter-chip active">Proyecto <span class="count">2</span></span>
+      <span class="filter-chip">Autor <span class="count">0</span></span>
+      <span class="filter-chip">Dictamen <span class="count">0</span></span>
+      <span class="filter-chip active">Estado OT <span class="count">3</span></span>
+      <label class="toggle-filter">
+        <input type="checkbox" checked> ⚠ Solo contradicen reporte operador
+      </label>
+    </div>
+    <div class="active-filters">
+      <span class="pill">Proyecto: Cali-Buenaventura tramo 3 <span class="x">×</span></span>
+      <span class="pill">Proyecto: Vía Barranquilla <span class="x">×</span></span>
+      <span class="pill">Estado OT: Generada <span class="x">×</span></span>
+      <span class="pill">Estado OT: Sin OT <span class="x">×</span></span>
+      <span class="pill">Estado OT: Rechazada <span class="x">×</span></span>
+      <span class="pill">Contradice reporte: sí <span class="x">×</span></span>
+      <span class="clear-all">Limpiar todos</span>
+    </div>
+  </section>
+
+  <!-- ===== KPIs ===== -->
+  <section class="kpis">
+    <div class="kpi-card primary">
+      <div class="label">Total cerradas</div>
+      <div class="value">47</div>
+      <div class="delta up">▲ 12% vs mes anterior</div>
+    </div>
+    <div class="kpi-card ok">
+      <div class="label">Con OT</div>
+      <div class="value">32</div>
+      <div class="delta">68% del total</div>
+    </div>
+    <div class="kpi-card info">
+      <div class="label">Sin OT</div>
+      <div class="value">12</div>
+      <div class="delta">25% del total</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="label">Rechazadas</div>
+      <div class="value">2</div>
+      <div class="delta">4% del total</div>
+    </div>
+    <div class="kpi-card err">
+      <div class="label">⚠ Contradicen reporte</div>
+      <div class="value">2</div>
+      <div class="delta">requieren revisión</div>
+    </div>
+    <div class="kpi-card primary">
+      <div class="label">⏱ Tiempo medio</div>
+      <div class="value">12 min</div>
+      <div class="delta down">▼ 3 min vs mes anterior</div>
+    </div>
+    <div class="kpi-card info">
+      <div class="label">Tasa descarte preop</div>
+      <div class="value">8%</div>
+      <div class="delta">12 de 147 novedades</div>
+    </div>
+  </section>
+
+  <!-- ===== LEYENDA ===== -->
+  <section class="legend">
+    <strong>Indicadores:</strong>
+    <span class="item"><span class="indicador-badge contradice">⚠</span> Decisión contradice reporte operador</span>
+    <span class="item"><span class="indicador-badge eliminados">🗑</span> Hallazgos eliminados (soft-delete)</span>
+    <span class="item"><span class="indicador-badge descartadas">📋</span> Novedades preop descartadas</span>
+  </section>
+
+  <!-- ===== TABLA ===== -->
+  <section class="table-wrapper">
+    <div class="table-header">
+      <h2>Inspecciones cerradas</h2>
+      <div class="count">Mostrando 1–10 de 47</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Equipo</th>
+          <th>Proyecto</th>
+          <th>Firmada</th>
+          <th>Por</th>
+          <th>Dictamen</th>
+          <th>Estado OT</th>
+          <th>Hallazgos</th>
+          <th>Repuestos</th>
+          <th>⏱</th>
+          <th>Indicadores</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Fila 1: contradice + tiene OT -->
+        <tr onclick="openDrill('insp-001', 'D11T-001')">
+          <td>
+            <span class="equipo-codigo">D11T-001</span>
+            <span class="equipo-desc">Caterpillar D11T Bulldozer</span>
+          </td>
+          <td>
+            <span class="proyecto-codigo">OB-2026-CALI-001</span>
+            <span class="proyecto-nombre">Vía Cali-Buenaventura tramo 3</span>
+          </td>
+          <td>
+            <span class="firma-fecha">30 abr 2026</span>
+            <span class="firma-hora">15:42</span>
+          </td>
+          <td><span class="firma-por">👤 rmartinez</span></td>
+          <td><span class="dictamen-badge con-restr">Con restricción</span></td>
+          <td><span class="estado-ot generada">✓ Generada <span class="num">OT-12345</span></span></td>
+          <td>
+            <span class="hallazgos-count">
+              <span class="total">5</span>
+              <span class="breakdown">3 ⚠ · 2 ↻</span>
+            </span>
+          </td>
+          <td>4</td>
+          <td><span class="tiempo-ejec">14 min</span></td>
+          <td>
+            <span class="indicadores">
+              <span class="indicador-badge contradice" title="2 novedades preop descartadas">⚠</span>
+              <span class="indicador-badge eliminados" title="1 hallazgo eliminado">🗑</span>
+              <span class="indicador-badge descartadas" title="2 novedades descartadas">📋</span>
+            </span>
+          </td>
+        </tr>
+
+        <!-- Fila 2: simple Sin OT -->
+        <tr onclick="openDrill('insp-002', 'EX450-A')">
+          <td>
+            <span class="equipo-codigo">EX450-A</span>
+            <span class="equipo-desc">Komatsu PC450 excavadora</span>
+          </td>
+          <td>
+            <span class="proyecto-codigo">OB-2025-BAR-007</span>
+            <span class="proyecto-nombre">Vía Barranquilla anillo norte</span>
+          </td>
+          <td>
+            <span class="firma-fecha">28 abr 2026</span>
+            <span class="firma-hora">10:15</span>
+          </td>
+          <td><span class="firma-por">👤 jperalta</span></td>
+          <td><span class="dictamen-badge apto">Apto</span></td>
+          <td><span class="estado-ot sin-ot">○ Sin OT</span></td>
+          <td>
+            <span class="hallazgos-count">
+              <span class="total">2</span>
+              <span class="breakdown">2 ✓ sin intervención</span>
+            </span>
+          </td>
+          <td>0</td>
+          <td><span class="tiempo-ejec">8 min</span></td>
+          <td><span class="indicadores"></span></td>
+        </tr>
+
+        <!-- Fila 3: rechazada por aprobador -->
+        <tr onclick="openDrill('insp-003', 'GR250-B')">
+          <td>
+            <span class="equipo-codigo">GR250-B</span>
+            <span class="equipo-desc">Caterpillar 320D motoniveladora</span>
+          </td>
+          <td>
+            <span class="proyecto-codigo">OB-2026-CALI-001</span>
+            <span class="proyecto-nombre">Vía Cali-Buenaventura tramo 3</span>
+          </td>
+          <td>
+            <span class="firma-fecha">26 abr 2026</span>
+            <span class="firma-hora">11:33</span>
+          </td>
+          <td><span class="firma-por">👤 lguzman</span></td>
+          <td><span class="dictamen-badge no-apto">No apto</span></td>
+          <td><span class="estado-ot rechazada">✗ Rechazada</span></td>
+          <td>
+            <span class="hallazgos-count">
+              <span class="total">3</span>
+              <span class="breakdown">2 ⚠ · 1 ↻</span>
+            </span>
+          </td>
+          <td>6</td>
+          <td><span class="tiempo-ejec">22 min</span></td>
+          <td><span class="indicadores"></span></td>
+        </tr>
+
+        <!-- Fila 4: contradice + descartadas múltiples -->
+        <tr onclick="openDrill('insp-004', 'D11T-002')">
+          <td>
+            <span class="equipo-codigo">D11T-002</span>
+            <span class="equipo-desc">Caterpillar D11T Bulldozer</span>
+          </td>
+          <td>
+            <span class="proyecto-codigo">OB-2026-CALI-001</span>
+            <span class="proyecto-nombre">Vía Cali-Buenaventura tramo 3</span>
+          </td>
+          <td>
+            <span class="firma-fecha">25 abr 2026</span>
+            <span class="firma-hora">09:08</span>
+          </td>
+          <td><span class="firma-por">👤 rmartinez</span></td>
+          <td><span class="dictamen-badge apto">Apto</span></td>
+          <td><span class="estado-ot sin-ot">○ Sin OT</span></td>
+          <td>
+            <span class="hallazgos-count">
+              <span class="total">1</span>
+              <span class="breakdown">1 ✓ sin intervención</span>
+            </span>
+          </td>
+          <td>0</td>
+          <td><span class="tiempo-ejec">6 min</span></td>
+          <td>
+            <span class="indicadores">
+              <span class="indicador-badge contradice" title="3 novedades preop descartadas">⚠</span>
+              <span class="indicador-badge descartadas" title="3 novedades descartadas">📋</span>
+            </span>
+          </td>
+        </tr>
+
+        <!-- Fila 5: fallida por error MYE -->
+        <tr onclick="openDrill('insp-005', 'D11T-003')">
+          <td>
+            <span class="equipo-codigo">D11T-003</span>
+            <span class="equipo-desc">Caterpillar D11T Bulldozer</span>
+          </td>
+          <td>
+            <span class="proyecto-codigo">OB-2025-BAR-007</span>
+            <span class="proyecto-nombre">Vía Barranquilla anillo norte</span>
+          </td>
+          <td>
+            <span class="firma-fecha">23 abr 2026</span>
+            <span class="firma-hora">14:55</span>
+          </td>
+          <td><span class="firma-por">👤 jperalta</span></td>
+          <td><span class="dictamen-badge con-restr">Con restricción</span></td>
+          <td><span class="estado-ot fallida">⚠ Fallida</span></td>
+          <td>
+            <span class="hallazgos-count">
+              <span class="total">4</span>
+              <span class="breakdown">4 ⚠</span>
+            </span>
+          </td>
+          <td>3</td>
+          <td><span class="tiempo-ejec">18 min</span></td>
+          <td><span class="indicadores"></span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="pagination">
+      <div class="info">Página 1 de 5</div>
+      <div class="pages">
+        <button>◀</button>
+        <button class="active">1</button>
+        <button>2</button>
+        <button>3</button>
+        <button>4</button>
+        <button>5</button>
+        <button>▶</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Metadata ===== -->
+  <section class="meta">
+    <p><strong>Read model:</strong> proyección Marten <code>AuditoriaInspeccionesView</code> — consume eventos del aggregate <code>InspeccionTecnica</code> + joins con <code>ProyectoLocal</code> y <code>EquipoLocal</code>. <strong>Endpoint:</strong> <code>GET /auditoria/inspecciones?proyecto=&desde=&hasta=&autor=&equipo=&dictamen=&estadoOT=&contradiceReporte=</code></p>
+    <p style="margin-top:8px;"><strong>Decisiones MVP (2026-05-04):</strong> regla (a) sola para <code>DecisionContradiceReporteOperador</code> (≥1 NovedadPreopDescartada_v1). Sin <code>SeguimientosAbiertosCount</code>. Métricas agregadas por usuario diferidas a Fase 10 post-piloto.</p>
+    <p style="margin-top:8px;"><strong>Referencias:</strong> <code>01-modelo-dominio.md</code> §15.12.2 · <code>roadmap.md</code> Fase 3.H pasos 3.55–3.58.</p>
+  </section>
+
+</div>
+
+<!-- ===== Drill-down overlay ===== -->
+<div class="drill-overlay" id="drillOverlay" onclick="closeDrill(event)">
+  <div class="drill-panel" onclick="event.stopPropagation()">
+    <header>
+      <div>
+        <h3 id="drillTitle">Detalle de inspección</h3>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Click fuera del panel o ESC para cerrar</div>
+      </div>
+      <button class="close" onclick="closeDrill()">×</button>
+    </header>
+    <div class="placeholder">
+      <p style="font-size:14px;color:var(--text);margin-bottom:8px;"><strong>Drill-down placeholder</strong></p>
+      <p>En la app real, este panel servirá <code>DetalleInspeccionView</code> (proyección §15.12.1).</p>
+      <p style="margin-top:12px;">Endpoint: <code>GET /inspecciones/<span id="drillId">{InspeccionId}</span></code></p>
+      <p style="margin-top:12px;">Mostrará: lifecycle completo, hallazgos no eliminados, hallazgos eliminados con MotivoEliminacion, novedades preop descartadas con MotivoDescarte + DescartadaPor, repuestos, adjuntos, firma + GPS, OT (si aplica).</p>
+      <p style="margin-top:12px;font-size:11px;color:var(--text-muted);">El drill-down se autoriza con la misma capability <code>auditar-inspecciones</code>.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function openDrill(id, equipoCodigo) {
+  document.getElementById('drillTitle').textContent = `Detalle: inspección de ${equipoCodigo}`;
+  document.getElementById('drillId').textContent = id;
+  document.getElementById('drillOverlay').classList.add('active');
+}
+function closeDrill(event) {
+  if (!event || event.target.id === 'drillOverlay') {
+    document.getElementById('drillOverlay').classList.remove('active');
+  } else if (event === undefined) {
+    document.getElementById('drillOverlay').classList.remove('active');
+  }
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.getElementById('drillOverlay').classList.remove('active');
+});
+
+// Toggle filter chips
+document.querySelectorAll('.filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => chip.classList.toggle('active'));
+});
+</script>
+
+</body>
+</html>
