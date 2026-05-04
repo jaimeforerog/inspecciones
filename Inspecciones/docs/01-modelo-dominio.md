@@ -1120,6 +1120,8 @@ Pueden tener forma similar pero **nunca son la misma clase**, por dos razones:
 1. **Versionado independiente**: el contrato de red puede evolucionar sin tocar la historia de eventos del aggregate (y al revés).
 2. **Cumplimiento §2 de la guía EDA Sinco**: "Nunca exponer un evento de dominio directamente como evento de integración."
 
+> **Nota sobre el patrón EDA aplicado:** la integración del módulo con el ERP Sinco encaja en **§3.2 "Comando asíncrono"** de la guía EDA Sinco — el módulo emite un comando dirigido a un consumidor conocido (MYE, Preop) vía Wolverine outbox + REST, no en §3.4 "Evento de integración" (publish/subscribe a través de un broker compartido entre BCs). Esto es así por restricción de infraestructura: el ERP Sinco es on-prem y no expone un bus consumible. Si en el futuro otro BC Sinco (Reporting, Costos) necesitara reaccionar a hechos del módulo, ahí sí aplicaría §3.4 y requeriría un ADR específico que defina broker, contrato público versionado y compatibilidad hacia atrás. Hoy no aplica.
+
 **Patrón aplicado en este módulo:**
 
 | Caso | Evento de dominio (en stream Marten) | DTO de request HTTP (al adapter) |
@@ -4140,6 +4142,16 @@ ADR-003 §13 ya documenta el patrón de retry para `POST /mye/ot-correctivas` (M
 - **Idempotencia real obligatoria** sobre `Idempotency-Key` (ver `06-contrato-apis-erp.md §1.4`). El ERP recibirá la misma key múltiples veces durante reintentos — debe responder igual a todas, sin crear duplicados.
 - **Volúmenes esperados**: en operación normal ~1 llamada por evento; en degradación hasta 5 llamadas con la misma key dentro de una hora. Dimensionar capacidad y rate limiting.
 - **Latencia tolerable**: hasta ~30s por llamada antes de timeout y reintentar. Si una operación requiere procesamiento más largo, considerar patrón async con polling o webhook (caso por caso).
+
+#### Mecanismos de idempotencia aplicados (mapa con guía EDA Sinco §5)
+
+La guía EDA Sinco §5 define tres mecanismos para garantizar idempotencia en consumo asíncrono. El módulo los usa los tres, en capas:
+
+| Mecanismo (guía §5) | Aplicación en el módulo |
+|---|---|
+| **Clave de idempotencia** | Header `Idempotency-Key` en cada `POST` saliente (ver §1.4 del contrato). El ERP debe mantener el mapeo `key → respuesta` durante ≥30 días. |
+| **Detección por estado** | Pre-condiciones en los métodos de decisión del aggregate (V-F1..V-F7 §15.5, I-F4 §15.7). Si el aggregate ya está en el estado esperado (p. ej. `OTSolicitada` ya emitida, inspección ya firmada), la decisión rechaza el comando antes de tocar el outbox. Esto cubre replays internos por reintento de saga, no solo retries HTTP. |
+| **Concurrencia optimista** | Marten valida la versión del stream en cada `SaveChangesAsync()`. Dos handlers concurrentes sobre el mismo `InspeccionId` colisionan y solo uno persiste; el otro se reintenta o falla limpio. |
 
 #### Excepciones (lo que NO va por outbox)
 
