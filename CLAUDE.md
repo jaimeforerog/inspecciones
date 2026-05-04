@@ -4,11 +4,23 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 
 ## Estado del proyecto
 
-- **Fase actual:** Fase 0 (diseño) al 95 %. Sin código aún. Solo docs y plantillas Excel.
+- **Fase actual:** Fase 0 (diseño) al 98 %. Sin código aún. Solo docs y plantillas Excel.
 - **Próximo trabajo:** primer slice de Fase 3 (backend core) cuando el usuario lo apruebe.
 - **Roadmap:** `Inspecciones/docs/roadmap.md` (fases 0..10).
 - **Modelo de dominio:** `Inspecciones/docs/01-modelo-dominio.md` §15 (fuente de verdad).
-- **ADRs:** ADR-001 a ADR-005 en `00-investigacion-mercado.md §9`; ADR-003 ampliado en `01-modelo-dominio.md §13`; ADR-005 en `§14`; **ADR-006 (resiliencia outbox para integraciones ERP) en `§16`**.
+- **Contrato de APIs ERP:** `Inspecciones/docs/06-contrato-apis-erp.md` (15 obligatorios MVP + 3 condicionales + 9 diferidos).
+- **Diagramas de flujo:** `02f` técnica · `02g` monitoreo · `02h` seguimientos (narrativos) + `02i/02j/02k` workflows basados en nodos (Markdown + HTML interactivos con Mermaid).
+- **ADRs:** ADR-001 a ADR-005 en `00-investigacion-mercado.md §9`; ADR-003 ampliado en `01-modelo-dominio.md §13`; ADR-005 en `§14`; **ADR-006 (resiliencia outbox para integraciones ERP) en `§16`**; **ADR-007 (OT manual con capability gate) en `§17`**.
+
+### Refinamientos vigentes (sesión 2026-05-04)
+
+- **Tipos de IDs (1b):** PKs del ERP son `int` (System.Int32) acompañados de `<X>Codigo: string` para UI/URLs. IDs internos del módulo (`InspeccionId`, `HallazgoId`, etc.) siguen siendo `Guid` (v7 preferido). Ver §15.4 del modelo para la convención formal.
+- **Rutina técnica per-equipo (β):** cardinalidad **1 rutina técnica por equipo** (única). La asignación es explícita en el ERP — `M-3b` trae `rutinaTecnicaId: int` (singular). El handler `IniciarInspeccion` la resuelve auto, técnico no elige (UX MVP histórica preservada). Ver §12.11.1 del modelo.
+- **Rutinas monitoreo per-equipo:** cardinalidad **2-3 rutinas por equipo**, asignación explícita. `M-3b` trae `rutinasMonitoreoIds: int[]` (plural). Técnico elige al iniciar. Ver §12.11.5.
+- **M-3b consolidado:** detalle del equipo trae partes + asignaciones de rutinas en una sola llamada. **M-4 eliminado** (absorbido).
+- **M-17 nuevo (MVP crítico):** `GET /catalogos/rutinas` — sync nocturno de rutinas técnicas. Cierra gap detectado en revisión por flujos.
+- **Adjuntos:** anclaje xor `HallazgoId` (técnica) o `ItemId` (monitoreo). Siempre opcional. Límite 5 por entidad. Ver §12.11.5 punto 12.
+- **Backends ERP:** preop = SQL Server relacional on-prem (confirmado). MYE núcleo / inventario = SQL Server (asumido — confirmar con David). Solo el módulo Azure usa Marten + PostgreSQL.
 
 ## Metodología (resumen — ver `METHODOLOGY.md` para detalle)
 
@@ -40,6 +52,7 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 - Records para eventos y comandos; clases para agregados.
 - `TimeProvider` inyectado — **prohibido `DateTime.UtcNow` en dominio**.
 - `Guid.NewGuid()` solo en handlers; el dominio recibe el id desde fuera.
+- **Tipos de IDs:** `int` (System.Int32) para PKs del ERP (`EquipoId`, `RutinaId`, `ParteId`, `ActividadId`, `CausaFallaId`, `TipoFallaId`, `NovedadPreopId`, `InsumoId`/`SkuId`, `ProyectoId`/`ObraId`, `OTCorrectivaIdSinco`, `ItemId`, etc.) acompañados de `<X>Codigo: string` para UI/URLs. `Guid` solo para IDs internos del módulo (`InspeccionId`, `HallazgoId`, `RepuestoId`, `AdjuntoId` Azure Blob, `SeguimientoHallazgoId`). Ver §15.4 del modelo.
 - `UbicacionGps(Latitud, Longitud, PrecisionMetros, CapturadoEn)` para coordenadas — prohibido `double` pelado.
 - `BlobUri` para adjuntos — el dominio nunca firma SAS (ADR-005, pattern SAS upload).
 - Identidad: el handler recibe claims por parámetro; el dominio nunca conoce JWTs.
