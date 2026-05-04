@@ -780,11 +780,11 @@ footer code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-si
   <ul>
     <li>¿Frecuencia / programación previa de inspecciones de monitoreo? (mensual, por horómetro). Roadmap 10.2 lo difería — ¿entra junto con monitoreo en Fase 2?</li>
     <li>¿Items obligatorios vs saltables? Al firmar, ¿todos los items deben tener registro o basta con observación general? (Actualmente: omitir es válido con motivo, sin bloqueo de firma.)</li>
-    <li>¿Adjuntos por item (foto del componente medido)? Especialmente útil cuando se califica <code>Malo</code> — sería evidencia para el seguimiento.</li>
+    <li><strong>✓ Resuelto 2026-05-04:</strong> los items deben permitir adjuntar archivos o fotos. Reusa la maquinaria de adjuntos del MVP (3 MB max, JPEG/PNG/HEIC/WebP/PDF, soft delete). Sub-preguntas pendientes para Fase 2: anclaje (por <code>ItemId</code>, por <code>HallazgoId</code> o ambos), obligatoriedad cuando <code>Malo</code> / fuera de rango, límite por item. Detalle en §12.11.5 punto 12 de <code>01-modelo-dominio.md</code>.</li>
     <li>¿"Observación general" como evento separado (<code>ObservacionGeneralRegistrada_v1</code>) o atributo de <code>InspeccionFirmada_v1</code>? El segundo es más simple.</li>
     <li>¿Lecturas de medidores (Medidor 1 / Medidor 2) al iniciar inspección de monitoreo? El comando <code>IniciarInspeccionMonitoreo</code> ya las admite — UX pendiente decidir si es obligatorio capturar.</li>
     <li>¿El técnico puede cambiar la rutina mid-inspección? (Ej. inició "Sistema eléctrico" pero quiere cambiar a "Transmisión".) Mi apuesta: no — si cambia, debe cancelar y reiniciar.</li>
-    <li>¿Pregunta abierta para falsa lectura?: el caso del item 2 (10.20 V con observación "multímetro con pila baja") muestra que la observación justifica falsa medición. ¿Hay acción explícita "descartar marca" antes de firmar para evitar el seguimiento? §12.11.5 punto 12 lo deja como pregunta abierta para Fase 2.</li>
+    <li>¿Pregunta abierta para falsa lectura?: el caso del item 2 (10.20 V con observación "multímetro con pila baja") muestra que la observación justifica falsa medición. ¿Hay acción explícita "descartar marca" antes de firmar para evitar el seguimiento? §12.11.5 punto 13 lo deja como pregunta abierta para Fase 2.</li>
   </ul>
 
   <h3 style="margin-top:20px;">Conexión con el modelo de dominio</h3>

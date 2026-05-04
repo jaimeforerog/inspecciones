@@ -2044,15 +2044,26 @@ El handler valida (además de I-I1, I-I2, I-I3 §15.7):
 
 Y emite `InspeccionIniciada_v1` con `Tipo=Monitoreo` + `RutinaMonitoreoSeleccionadaId` + `ItemsSnapshot`.
 
-**12. Pregunta abierta para Fase 2 (no bloqueante hoy):**
+**12. Adjuntos en monitoreo (decisión 2026-05-04):**
 
-Si el técnico mide fuera de rango pero la observación lo justifica (p. ej. "multímetro con pila baja" — caso real del archivo `inspeccion.xlsx` línea 8), ¿el hallazgo automático se abre igual o existe acción explícita "descartar marca" antes de firmar? Análogo al descarte de novedad preop pero sobre medición. **No resolver hasta llegar a Fase 2** — afecta UX y posiblemente un evento `MarcaMonitoreoDescartada_v1`.
+> **Decisión:** los items de una rutina de monitoreo **deben permitir adjuntar archivos o fotos**. Confirmado por Jaime el 2026-05-04 — cierra la pregunta abierta de §12.11.5 versión 2026-04-30.
 
-**13. Lo que NO está modelado todavía (cola de preguntas pendientes):**
+Reusa la maquinaria de adjuntos del MVP (§12.10.11): mismo `BlobUri`, SAS upload pattern (ADR-005), `AdjuntoEliminado_v1` para soft delete, mismos tipos permitidos (JPEG/PNG/HEIC/WebP/PDF), 3 MB max, EXIF preservado.
 
+Sub-preguntas pendientes para resolver al entrar a Fase 2 (no bloquean el MVP):
+
+- **Anclaje del adjunto:** ¿se asocia al `ItemId` del item de monitoreo (foto evidencia incluso cuando el resultado es OK), al `HallazgoId` cuando el item dispara hallazgo automático, o ambos? Tres opciones:
+  - (a) Solo por `HallazgoId` — reusa `AdjuntoAgregado_v1` sin cambios; pierde evidencia positiva (item Bueno con foto).
+  - (b) Solo por `ItemId` — extiende `AdjuntoAgregado_v1` con `ItemId` opcional (xor con `HallazgoId`); el hallazgo automático "hereda" visualmente las fotos del item.
+  - (c) Ambos — el técnico decide a qué anclar; modelo más flexible, UI más compleja.
+- **Obligatoriedad:** ¿foto obligatoria cuando el item resulta `Malo` o `FueraDeRango` (evidencia para el seguimiento), opcional cuando `Bueno` / dentro de rango? ¿O siempre opcional?
+- **Límite por item:** ¿se hereda el límite de 5 adjuntos del MVP (que aplica por hallazgo) al item de monitoreo, o se ajusta?
+
+**13. Otras preguntas abiertas (no bloqueantes hoy):**
+
+- Si el técnico mide fuera de rango pero la observación lo justifica (p. ej. "multímetro con pila baja" — caso real del archivo `inspeccion.xlsx` línea 8), ¿el hallazgo automático se abre igual o existe acción explícita "descartar marca" antes de firmar? Análogo al descarte de novedad preop pero sobre medición. Posiblemente un evento `MarcaMonitoreoDescartada_v1`.
 - ¿Frecuencia / programación previa de inspecciones de monitoreo? (mensual, por horómetro, etc.) — roadmap 10.2 lo difería; con monitoreo en Fase 2, ¿entra junto?
 - ¿Items obligatorios vs saltables? ¿Al firmar, todos los items deben tener registro o basta con observación general?
-- ¿Adjuntos por item (foto del componente medido)?
 - ¿"Observación general" como evento separado o atributo de `InspeccionFirmada_v1`?
 - ¿La rutina se elige solo al iniciar o el técnico puede cambiarla mid-inspección?
 
