@@ -444,9 +444,10 @@ Actualiza el dictamen vigente del equipo en MYE. Invocado en **toda firma** de i
 
 | # | Método | Path | Estado | Propósito |
 |---|---|---|---|---|
-| M-3 | GET | `/api/v1/equipos?q=&page=&size=` | 🚧 | Lista de equipos filtrable (incluye detalle completo de cada item — no requiere endpoint de detalle separado) |
-| M-4 | GET | `/api/v1/equipos/{equipoCodigo}/partes` | 🚧 | Árbol de partes del equipo (incluye detalle completo de cada parte — no requiere endpoint de detalle separado) |
-| M-5 | GET | `/api/v1/equipos/{equipoCodigo}/rutinas-aplicables?tipo=tecnica` | ⏸ | **Diferido a post-MVP** — solo aplica para inspecciones con medidores (tipo "Monitoreo", roadmap §10.4). El flujo MVP es libre, sin rutina pre-cargada |
+| M-3 | GET | `/api/v1/equipos?q=&page=&size=` | 🚧 | Lista de equipos liviana para selector / autocomplete. NO trae partes ni rutinas (eso vive en M-3b). |
+| M-3b | GET | `/api/v1/equipos/{equipoCodigo}` | 🚧 | **Detalle del equipo** con `partes[]` (árbol plano) y `rutinasMonitoreoIds[]` (referencias al catálogo, Fase 2). Absorbe M-4. Decisión 2026-05-04. |
+| M-4 | GET | `/api/v1/equipos/{equipoCodigo}/partes` | ❌ | **Eliminado / absorbido por M-3b (decisión 2026-05-04).** Conservado en la tabla solo como referencia histórica. |
+| M-5 | GET | `/api/v1/equipos/{equipoCodigo}/rutinas-aplicables?tipo=tecnica` | ⏸ | **Diferido a post-MVP** — solo aplica para inspecciones con medidores (tipo "Monitoreo", roadmap §10.4). Para Monitoreo Fase 2, las rutinas asignadas viajan ya en M-3b. |
 | M-6 | GET | `/api/v1/rutinas?grupo=&tipo=&page=&size=` | ⏸ | **Diferido** — bloque rutinas-driven (junto con M-5, M-7). Reactivar con tipo "Monitoreo" post-MVP |
 | M-7 | GET | `/api/v1/rutinas/{rutinaCodigo}` | ⏸ | **Diferido** — bloque rutinas-driven (junto con M-5, M-6) |
 
@@ -454,12 +455,13 @@ Consumidos por: pantalla de inicio de inspección (selector de equipo, carga de 
 
 #### M-3 `GET /api/v1/equipos`
 
-Lista de equipos del usuario para el selector al iniciar inspección.
+Lista **liviana** de equipos del usuario para el selector / autocomplete al iniciar inspección. Diseñada para latencia baja en `q=` autocomplete.
 
 - **Query params**:
   - `q` (opcional): búsqueda libre por código / id / descripción del equipo.
   - `page`, `size`: paginación estándar.
 - **Sin filtro de `obra` ni `grupo`**: el ERP filtra por las obras del usuario via JWT (row-level security, mismo patrón que P-1). `grupo` se difiere a refinamiento post-piloto si emerge necesidad.
+- **NO incluye `partes` ni `rutinasMonitoreoIds`**: estas viven en M-3b (detalle por equipo). M-3 mantiene el response liviano para que `q=` autocomplete sea responsivo en redes 4G de obra.
 - **Auth**: capability `ejecutar-inspeccion`.
 - **Response 200**:
   ```json
@@ -492,17 +494,33 @@ Lista de equipos del usuario para el selector al iniciar inspección.
   - `estado`: catálogo cerrado del ERP — los valores reales se confirman con MYE núcleo (pendiente §8).
   - Lista de campos del item es propuesta inicial; se refina con MYE núcleo cuando avance la integración.
 
-#### M-4 `GET /api/v1/equipos/{equipoCodigo}/partes`
+#### M-3b `GET /api/v1/equipos/{equipoCodigo}` (decisión 2026-05-04)
 
-Árbol de partes del equipo. Consultado al iniciar inspección y al abrir el wizard de hallazgo (selector de parte).
+**Detalle completo del equipo.** Invocado cuando el técnico **selecciona un equipo** desde la lista (M-3) para iniciar inspección. Incluye partes (absorbe M-4) y `rutinasMonitoreoIds` (Fase 2). Una sola llamada → todo el contexto operativo del equipo cargado.
 
 - **Path param**: `equipoCodigo` (string MYE — ej. `D11T-001`).
-- **Auth**: capability `ejecutar-inspeccion`. ERP valida acceso al equipo (404 si no).
-- **Sin paginación**: el árbol cabe completo en una respuesta. Profundidad máxima **3 niveles**.
+- **Auth**: capability `ejecutar-inspeccion`. ERP valida acceso al equipo (404 si no — no revela existencia).
+- **Sin paginación**: el árbol de partes cabe completo (profundidad máx 3 niveles, ~10–40 partes) y la lista de `rutinasMonitoreoIds` es de 2–3 elementos.
+- **Cache**: `ETag` + `Last-Modified` recomendados. El detalle de un equipo cambia poco (alta de equipos esporádica, partes y asignación de rutinas estables). Cliente puede revalidar con `If-None-Match`.
 - **Response 200**:
   ```json
   {
     "equipoId": "D11T-001",
+    "codigo": "D11T-001",
+    "descripcion": "Caterpillar D11T Bulldozer",
+    "marca": "Caterpillar",
+    "modelo": "D11T",
+    "anio": 2018,
+    "numeroSerie": "CAT-D11T-2018-7234",
+    "numeroEconomico": "ECON-1145",
+    "grupo": "MAQ-PESADA",
+    "obraId": "OB-2026-CALI-001",
+    "obraDescripcion": "Vía Cali-Buenaventura tramo 3",
+    "estado": "operativo",
+    "medidores": [
+      { "numero": 1, "unidad": "horas", "valorActual": 4287.5 },
+      { "numero": 2, "unidad": "kilometros", "valorActual": 32500.0 }
+    ],
     "partes": [
       {
         "parteId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
@@ -517,22 +535,26 @@ Lista de equipos del usuario para el selector al iniciar inspección.
         "descripcion": "Sistema de inyección",
         "padreId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
         "nivel": 1
-      },
-      {
-        "parteId": "b2c3d4e5-...",
-        "codigo": "HIDRAULICA",
-        "descripcion": "Sistema hidráulico",
-        "padreId": null,
-        "nivel": 0
       }
+    ],
+    "rutinasMonitoreoIds": [
+      "rm-001-elec",
+      "rm-002-trans",
+      "rm-003-frenos"
     ]
   }
   ```
 - **Convenciones del shape**:
-  - Estructura **plana con `padreId`**, no árbol anidado JSON. El cliente arma el árbol al renderizar (más simple para filtrar/buscar/cachear).
-  - `padreId = null` → parte raíz (nivel 0).
-  - `nivel`: profundidad en el árbol (0..2). Permite indentar visualmente sin caminar el árbol.
-- **Sin filtro de estado**: las partes en MYE no tienen estado activo/inactivo — todas las devueltas son válidas para el flujo de inspección.
+  - **Partes**: estructura **plana con `padreId`** (no árbol anidado JSON). `padreId=null` → raíz. `nivel` (0..2) para indentar sin caminar el árbol. Sin filtro de estado — todas las partes devueltas son válidas para inspección. Mismo formato que tenía M-4.
+  - **`rutinasMonitoreoIds`**: array de **referencias** (strings o guids) al catálogo `RutinaMonitoreoLocal` (sincronizado vía §3.4 / catálogo de rutinas-monitoreo). El módulo NO recibe los items embebidos aquí — los resuelve client-side contra la cache local. **Esto evita redundancia** (50 BULLDOZERs no replican las 3 rutinas idénticas).
+  - **Asignación per-equipo**: la lista representa las rutinas **asignadas explícitamente a este equipo** en el ERP. Dos equipos del mismo grupo pueden tener listas distintas (ver §12.11.5 punto 4 del modelo). Para MVP solo aplica monitoreo (Fase 2); en MVP la lista llega vacía o se omite.
+  - **Sin `rutinasTecnicasIds`**: rutina técnica MVP se deriva del grupo automáticamente (no asignación explícita per-equipo, sin cambio respecto al MVP histórico).
+- **Errors**: `404` si no existe o no es accesible al usuario.
+- **🚧 TODO con David** (ver `07-preguntas-destrabar-followups.md` pregunta 6): confirmar la forma de la relación equipo↔rutinas en MYE (¿columna en `Equipo`, tabla intermedia, otra entidad?) y el endpoint actual o a construir.
+
+#### M-4 `GET /api/v1/equipos/{equipoCodigo}/partes` ❌ ELIMINADO
+
+> **Eliminado el 2026-05-04 — absorbido por M-3b.** El árbol de partes ahora viaja embebido en el detalle del equipo (M-3b). Mantener M-4 implicaría dos llamadas para la misma operación (selección de equipo). Esta entrada queda solo como referencia histórica para slices que aún apunten a M-4 — todos deben migrar a M-3b.
 
 ---
 
@@ -550,6 +572,7 @@ Sincronizados nocturnamente vía cron + `If-Modified-Since` (ADR-004). Soporte d
 | M-13 | GET | `/api/v1/catalogos/obras` | 🚧 | Diario nocturno | `ProyectoLocal` |
 | M-14 | GET | `/api/v1/catalogos/grupos` | ⏸ | **Diferido** — filtro por grupo en M-3 ya está diferido; M-3 trae `grupo` como string denormalizado | (sin proyección local en MVP) |
 | M-15 | GET | `/api/v1/catalogos/unidades-medidor` | ⏸ | **Diferido** — ningún campo del modelo referencia `UnidadMedidorId`; en MVP `unidad` viaja como string denormalizado en `medidores[]` (P-2). Reactivar con bloque rutinas-driven | (sin proyección local en MVP) |
+| M-16 | GET | `/api/v1/catalogos/rutinas-monitoreo` | ⏸ | **Diferido a Fase 2** — catálogo completo de definiciones de rutinas de monitoreo (sin filtro por grupo, decisión 2026-05-04). La asignación equipo↔rutinas vive en M-3b; este endpoint trae solo las definiciones (items + rangos + calificaciones). | `RutinaMonitoreoLocal` |
 
 #### M-10 `GET /api/v1/catalogos/causas-falla`
 
@@ -630,6 +653,52 @@ Catálogo cerrado de unidades para los medidores de equipos (referenciado por P-
   ```
 - **Notas**: igual que el catálogo de partes — el ERP puede agregar unidades pero los códigos existentes son inmutables (ADR-004). Ventana de staleness aceptada: 24h.
 - **Sync**: nocturna + `If-Modified-Since`/`ETag` con `304 Not Modified` cuando aplique.
+
+#### M-16 `GET /api/v1/catalogos/rutinas-monitoreo` (Fase 2 — diferido)
+
+> **Decisión 2026-05-04:** este endpoint reemplaza al `GET /api/v1/rutinas-monitoreo?grupo={g}` planteado inicialmente. La asignación equipo↔rutinas se movió al detalle del equipo (M-3b); este catálogo solo trae **definiciones** de rutinas, sin filtro por grupo. Detalle del modelo en `01-modelo-dominio.md` §12.11.5 punto 9.
+
+Catálogo completo de definiciones de rutinas de monitoreo. Sincronizado nocturnamente. **Crítico para Fase 2** — la inspección de monitoreo necesita los items + rangos + calificaciones snapshotados al iniciar (§12.11.5 punto 7 del modelo).
+
+- **Sin filtro por grupo**: trae todas las rutinas activas. La relación con equipos vive en M-3b (`equipo.rutinasMonitoreoIds`).
+- **Estructura**: catálogo plano con items embebidos por rutina.
+- **Response 200**:
+  ```json
+  {
+    "items": [
+      {
+        "rutinaMonitoreoId": "rm-001-elec",
+        "nombre": "Sistema eléctrico",
+        "grupoMantenimiento": "Camioneta",
+        "items": [
+          {
+            "itemId": "it-elec-001",
+            "parte": "Batería",
+            "actividad": "Medición de voltaje",
+            "tipoEvaluacion": "Numerica",
+            "magnitud": "voltaje",
+            "unidad": "V",
+            "valorMin": 12.3,
+            "valorMax": 12.5
+          },
+          {
+            "itemId": "it-elec-002",
+            "parte": "Conectores batería",
+            "actividad": "Revisar estado",
+            "tipoEvaluacion": "Cualitativa"
+          }
+        ]
+      }
+    ],
+    "totalCount": 47
+  }
+  ```
+- **`grupoMantenimiento`**: campo descriptor (no es mecanismo de asignación — la asignación per-equipo viaja en M-3b). Útil para agrupación visual en pantallas administrativas.
+- **`tipoEvaluacion`**: discriminador explícito (`"Numerica"` con `valorMin`/`valorMax`/`magnitud`/`unidad` o `"Cualitativa"` sin esos campos).
+- **Solo rutinas activas**: el ERP filtra server-side. Módulo conserva descontinuadas en `RutinaMonitoreoLocal` (no las borra al desaparecer del response) para resolver historiales — ADR-004.
+- **Cache headers obligatorios**: `ETag` + `Last-Modified` → `304 Not Modified` cuando no hay cambios. Sync nocturno con stale-while-revalidate hasta 24h.
+- **Inmutabilidad de IDs**: tanto `rutinaMonitoreoId` como `itemId` son inmutables una vez publicados (ADR-004). Renombrar = cambiar descripción, no id. Esto es crítico porque `InspeccionIniciada_v1` snapshotea los items con su `ItemId` para calcular `FueraDeRango` contra el rango vigente al iniciar — si los IDs cambian se rompe la trazabilidad histórica.
+- **🚧 TODO con David** (ver `07-preguntas-destrabar-followups.md` pregunta 6): confirmar existencia del catálogo en MYE y el endpoint real.
 
 ---
 
@@ -717,12 +786,12 @@ Sync nocturno del catálogo completo de insumos. Alimenta la proyección local `
 |---|---|---|---|
 | Preoperacional | 6 (P-1..P-6) | Equipo del preop | 🚧 todos bloqueados |
 | MYE núcleo (operaciones) | 2 (M-1, M-2) | Equipo MYE | 🚧 + 🟣 fallback |
-| MYE núcleo (lecturas) | 5 (M-3..M-7) | Equipo MYE | M-3, M-4 activos (🚧); M-5, M-6, M-7 ⏸ diferidos al bloque rutinas-driven (post-MVP) |
-| MYE núcleo (catálogos) | 8 (M-8..M-15) | Equipo MYE | M-10, M-11, M-13 activos (🚧); M-8, M-9, M-12, M-14, M-15 ⏸ diferidos |
+| MYE núcleo (lecturas) | 5 (M-3, M-3b, M-5..M-7) | Equipo MYE | M-3 + M-3b activos (🚧); M-4 ❌ eliminado/absorbido por M-3b (decisión 2026-05-04); M-5, M-6, M-7 ⏸ diferidos al bloque rutinas-driven (post-MVP) |
+| MYE núcleo (catálogos) | 9 (M-8..M-16) | Equipo MYE | M-10, M-11, M-13 activos (🚧); M-8, M-9, M-12, M-14, M-15, M-16 ⏸ diferidos (M-16 entra en Fase 2) |
 | Inventario | 2 (I-1, I-2) | Equipo inventario | 🚧 todos bloqueados |
 | User master / RRHH | 2 (U-1, U-2) | Equipo seguridad/IT | 🟣 condicional ADR-002 |
 
-**Total:** 25 endpoints — 14 obligatorios MVP + 3 condicionales (M-2 fallback ADR-003; U-1, U-2 según ADR-002) + 8 diferidos al post-MVP (M-5, M-6, M-7 — bloque rutinas-driven; M-8, M-9 — catálogos globales de partes/actividades; M-12 — ubicaciones; M-14 — grupos; M-15 — unidades-medidor).
+**Total:** 26 endpoints (con M-3b nuevo + M-16 nuevo, M-4 eliminado) — 14 obligatorios MVP + 3 condicionales (M-2 fallback ADR-003; U-1, U-2 según ADR-002) + 9 diferidos al post-MVP (M-5, M-6, M-7 — bloque rutinas-driven; M-8, M-9 — catálogos globales de partes/actividades; M-12 — ubicaciones; M-14 — grupos; M-15 — unidades-medidor; M-16 — rutinas-monitoreo Fase 2).
 
 **Cuellos de botella esperados:**
 
@@ -770,6 +839,8 @@ Este archivo unifica versiones contradictorias previas:
 | 2026-04-29 | M-2 marcado 🟣 condicional (fallback) | Review consultor sobre ADR-003 |
 | 2026-04-27 | Consolidación `/repuestos` → `/insumos` | Decisión del 2026-04-27 (modelo §1.4) |
 | 2026-04-28 | P-5 (`/preop/novedades/{id}/descartar`) emerge | Refactor §15: `NovedadPreopDescartada_v1` evento dedicado |
+| 2026-05-04 | M-3b (detalle equipo con partes + rutinasMonitoreoIds) creado, M-4 eliminado/absorbido | Consolidación equipo+partes+rutinas en una sola llamada |
+| 2026-05-04 | M-16 (catálogo `rutinas-monitoreo` sin filtro) reemplaza el `?grupo=` planteado inicialmente | Corrección Jaime 2026-05-04: rutinas se asignan per-equipo en ERP, no por grupo |
 
 ---
 
@@ -786,6 +857,7 @@ Lista de cosas que faltan acordar con cada equipo Sinco antes de implementar:
 - [ ] **Preop**: confirmar campos adicionales por adjunto en P-3 (GPS de la foto, dispositivo, hash de integridad).
 - [ ] **MYE núcleo**: confirmar valores del catálogo cerrado de `estado` en M-3 (asumido `operativo | en-mantenimiento | fuera-de-servicio | inactivo` — adivinanza).
 - [ ] **MYE núcleo**: refinar lista de campos del item de M-3 (`marca`, `modelo`, `anio`, `numeroSerie`, `numeroEconomico` propuestos — pueden faltar o sobrar).
+- [ ] **MYE núcleo (M-3b + M-16)**: confirmar la relación equipo↔rutinas-monitoreo en MYE — ¿columna en `Equipo` con array de ids, tabla intermedia, otra entidad? ¿Existe endpoint actual que devuelva las rutinas asignadas a un equipo, o es a construir? ¿La asignación admite distintas rutinas por contexto (técnica vs monitoreo) o es un solo set por equipo con discriminador? Ver `07-preguntas-destrabar-followups.md` pregunta 6 actualizada.
 - [ ] **Inventario**: validar que I-1 soporta filtrado por `parteId` (compatibilidad).
 - [ ] **Inventario**: cuál es el catálogo cerrado de unidades (`Unidad` field).
 - [ ] **Seguridad/IT**: confirmar si U-1/U-2 son necesarios o el host PWA ya propaga lo requerido.

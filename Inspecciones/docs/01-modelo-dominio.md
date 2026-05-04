@@ -1889,7 +1889,7 @@ public enum TipoInspeccion
 public sealed record RutinaMonitoreo(
     Guid RutinaMonitoreoId,
     string Nombre,                                  // p. ej. "Sistema eléctrico"
-    string GrupoMantenimiento,                      // p. ej. "Camioneta"
+    string GrupoMantenimiento,                      // p. ej. "Camioneta" — descriptor, no mecanismo de asignación
     IReadOnlyList<ItemRutinaMonitoreo> Items,
     DateTime SincronizadoEn);
 
@@ -1899,6 +1899,8 @@ public sealed record ItemRutinaMonitoreo(
     string Actividad,                               // "Medición de voltaje"
     EvaluacionEsperada Evaluacion);                 // numérica O cualitativa (mutuamente exclusivas)
 ```
+
+> **Sobre `GrupoMantenimiento` (decisión 2026-05-04):** este campo se conserva como **descriptor** para auditoría y agrupación visual en pantalla, pero **NO es el mecanismo de asignación equipo↔rutinas**. La asignación se hace **explícitamente en el ERP por equipo** (ver punto 4 abajo). Dos equipos del mismo grupo pueden tener listas distintas de rutinas asignadas si el ERP así las configuró.
 
 **3. `EvaluacionEsperada` — dos value objects paralelos (decisión 1, opción A):**
 
@@ -1931,12 +1933,13 @@ Ejemplos del archivo `inspeccion.xlsx`:
 - Numérico: `Parte=Batería, Actividad=Medir voltaje, Evaluacion=MedicionEsperada(voltaje, V, 12.3, 12.5)`.
 - Cualitativo: `Parte=Conectores batería, Actividad=Revisar estado, Evaluacion=EvaluacionCualitativaEsperada()`.
 
-**4. Diferencia con rutina técnica (decisión 4 confirmada 2026-04-30):**
+**4. Diferencia con rutina técnica (decisión 4 confirmada 2026-04-30, refinada 2026-05-04):**
 
 | Aspecto | Rutina técnica (MVP) | Rutina de monitoreo (Fase 2) |
 |---|---|---|
-| Cardinalidad por grupo | **Una sola** rutina por grupo | **N rutinas** por grupo (Sistema eléctrico, Transmisión, Sistema de frenos, …) |
-| Selección al iniciar | Derivada automáticamente del grupo | **El técnico elige** la rutina al iniciar |
+| Asignación equipo↔rutina | Una sola rutina por grupo, derivada automáticamente del grupo del equipo | **Asignación explícita en el ERP por equipo** — 2 a 3 rutinas por equipo, configuradas individualmente |
+| Cardinalidad | **Una sola** rutina por equipo | **2–3 rutinas** por equipo (típico) |
+| Selección al iniciar | Derivada automáticamente del grupo (técnico no elige) | **El técnico elige** entre las rutinas asignadas a ese equipo |
 | Items | Lista de partes aplicables (filtro) | Lista de items con evaluación esperada (checklist real) |
 | Flujo del técnico | Libre — el técnico decide qué inspeccionar | Estructurado — el técnico recorre los items de la rutina elegida |
 
@@ -2014,9 +2017,14 @@ Invariantes derivadas para Fase 2:
 - Si `Origen=Monitoreo` → `AccionRequerida=RequiereSeguimiento` (no genera OT inmediata).
 - Si `Origen=Monitoreo` → `TipoInspeccion` del stream = `Monitoreo`.
 
-**9. Sync de catálogo con ERP (decisión 5 confirmada 2026-04-30, opción A):**
+**9. Sync de catálogo con ERP (decisión 5 confirmada 2026-04-30, refinada 2026-05-04):**
 
-Las rutinas de monitoreo se sincronizan desde el ERP con el mismo patrón que el resto de catálogos (ADR-004, sync nocturno + stale-while-revalidate). Endpoint nuevo del lado MYE: `GET /api/v1/rutinas-monitoreo?grupo={g}` — pendiente confirmar con David. El módulo NO gestiona el catálogo localmente.
+El modelo se separa en dos piezas con responsabilidades distintas:
+
+- **Catálogo de definiciones de rutinas (`/catalogos/rutinas-monitoreo`):** sincronizado nocturnamente con el patrón estándar de catálogos (ADR-004, stale-while-revalidate, ETag/`If-Modified-Since`). Trae **todas** las rutinas de monitoreo del cliente con sus items completos. Sin filtro por grupo. Alimenta la proyección local `RutinaMonitoreoLocal` (resolver el id contra el contenido).
+- **Asignación equipo↔rutinas:** viaja en el detalle del equipo (M-3b en `06-contrato-apis-erp.md` — `GET /api/v1/equipos/{equipoCodigo}` devuelve `rutinasMonitoreoIds: ["id1", "id2", "id3"]`). Es decir, el equipo "sabe" qué rutinas le aplican; las definiciones se resuelven contra el catálogo local.
+
+El módulo NO gestiona el catálogo de definiciones localmente (lo sincroniza). La asignación se consulta vía M-3b al iniciar inspección de monitoreo.
 
 **10. Dictamen de monitoreo (decisión 6 confirmada 2026-04-30, opción A):**
 
@@ -2039,7 +2047,8 @@ public sealed record IniciarInspeccionMonitoreo(
 ```
 
 El handler valida (además de I-I1, I-I2, I-I3 §15.7):
-- `RutinaMonitoreoId` existe y pertenece al `GrupoMantenimiento` del equipo.
+- `RutinaMonitoreoId` existe en el catálogo local `RutinaMonitoreoLocal`.
+- `RutinaMonitoreoId ∈ Equipo.RutinasMonitoreoIds` — la rutina está **asignada al equipo en el ERP** (resolución contra `EquipoLocal` poblado desde M-3b). No vale "la rutina pertenece al grupo del equipo" — ahora la asignación es explícita por equipo.
 - `RutinaMonitoreo` tiene ≥1 item (rutinas vacías se rechazan).
 
 Y emite `InspeccionIniciada_v1` con `Tipo=Monitoreo` + `RutinaMonitoreoSeleccionadaId` + `ItemsSnapshot`.
@@ -2050,14 +2059,47 @@ Y emite `InspeccionIniciada_v1` con `Tipo=Monitoreo` + `RutinaMonitoreoSeleccion
 
 Reusa la maquinaria de adjuntos del MVP (§12.10.11): mismo `BlobUri`, SAS upload pattern (ADR-005), `AdjuntoEliminado_v1` para soft delete, mismos tipos permitidos (JPEG/PNG/HEIC/WebP/PDF), 3 MB max, EXIF preservado.
 
-Sub-preguntas pendientes para resolver al entrar a Fase 2 (no bloquean el MVP):
+**12.1 Anclaje del adjunto (decisión 2026-05-04, opción "xor por contexto UI"):**
 
-- **Anclaje del adjunto:** ¿se asocia al `ItemId` del item de monitoreo (foto evidencia incluso cuando el resultado es OK), al `HallazgoId` cuando el item dispara hallazgo automático, o ambos? Tres opciones:
-  - (a) Solo por `HallazgoId` — reusa `AdjuntoAgregado_v1` sin cambios; pierde evidencia positiva (item Bueno con foto).
-  - (b) Solo por `ItemId` — extiende `AdjuntoAgregado_v1` con `ItemId` opcional (xor con `HallazgoId`); el hallazgo automático "hereda" visualmente las fotos del item.
-  - (c) Ambos — el técnico decide a qué anclar; modelo más flexible, UI más compleja.
-- **Obligatoriedad:** ¿foto obligatoria cuando el item resulta `Malo` o `FueraDeRango` (evidencia para el seguimiento), opcional cuando `Bueno` / dentro de rango? ¿O siempre opcional?
-- **Límite por item:** ¿se hereda el límite de 5 adjuntos del MVP (que aplica por hallazgo) al item de monitoreo, o se ajusta?
+Un adjunto pertenece a **exactamente uno** de `HallazgoId` o `ItemId` — nunca a ambos, nunca a ninguno. El anclaje queda determinado por dónde toma la foto el técnico en la UI, no por una elección explícita:
+
+| Tipo de inspección | Origen del adjunto | Campo relleno |
+|---|---|---|
+| Técnica | Botón cámara dentro de un hallazgo | `HallazgoId` (sin cambio respecto a MVP) |
+| Monitoreo | Botón cámara en un item del checklist de la rutina | `ItemId` |
+| Monitoreo | Botón cámara en un hallazgo manual (`Origen=Manual`) fuera de la rutina | `HallazgoId` |
+
+Cuando un item dispara hallazgo automático (`Origen=Monitoreo`), las fotos del item se muestran en la vista del hallazgo vía el link existente `MedicionOrigenId=ItemId` (§12.11.5 punto 6). **No se duplican** ni se "transfieren" — son las mismas fotos vistas desde dos ángulos.
+
+Implementación: el evento `AdjuntoAgregado_v1` gana campo `ItemId: Guid?`. Invariante: `(ItemId == null) XOR (HallazgoId == null)`. El handler `AdjuntarArchivo` recibe uno u otro según el contexto del comando y valida coherencia con el `Tipo` del aggregate (en `Tecnica`, `ItemId` siempre `null`).
+
+**Trade-off aceptado:** asimetría leve respecto a técnica donde solo aplica `HallazgoId`. Refleja la realidad — solo monitoreo tiene items. Descartadas: opción (a) "solo `HallazgoId`" (perdía evidencia positiva de items Bueno), opción (c) "el técnico elige a qué anclar" (decisión UX innecesaria).
+
+**12.2 Obligatoriedad (decisión 2026-05-04, opción "siempre opcional"):**
+
+La foto **siempre es opcional**, sin importar el resultado del item (`Bueno` / `Regular` / `Malo` / dentro de rango / `FueraDeRango`). La medición numérica o la calificación cualitativa son la evidencia primaria; la foto es complementaria.
+
+**Razones:**
+- Algunos items no se prestan a foto (medición eléctrica con multímetro — la foto del instrumento aporta poco).
+- El `SeguimientoHallazgo` que se abre tras `Malo` / `FueraDeRango` tiene su propio ciclo de captura de evidencia (§15.8).
+- Endurecer después es reversible y de bajo riesgo: si en producción observamos que los seguimientos llegan sin evidencia útil, se agrega una pre-condición al handler ("foto requerida cuando item dispara hallazgo automático") sin migrar el evento ni reescribir la historia.
+
+**Trade-off aceptado:** los técnicos podrían no documentar fallas críticas con foto. Mitigación posterior si se materializa: invariante condicional en el comando `FirmarInspeccion` que bloquee firma cuando un item con `Malo` / `FueraDeRango` no tenga al menos una foto. **NO se aplica en Fase 2 MVP — solo si emerge la necesidad.**
+
+**12.3 Límite por item (decisión 2026-05-04, opción "heredar del MVP"):**
+
+Mismo tope que MVP técnica (§12.10.11):
+
+| Restricción | Valor | Aplicación |
+|---|---|---|
+| Adjuntos máximos | 5 (no eliminados) | Por `ItemId` o por `HallazgoId`, individualmente |
+| Tamaño máximo por archivo | 3 MB | Igual que MVP — cliente comprime |
+| Tipos permitidos | JPEG, PNG, HEIC, WebP, PDF | Igual que MVP |
+| EXIF | Preservado | Igual que MVP |
+
+El handler `AdjuntarArchivo` extiende su validación de límite-5 para contar contra el `ItemId` cuando el comando viene anclado a item, contra `HallazgoId` cuando viene anclado a hallazgo. Cada item de la rutina de monitoreo tiene su propio cupo de 5; cada hallazgo manual tiene el suyo.
+
+**Trade-off aceptado:** una rutina extensa con muchas fotos puede pesar 100+ MB. Manejable con Azure Storage Lifecycle Policy moviendo blobs antiguos a tier Archive (ya previsto en §12.10.11). Bajar el límite es reversible si emerge abuso.
 
 **13. Otras preguntas abiertas (no bloqueantes hoy):**
 
@@ -2316,6 +2358,8 @@ foreach (var hallazgo in inspeccion.Hallazgos
 Mismo efecto, una vuelta menos en código.
 
 #### 12.10.11 Decisiones operativas de adjuntos (foto / PDF) (2026-04-27)
+
+> **Forward-reference:** las decisiones de esta sección aplican al MVP técnica. La extensión para Fase 2 (anclaje a `ItemId` de monitoreo, mismo tope 5/3MB por item, opcional) se documenta en §12.11.5 puntos 12.1–12.3.
 
 Decisiones del usuario para el evento `AdjuntoAgregado_v1` y comando `AdjuntarArchivo`:
 
