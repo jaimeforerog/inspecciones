@@ -310,7 +310,7 @@ Recomendación inicial: **VPN sitio-a-sitio**. Sube a ExpressRoute si los volúm
 
 ### Capa de eventos del preoperacional — patrón propuesto
 
-El preoperacional vive en SQL Server (asumido) on-prem y no expone eventos. Patrón menos invasivo:
+El preoperacional vive en SQL Server on-prem (confirmado por Jaime el 2026-05-04) y no expone eventos. Patrón menos invasivo:
 
 ```
 On-Premise (Sinco)                                Azure

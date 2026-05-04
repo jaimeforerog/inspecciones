@@ -104,6 +104,8 @@ Forma esperada de respuestas 4xx/5xx (a confirmar con cada equipo):
 
 ### 3.1 Preoperacional (equipo del preop)
 
+> **Backend del preop:** **SQL Server relacional on-prem.** Sin event store, sin event sourcing. La idempotencia real exigida en §1.4 para P-5 y P-6 se implementa del lado preop con una tabla `idempotency_key → (response_status, response_body, expires_at)` consultada antes de procesar el comando — **no es comportamiento automático como en Marten/event-store**, requiere desarrollo explícito en el preop. Confirmado decisión 2026-05-04.
+
 | # | Método | Path | Estado | Slice consumidor | Roadmap |
 |---|---|---|---|---|---|
 | P-1 | GET | `/api/v1/preop/novedades?q=&page=&size=` | 🚧 | Pantalla 2 (importar novedades) | §4.1 |
