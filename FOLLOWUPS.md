@@ -24,11 +24,45 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 ### #5 — Endpoints de listado de hallazgos importables con filtros 🟢
 
 **Origen:** notas reunión diseño 2026-04-29 — "filtros para importar hallazgos deben estar disponibles antes de mostrar el listado, permitiendo filtrar por parte, fecha y usuario".
-**Fecha:** 2026-04-29
+**Fecha:** 2026-04-29 · **Refinado:** 2026-05-04
 **Tipo:** API · doc
 **Descripción:** Definir y agregar al roadmap dos endpoints (o variantes filtrables de los existentes): `GET /inspecciones/{id}/importables-preop?parte=&desde=&hasta=&usuario=` (lista novedades preop verificables del equipo, filtrable) y `GET /equipos/{equipoId}/seguimientos-importables?parte=&desde=&hasta=&usuario=` (lista seguimientos abiertos importables a la inspección actual). El segundo puede ser la misma proyección de §15.12.4 con filtros adicionales. El primero requiere proyección lateral del catálogo de novedades preop pendientes — confirmar si es lectura directa al ERP (`GET /api/v1/preop/novedades?...`) o read model local.
+**Cross-references (2026-05-04):**
+- **`02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 3**: el flow review confirmó que P-1 hoy solo soporta `q=` libre + paginación. Si followup #5 se materializa, P-1 necesita extender query params (parte, fecha, usuario).
+- **`07-preguntas-destrabar-followups.md` pregunta 7**: redactada y pendiente de enviar a David — confirma forma exacta del filtro server-side y si los filtros aplican al endpoint del preop directamente.
 **Disparador para abrir slice:** previo al slice del wizard de hallazgo (paso 3.37 `POST /hallazgos`). Resolver con David si es lectura directa o local antes de codear el adapter.
 **Notas:** No bloqueante hasta que Santiago llegue al slice de importación. Daniel ya está iterando UX en Figma.
+
+
+
+### #7 — Inconsistencia P-5: ¿al asignar o al firmar? 🟢
+
+**Origen:** revisión por flujos 2026-05-04 — `02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 2.
+**Fecha:** 2026-05-04
+**Tipo:** doc · consistencia
+**Descripción:** Dos lugares del contrato `06-contrato-apis-erp.md` dicen cosas distintas sobre cuándo se invoca P-5 `POST /preop/novedades/{id}/verificar`:
+- **Detalle P-5 (§3.1)** dice: *"Cuándo se invoca: cuando el técnico asigna la novedad... No al firmar la inspección. La asignación dispara el outbox; la firma no necesita re-emitir."*
+- **Resumen §1.8** (resiliencia outbox) dice: *"P-5 ... | Saga `CerrarInspeccionSaga` (paso 3.28)"* — el paso 3.28 corre al firmar.
+Mi lectura: el detalle de P-5 ("al asignar") es la versión vigente y el resumen §1.8 quedó desactualizado. Razones: (a) P-6 descartar también dice "al tocar el ojo tachado, no al firmar" — patrón consistente entre verificar y descartar. (b) La irreversibilidad documentada en P-5 ("queda verificada incluso si la inspección se cancela") solo tiene sentido si la verificación es en tiempo real. (c) Reduce la atomicidad de la saga `CerrarInspeccionSaga` (un POST menos por hallazgo, más rápida).
+**Decisión necesaria:** elegir una de las dos (sugerencia: "al asignar") y limpiar el otro lugar. Si vamos con "al asignar", §1.8 debe quitar P-5 de la columna "consumida por saga" y poner "Adapter del comando `RegistrarHallazgo` cuando Origen=PreOperacional". Si vamos con "al firmar", el detalle de P-5 debe rectificarse.
+**Disparador para abrir slice:** previo al slice 3.28 / 3.49 (adapter Preop). Es decisión doc-only — al elegir cuál es la fuente de verdad, alinear ambos lugares y confirmar con el patrón unificado §15.9.
+**Notas:** No bloqueante en el corto plazo. Antes de codear el adapter Preop hay que tener una sola fuente de verdad sobre el momento de invocación.
+
+
+
+### #8 — Push SignalR: ¿cuándo exactamente? 🟢
+
+**Origen:** revisión por flujos 2026-05-04 — `02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 4.
+**Fecha:** 2026-05-04
+**Tipo:** doc · ADR-005
+**Descripción:** ADR-005 dice "push al cliente cuando termina la integración", pero hay **dos integraciones en pipeline** tras la firma con OT: M-1 (POST OT) y M-1b (PDF adjunto). Tres opciones para el timing del push SignalR:
+- **(a)** Push tras éxito de M-1 (OT generada con número visible inmediatamente; PDF puede tardar más, se notifica aparte si falla). UX más reactiva.
+- **(b)** Push solo tras M-1 + M-1b ambos exitosos (estado "OT con PDF lista"). UX más conservadora — usuario espera más.
+- **(c)** Dos pushes separados (uno por cada integración). UX más informativa pero potencialmente ruidosa.
+Mi sugerencia: **(a)** explicitada en ADR-005 — push tras M-1 con `OTGenerada` + push opcional tras M-1b solo si falla. El técnico ve el número de OT lo antes posible (lo más útil); el adjunto PDF es retroactivo y no bloquea operaciones.
+**Decisión necesaria:** elegir entre (a)/(b)/(c) y actualizar ADR-005 (`01-modelo-dominio.md §14`) + slice 3.51 (`InspeccionesHub`) + slice 3.27d (saga PDF).
+**Disparador para abrir slice:** previo al slice 3.51 o 3.27d. Decisión doc-only — actualizar ADR-005 antes de codear el hub.
+**Notas:** No es blocker técnico — el técnico puede ver el número de OT inmediatamente tras M-1 (lo más útil), y el PDF adjunto es retroactivo.
 
 
 
