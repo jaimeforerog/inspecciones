@@ -46,11 +46,11 @@
 ```csharp
 public sealed record InspeccionIniciada_v1(
     Guid InspeccionId,
-    Guid EquipoId,
-    Guid RutinaId,                 // derivada del Grupo del equipo (no la elige el técnico)
+    int EquipoId,
+    int RutinaId,                 // derivada del Grupo del equipo (no la elige el técnico)
     string RutinaCodigo,           // legible para UI ("INSP. BULL.MOTOR")
     string TecnicoIniciador,
-    Guid ProyectoId,
+    int ProyectoId,
     UbicacionGps Ubicacion,        // OBLIGATORIO — GPS del teléfono al iniciar
     DateTime IniciadaEn);
 ```
@@ -72,15 +72,15 @@ public sealed record HallazgoRegistrado_v1(
     Guid InspeccionId,
     Guid HallazgoId,
     OrigenHallazgo Origen,                  // PreOperacional | Manual
-    Guid? NovedadPreopId,                   // !=null si Origen=PreOperacional (I-H2)
-    Guid ParteEquipoId,                     // SIEMPRE obligatorio (I-H1)
-    Guid? ActividadId,                      // del catálogo si Origen=PreOperacional (xor I12)
+    int? NovedadPreopId,                   // !=null si Origen=PreOperacional (I-H2)
+    int ParteEquipoId,                     // SIEMPRE obligatorio (I-H1)
+    int? ActividadId,                      // del catálogo si Origen=PreOperacional (xor I12)
     string? ActividadDescripcion,           // texto libre si Origen=Manual (xor I12)
     string NovedadTecnica,                  // texto libre obligatorio (I11)
     AccionRequerida AccionRequerida,        // NoRequiereIntervencion | RequiereSeguimiento | RequiereIntervencion
     string? AccionCorrectiva,               // !=null si AccionRequerida=RequiereIntervencion (I-H4)
-    Guid? CausaFallaId,                     // !=null si AccionRequerida∈{Seguimiento, Intervencion} (I-H4)
-    Guid? TipoFallaId,                      // !=null si AccionRequerida∈{Seguimiento, Intervencion} (I-H4)
+    int? CausaFallaId,                     // !=null si AccionRequerida∈{Seguimiento, Intervencion} (I-H4)
+    int? TipoFallaId,                      // !=null si AccionRequerida∈{Seguimiento, Intervencion} (I-H4)
     string? ObservacionCampo,
     UbicacionGps? Ubicacion,                // GPS al registrar (opcional)
     string EmitidoPor,
@@ -114,14 +114,14 @@ Edita campos de un hallazgo ya registrado. Solo válido mientras la inspección 
 public sealed record HallazgoActualizado_v1(
     Guid InspeccionId,
     Guid HallazgoId,
-    Guid ParteEquipoId,
-    Guid? ActividadId,
+    int ParteEquipoId,
+    int? ActividadId,
     string? ActividadDescripcion,
     string NovedadTecnica,
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     string EmitidoPor,
     DateTime ActualizadoEn);
@@ -163,7 +163,7 @@ public sealed record HallazgoEliminado_v1(
 ```csharp
 public sealed record NovedadPreopDescartada_v1(
     Guid InspeccionId,
-    Guid NovedadPreopId,
+    int NovedadPreopId,
     string Motivo,                  // texto libre obligatorio
     string EmitidoPor,
     DateTime DescartadaEn);
@@ -186,7 +186,7 @@ public sealed record RepuestoEstimado_v1(
     Guid InspeccionId,
     Guid HallazgoId,
     Guid RepuestoEstimadoId,
-    Guid SkuId,
+    int SkuId,
     decimal Cantidad,                // > 0 (permite galones, litros, fracciones)
     string Unidad,                   // derivada del catálogo SKU al guardar (NO viene del comando)
     string Justificacion,            // texto libre obligatorio
@@ -357,7 +357,7 @@ Emitido **por la saga**, no por un comando del técnico, tras éxito de la integ
 ```csharp
 public sealed record InspeccionCerrada_v1(
     Guid InspeccionId,
-    Guid OTCorrectivaIdSinco,        // identificador técnico interno
+    int OTCorrectivaIdSinco,        // identificador técnico interno
     string OTCorrectivaNumero,       // ej. "OT-123456" — visible al usuario
     DateTime CerradaEn);
 ```
@@ -440,10 +440,10 @@ Lo emite **la saga** `CerrarInspeccionSaga` al firmar la inspección que origin�
 ```csharp
 public sealed record SeguimientoAbierto_v1(
     Guid SeguimientoId,
-    Guid EquipoId,
+    int EquipoId,
     Guid HallazgoOrigenId,           // ref al hallazgo que originó (en inspección cerrada)
     Guid InspeccionOrigenId,
-    Guid ParteEquipoId,
+    int ParteEquipoId,
     string DescripcionOrigen,        // copia del NovedadTecnica del hallazgo
     string AbiertoPor,               // técnico que firmó la inspección original
     DateTime AbiertoEn);

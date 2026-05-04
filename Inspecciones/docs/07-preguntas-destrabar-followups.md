@@ -206,12 +206,12 @@ El modelo separa dos responsabilidades (decisión 2026-05-04):
    {
      "items": [
        {
-         "rutinaMonitoreoId": "rm-001-elec",
+         "rutinaMonitoreoId": 201,
          "nombre": "Sistema eléctrico",
          "grupoMantenimiento": "Camioneta",
          "items": [
            {
-             "itemId": "it-elec-001",
+             "itemId": 6001,
              "parte": "Batería",
              "actividad": "Medición de voltaje",
              "tipoEvaluacion": "Numerica",
@@ -221,7 +221,7 @@ El modelo separa dos responsabilidades (decisión 2026-05-04):
              "valorMax": 12.5
            },
            {
-             "itemId": "it-elec-002",
+             "itemId": 6002,
              "parte": "Conectores batería",
              "actividad": "Revisar estado",
              "tipoEvaluacion": "Cualitativa"

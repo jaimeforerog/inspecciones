@@ -559,14 +559,14 @@ Lo que el módulo de inspecciones técnicas necesita consumir es **una novedad c
 // Evento publicado al Service Bus topic 'preoperacional.novedades.v1'
 public sealed record NovedadReportada_v1
 {
-    public required Guid NovedadId          { get; init; } // PK estable derivada del registro origen
-    public required Guid EquipoId           { get; init; } // FK a maestro MYE
+    public required int NovedadId          { get; init; } // PK estable derivada del registro origen
+    public required int EquipoId           { get; init; } // FK a maestro MYE
     public required string EquipoCodigo     { get; init; } // human-readable para UX
 
-    public required Guid ParteId            { get; init; }
+    public required int ParteId            { get; init; }
     public required string ParteNombre      { get; init; }
 
-    public required Guid ActividadId        { get; init; }
+    public required int ActividadId        { get; init; }
     public required string ActividadDescripcion { get; init; }
 
     public required string Descripcion      { get; init; } // observación del operario
@@ -576,7 +576,7 @@ public sealed record NovedadReportada_v1
 
     public required DateTime ReportadaEn    { get; init; }
     public required string ReportadaPor     { get; init; } // operario
-    public required Guid PreoperacionalId   { get; init; } // a qué reporte pertenece
+    public required int PreoperacionalId   { get; init; } // a qué reporte pertenece
 
     public required IReadOnlyList<AdjuntoRef> Adjuntos { get; init; }
 
@@ -633,7 +633,7 @@ Esto es el corazón de la complejidad del workstream B.
 ```csharp
 // Topic: 'inspecciones.novedades.v1'
 public sealed record NovedadVerificada_v1(
-    Guid NovedadId,           // referencia a la del preop
+    int NovedadId,           // referencia a la del preop
     Guid InspeccionId,        // qué inspección la verificó
     string Resultado,         // "Confirmada" | "Descartada" | "RequiereSeguimiento"
     string DiagnosticoTecnico,
@@ -643,8 +643,8 @@ public sealed record NovedadVerificada_v1(
 // Topic: 'inspecciones.repuestos.v1'
 public sealed record RepuestoEstimado_v1(
     Guid InspeccionId,
-    Guid EquipoId,
-    Guid SkuId,                  // catálogo de inventario Sinco
+    int EquipoId,
+    int SkuId,                  // catálogo de inventario Sinco
     decimal CantidadEstimada,
     string UnidadMedida,
     string Justificacion);
@@ -652,7 +652,7 @@ public sealed record RepuestoEstimado_v1(
 // Topic: 'inspecciones.ot.v1'
 public sealed record OTCorrectivaSugerida_v1(
     Guid InspeccionId,
-    Guid EquipoId,
+    int EquipoId,
     string Prioridad,
     string DescripcionTrabajo,
     IReadOnlyList<Guid> NovedadesRelacionadas,
@@ -871,7 +871,7 @@ Ambas son **`Hallazgo`** dentro del aggregate `InspeccionTecnica` — solo cambi
 public sealed class InspeccionTecnica  // aggregate root
 {
     public Guid InspeccionId { get; private set; }
-    public Guid EquipoId { get; private set; }
+    public int EquipoId { get; private set; }
     public Guid TipoInspeccionId { get; private set; }
     public string TecnicoId { get; private set; }
     public DateTime IniciadaEn { get; private set; }
@@ -914,7 +914,7 @@ public sealed record Hallazgo(
     Guid HallazgoId,
     OrigenHallazgo Origen,                // PreOperacional | Manual
     Guid? NovedadPreopReferenciada,       // null si Origen = Manual
-    Guid ParteId,
+    int ParteId,
     string ActividadDescripcion,
     AccionRequerida AccionRequerida,
     string Descripcion,
@@ -931,14 +931,14 @@ public enum DictamenOperacion { Apto, AptoConRestricciones, NoApto }
 ```csharp
 // Origen preoperacional
 public sealed record NovedadPreopVerificada_v1(
-    Guid InspeccionId, Guid HallazgoId, Guid NovedadPreopId,
+    Guid InspeccionId, Guid HallazgoId, int NovedadPreopId,
     ResultadoVerificacion Resultado, string Diagnostico,
     string TecnicoId, DateTime VerificadaEn);
 
 // Origen inspector — NUEVO
 public sealed record HallazgoDescubierto_v1(
     Guid InspeccionId, Guid HallazgoId,
-    Guid EquipoId, Guid ParteId,
+    int EquipoId, int ParteId,
     string ActividadDescripcion, Severidad Severidad,
     string Descripcion, IReadOnlyList<Guid> AdjuntosIds,
     string TecnicoId, DateTime RegistradoEn);
@@ -946,7 +946,7 @@ public sealed record HallazgoDescubierto_v1(
 // Comunes
 public sealed record RepuestoEstimadoEnHallazgo_v1(
     Guid InspeccionId, Guid HallazgoId,
-    Guid SkuId, decimal Cantidad, string Unidad, string Justificacion);
+    int SkuId, decimal Cantidad, string Unidad, string Justificacion);
 
 public sealed record DiagnosticoEmitido_v1(
     Guid InspeccionId, string Diagnostico, DictamenOperacion Dictamen,
@@ -958,7 +958,7 @@ public sealed record InspeccionFirmada_v1(
 
 // Salida hacia el resto de Sinco (REST POST, no Service Bus por ADR-001)
 public sealed record OTCorrectivaSugerida_v1(
-    Guid InspeccionId, Guid EquipoId, Severidad PrioridadAgregada,
+    Guid InspeccionId, int EquipoId, Severidad PrioridadAgregada,
     string DescripcionTrabajo,
     IReadOnlyList<Guid> NovedadesPreopRelacionadas,
     IReadOnlyList<Guid> HallazgosInspectorRelacionados,

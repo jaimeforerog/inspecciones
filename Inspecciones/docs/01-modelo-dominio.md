@@ -103,10 +103,10 @@ public sealed class InspeccionTecnica
 {
     // Identidad y contexto
     public Guid InspeccionId        { get; private set; }
-    public Guid EquipoId            { get; private set; }
-    public Guid RutinaId            { get; private set; }
+    public int EquipoId            { get; private set; }
+    public int RutinaId            { get; private set; }
     public string TecnicoIniciador  { get; private set; } = default!;
-    public Guid ProyectoId              { get; private set; }
+    public int ProyectoId              { get; private set; }
     public string RutinaCodigo      { get; private set; } = default!;
     public UbicacionGps UbicacionInicio { get; private set; } = default!;
 
@@ -139,7 +139,7 @@ public sealed class InspeccionTecnica
 
     // Trazabilidad de salida
     // OT correctiva en MYE — poblados solo cuando MYE confirma creación
-    public Guid? OTCorrectivaIdSinco  { get; private set; }   // identificador técnico interno (Guid)
+    public int? OTCorrectivaIdSinco  { get; private set; }   // identificador técnico (int del ERP)
     public string? OTCorrectivaNumero { get; private set; }   // autonumérico humano de MYE (ej. "OT-123456")
 }
 
@@ -173,9 +173,9 @@ public enum InspeccionEstado
 // La rutina técnica NO se selecciona — se deriva del grupo del equipo: una por grupo.
 public sealed record IniciarInspeccion(
     Guid InspeccionId,                   // nuevo, no debe existir
-    Guid EquipoId,                       // del catálogo, debe estar en proyecto del técnico
+    int EquipoId,                       // del catálogo, debe estar en proyecto del técnico
     string IniciadaPor,                  // del JWT (ID del técnico)
-    Guid ProyectoId,                         // de los claims sinco_obras del JWT
+    int ProyectoId,                         // de los claims sinco_obras del JWT
     UbicacionGps Ubicacion) : ICommand;  // OBLIGATORIO — GPS del teléfono al iniciar
 
 // ⚠️ OBSOLETO — eliminado en §15.9. Reemplazado por los 3 botones de la variante B
@@ -183,7 +183,7 @@ public sealed record IniciarInspeccion(
 // NovedadPreopDescartada según el botón presionado.
 public sealed record VerificarNovedadPreoperacional(
     Guid InspeccionId,
-    Guid NovedadPreopId,                 // referencia al sistema preop
+    int NovedadPreopId,                 // referencia al sistema preop
     ResultadoVerificacion Resultado,
     string DiagnosticoEspecifico,
     string EmitidoPor) : ICommand;
@@ -192,7 +192,7 @@ public sealed record VerificarNovedadPreoperacional(
 // Reemplazado por AccionRequerida en RegistrarHallazgo (§15.2/§15.9).
 public sealed record DescubrirHallazgo(
     Guid InspeccionId,
-    Guid ParteId,                        // del catálogo Sinco
+    int ParteId,                        // del catálogo Sinco
     string ActividadDescripcion,
     Severidad Severidad,
     string Descripcion,
@@ -229,7 +229,7 @@ public sealed record EliminarAdjunto(
 public sealed record EstimarRepuesto(
     Guid InspeccionId,
     Guid HallazgoId,
-    Guid SkuId,
+    int SkuId,
     decimal Cantidad,                      // > 0 obligatorio (puede ser decimal — galones, litros)
     string Justificacion,                  // texto libre obligatorio, no vacío
     UbicacionGps? Ubicacion,
@@ -283,11 +283,11 @@ public sealed record CancelarInspeccion(
 // Las inspecciones históricas se reconstruyen sin depender de la versión de la rutina.
 public sealed record InspeccionIniciada_v1(
     Guid InspeccionId,
-    Guid EquipoId,
-    Guid RutinaId,
+    int EquipoId,
+    int RutinaId,
     string RutinaCodigo,                        // legible para UI ("INSP. BULL.MOTOR")
     string TecnicoIniciador,
-    Guid ProyectoId,
+    int ProyectoId,
     UbicacionGps Ubicacion,                     // OBLIGATORIO — GPS al iniciar
     DateTime IniciadaEn);
 
@@ -307,16 +307,16 @@ public sealed record InspeccionIniciada_v1(
 public sealed record HallazgoRegistrado_v1(
     Guid InspeccionId, Guid HallazgoId,
     OrigenHallazgo Origen,                          // PreOperacional | Manual
-    Guid? NovedadPreopId,                           // poblado si Origen == PreOperacional (I12b)
+    int? NovedadPreopId,                           // poblado si Origen == PreOperacional (I12b)
     ResultadoVerificacion? ResultadoVerificacion,   // ⚠️ OBSOLETO — eliminado del payload (§15.2)
-    Guid ParteId,                                   // siempre, validado contra rutina del aggregate
-    Guid? ActividadId,                              // poblado si Origen == PreOperacional (catálogo)
+    int ParteId,                                   // siempre, validado contra rutina del aggregate
+    int? ActividadId,                              // poblado si Origen == PreOperacional (catálogo)
     string? ActividadDescripcion,                   // poblado si Origen == Manual (texto libre)
     string NovedadTecnica,                          // texto libre obligatorio
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,                       // obligatorio solo si AccionRequerida = RequiereIntervencion
-    Guid? CausaFallaId,                             // obligatorio solo si AccionRequerida = RequiereIntervencion
-    Guid? TipoFallaId,                              // obligatorio solo si AccionRequerida = RequiereIntervencion
+    int? CausaFallaId,                             // obligatorio solo si AccionRequerida = RequiereIntervencion
+    int? TipoFallaId,                              // obligatorio solo si AccionRequerida = RequiereIntervencion
     string? ObservacionCampo,
     UbicacionGps? Ubicacion,                        // GPS al registrar (opcional)
     string EmitidoPor, DateTime RegistradoEn);
@@ -345,7 +345,7 @@ public sealed record AdjuntoEliminado_v1(
 
 public sealed record RepuestoEstimadoAgregado_v1(
     Guid InspeccionId, Guid HallazgoId, Guid RepuestoEstimadoId,
-    Guid SkuId, decimal Cantidad,
+    int SkuId, decimal Cantidad,
     string Unidad,                                    // derivada del catálogo del SKU
     string Justificacion,
     UbicacionGps? Ubicacion,
@@ -388,7 +388,7 @@ public sealed record InspeccionCancelada_v1(
 // Lleva tanto el ID técnico (Guid) como el número humano (autonumérico de MYE).
 public sealed record InspeccionCerrada_v1(
     Guid InspeccionId,
-    Guid OTCorrectivaIdSinco,           // identificador técnico interno
+    int OTCorrectivaIdSinco,           // identificador técnico interno
     string OTCorrectivaNumero,          // ej. "OT-123456" — visible al usuario
     DateTime CerradaEn);
 ```
@@ -621,7 +621,7 @@ public sealed class TipoInspeccion
 }
 
 public sealed record PartePlantilla(
-    Guid ParteId,                          // del catálogo Sinco
+    int ParteId,                          // del catálogo Sinco
     bool Obligatoria,                       // se debe revisar siempre
     List<string> ActividadesSugeridas);
 
@@ -644,8 +644,8 @@ public sealed record MedicionPlantilla(
 public sealed record Hallazgo(
     Guid HallazgoId,
     OrigenHallazgo Origen,
-    Guid? NovedadPreopId,           // null si Origen == Manual
-    Guid ParteId,
+    int? NovedadPreopId,           // null si Origen == Manual
+    int ParteId,
     string ActividadDescripcion,
     Severidad Severidad,            // ⚠️ ELIMINADO en §15.2
     string Descripcion,
@@ -659,7 +659,7 @@ public sealed record Medicion(
 
 public sealed record RepuestoEstimado(
     Guid RepuestoEstimadoId, Guid HallazgoId,
-    Guid SkuId, decimal Cantidad, string Unidad,
+    int SkuId, decimal Cantidad, string Unidad,
     string Justificacion, DateTime EstimadoEn);
 
 public sealed record UbicacionGps(double Latitud, double Longitud, double? PrecisionMetros);
@@ -684,32 +684,32 @@ Documentos `Marten` read-only mantenidos por sincronización REST contra Sinco o
 ```csharp
 // Definiciones preliminares — superseded por §12.7 y §12.9.6
 public sealed record EquipoLocal(
-    Guid EquipoId,
+    int EquipoId,
     string Codigo,                  // "EXC-320D-014"
     string Modelo,
     string Marca,
-    Guid ProyectoActualId,
+    int ProyectoActualId,
     decimal HorometroActual,
     Dictionary<string, string> AtributosExtra,
     DateTime SincronizadoEn);
 
 public sealed record ParteLocal(
-    Guid ParteId,
-    Guid EquipoId,
+    int ParteId,
+    int EquipoId,
     string Nombre,
     string? Categoria,
     string? PosicionFisica,
     bool Critica,
-    Guid? ParteIdPadre,
+    int? ParteIdPadre,
     DateTime SincronizadoEn);
 
 public sealed record RepuestoLocal(
-    Guid SkuId,
+    int SkuId,
     string Codigo,
     string Nombre,
     string Unidad,
     decimal? PrecioReferencia,
-    List<Guid> ParteIdsCompatibles,
+    List<int> ParteIdsCompatibles,
     DateTime SincronizadoEn);
 ```
 
@@ -790,9 +790,9 @@ Una fila por inspección por técnico. Útil para la pantalla principal del móv
 public sealed record BandejaItem(
     Guid InspeccionId,
     string TecnicoId,
-    Guid EquipoId, string EquipoCodigo,
-    Guid RutinaId, string RutinaCodigo, string RutinaNombre,
-    Guid ProyectoId, string ProyectoNombre,
+    int EquipoId, string EquipoCodigo,
+    int RutinaId, string RutinaCodigo, string RutinaNombre,
+    int ProyectoId, string ProyectoNombre,
     DateTime IniciadaEn,
     InspeccionEstado Estado,
     int HallazgosCount,
@@ -1264,14 +1264,14 @@ Grupo (BULLDOZER, EXCAVADORA, …)
 
 ```csharp
 public sealed record EquipoLocal(
-    Guid EquipoId,                      // Id técnico interno
+    int EquipoId,                      // Id técnico interno
     string CodigoSinco,                 // "1" — clave natural
     string? Placa,                      // "xemp899" — opcional
     string Descripcion,
     string GrupoMantenimiento,          // "BULLDOZER" — clave para rutina
     string Modelo,                      // "D65PX2"
     string? UbicacionDescripcion,       // texto libre por ahora
-    Guid? ProyectoActualId,                 // si existe catálogo de proyectos (ERP lo llama "obras")
+    int? ProyectoActualId,                 // si existe catálogo de proyectos (ERP lo llama "obras")
     decimal? HorometroActual,
     Dictionary<string, string> AtributosExtra,
     DateTime SincronizadoEn);
@@ -1283,14 +1283,14 @@ Antes había modelado `ParteLocal` como "una parte por equipo". Lo correcto es: 
 
 ```csharp
 public sealed record ParteCatalogo(
-    Guid ParteId,
+    int ParteId,
     string Codigo,                      // "MOTOR"
     string Nombre,
     string? Categoria,
     DateTime SincronizadoEn);
 
 public sealed record ActividadCatalogo(
-    Guid ActividadId,
+    int ActividadId,
     string Codigo,                      // "VERIFICACION ESTADO"
     string Descripcion,
     DateTime SincronizadoEn);
@@ -1302,7 +1302,7 @@ Reemplaza al `TipoInspeccion` que tenía en §2.2. La rutina es el concepto del 
 
 ```csharp
 public sealed record Rutina(
-    Guid RutinaId,
+    int RutinaId,
     string Codigo,                          // "PERO. BULL", "INSP.BULL.MOTOR"
     string Nombre,
     TipoRutina Tipo,                        // Preoperacional | Tecnica
@@ -1312,8 +1312,8 @@ public sealed record Rutina(
     DateTime SincronizadoEn);
 
 public sealed record ItemRutina(
-    Guid ParteId,
-    Guid ActividadId,
+    int ParteId,
+    int ActividadId,
     bool Obligatorio,
     string? Instruccion);                   // texto guía opcional para el ejecutor
 
@@ -1326,14 +1326,14 @@ public enum TipoRutina { Preoperacional, Tecnica }
 
 ```csharp
 public sealed record RepuestoLocal(
-    Guid SkuId,
+    int SkuId,
     string CodigoSinco,                     // "101", "103"
     string Descripcion,
     string Agrupacion,                      // "combustible", "repuestos"
     string UnidadMedida,                    // "galon", "unidad"
     AplicabilidadMYE AplicaMYE,
     decimal? PrecioReferencia,
-    List<Guid> ParteIdsCompatibles,         // si la relación existe
+    List<int> ParteIdsCompatibles,         // si la relación existe
     DateTime SincronizadoEn);
 
 public enum AplicabilidadMYE { NoAplica, Opcional, Requerido }
@@ -1346,8 +1346,8 @@ public enum AplicabilidadMYE { NoAplica, Opcional, Requerido }
 ```csharp
 public sealed record HallazgoDescubierto_v1(
     Guid InspeccionId, Guid HallazgoId,
-    Guid ParteId,                       // referencia ParteCatalogo
-    Guid ActividadId,                   // referencia ActividadCatalogo (NUEVO)
+    int ParteId,                       // referencia ParteCatalogo
+    int ActividadId,                   // referencia ActividadCatalogo (NUEVO)
     string? ObservacionLibre,           // si el técnico necesita comentar más
     Severidad Severidad,
     string Descripcion,
@@ -1412,13 +1412,13 @@ Esto **reduce dos endpoints y agrega tres** respecto al inventario anterior. Hay
 
 ```csharp
 public sealed record EquipoLocal(
-    Guid EquipoId,                      // Id técnico interno
+    int EquipoId,                      // Id técnico interno
     string CodigoSinco,                 // "1" — clave natural
     string? Placa,                      // "xemp899" — opcional
     string Descripcion,
     string GrupoMantenimiento,          // "BULLDOZER" — clave para rutina
-    Guid UbicacionId,                   // referencia a UbicacionLocal
-    Guid? ProyectoActualId,                 // referencia a ProyectoLocal (asignación dinámica)
+    int UbicacionId,                   // referencia a UbicacionLocal
+    int? ProyectoActualId,                 // referencia a ProyectoLocal (asignación dinámica)
     LecturaMedidor? MedidorPrimario,    // p. ej. odómetro (Km) — extendido 2026-04-30
     LecturaMedidor? MedidorSecundario,  // p. ej. horómetro (Hr) — extendido 2026-04-30
     Dictionary<string, string> AtributosExtra,
@@ -1438,7 +1438,7 @@ Sin campo `Modelo`. La rutina aplicable se determina por `GrupoMantenimiento`.
 
 ```csharp
 public sealed record Rutina(
-    Guid RutinaId,
+    int RutinaId,
     string Codigo,                          // "PERO. BULL", "INSP. BULL", "D65PX2"
     string Nombre,
     // ❌ El campo Tipo se eliminó del modelo del módulo en §12.11.1.
@@ -1449,9 +1449,9 @@ public sealed record Rutina(
     DateTime SincronizadoEn);
 
 public sealed record ItemRutina(
-    Guid ItemId,                            // estable en el catálogo
-    Guid ParteId,                           // referencia a ParteCatalogo
-    Guid ActividadId,                       // referencia a ActividadCatalogo
+    int ItemId,                            // estable en el catálogo
+    int ParteId,                           // referencia a ParteCatalogo
+    int ActividadId,                       // referencia a ActividadCatalogo
     bool Obligatorio,
     string? Instruccion);
 
@@ -1462,16 +1462,16 @@ public sealed record ItemRutina(
 
 ```csharp
 public sealed record UbicacionLocal(
-    Guid UbicacionId,
+    int UbicacionId,
     string Codigo,
     string Nombre,
     DateTime SincronizadoEn);
 
 public sealed record ProyectoLocal(
-    Guid ProyectoId,
+    int ProyectoId,
     string Codigo,
     string Nombre,
-    Guid? UbicacionId,                  // si el proyecto tiene ubicación geográfica catalogada
+    int? UbicacionId,                  // si el proyecto tiene ubicación geográfica catalogada
     bool Activa,
     DateTime SincronizadoEn);
 ```
@@ -1488,7 +1488,7 @@ Como cada rutina es un set fijo de items y solo los items con hallazgo emiten ev
 public sealed record InspeccionIniciada_v1(
     Guid InspeccionId, string IniciadaPor,
     UbicacionGps? Ubicacion,
-    Guid RutinaId,                          // referencia
+    int RutinaId,                          // referencia
     string RutinaCodigo,
     IReadOnlyList<ItemRutina> ItemsSnapshot, // congelado al iniciar
     DateTime IniciadaEn);
@@ -1501,8 +1501,8 @@ Cuando el técnico marca una actividad de la rutina con hallazgo:
 ```csharp
 public sealed record HallazgoEnRutina_v1(   // sustituye a HallazgoDescubierto_v1 cuando viene de rutina
     Guid InspeccionId, Guid HallazgoId,
-    Guid ItemRutinaId,                      // referencia al snapshot
-    Guid ParteId, Guid ActividadId,         // duplicado para query directo
+    int ItemRutinaId,                      // referencia al snapshot
+    int ParteId, int ActividadId,         // duplicado para query directo
     Severidad Severidad,
     string? ObservacionLibre,
     string EmitidoPor, DateTime RegistradoEn);
@@ -1513,7 +1513,7 @@ Y cuando el técnico descubre algo **fuera** de la rutina:
 ```csharp
 public sealed record HallazgoFueraDeRutina_v1(  // sustituye a HallazgoDescubierto_v1 cuando es ad-hoc
     Guid InspeccionId, Guid HallazgoId,
-    Guid ParteId, Guid ActividadId,
+    int ParteId, int ActividadId,
     Severidad Severidad,
     string? ObservacionLibre,
     string EmitidoPor, DateTime RegistradoEn);
@@ -1593,14 +1593,14 @@ Total: **15 endpoints** en cuatro módulos Sinco. Pendiente actualizar §9.13 de
 public sealed record Hallazgo(
     Guid HallazgoId,
     OrigenHallazgo Origen,                          // PreOperacional | Manual
-    Guid? NovedadPreopId,                           // si Origen == PreOperacional
-    Guid? ItemRutinaId,                             // si fue capturado desde rutina
-    Guid ParteId,                                   // siempre, del catálogo
+    int? NovedadPreopId,                           // si Origen == PreOperacional
+    int? ItemRutinaId,                             // si fue capturado desde rutina
+    int ParteId,                                   // siempre, del catálogo
     string NovedadTecnicaDescripcion,               // texto libre obligatorio
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,                       // obligatorio si AccionRequerida = RequiereIntervencion
-    Guid? CausaFallaId,                             // obligatorio en paso 2 si AccionRequerida = RequiereIntervencion
-    Guid? TipoFallaId,                              // obligatorio en paso 2 si AccionRequerida = RequiereIntervencion
+    int? CausaFallaId,                             // obligatorio en paso 2 si AccionRequerida = RequiereIntervencion
+    int? TipoFallaId,                              // obligatorio en paso 2 si AccionRequerida = RequiereIntervencion
     string? ObservacionCampo,
     IReadOnlyList<Guid> AdjuntosIds,
     IReadOnlyList<RepuestoEstimado> Repuestos,
@@ -1622,25 +1622,25 @@ public enum AccionRequerida
 // Reemplaza HallazgoEnRutina_v1
 public sealed record HallazgoEnRutina_v2(
     Guid InspeccionId, Guid HallazgoId,
-    Guid ItemRutinaId,
-    Guid ParteId,
+    int ItemRutinaId,
+    int ParteId,
     string NovedadTecnicaDescripcion,
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     string EmitidoPor, DateTime RegistradoEn);
 
 // Reemplaza HallazgoFueraDeRutina_v1
 public sealed record HallazgoFueraDeRutina_v2(
     Guid InspeccionId, Guid HallazgoId,
-    Guid ParteId,
+    int ParteId,
     string NovedadTecnicaDescripcion,
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     string EmitidoPor, DateTime RegistradoEn);
 ```
@@ -1694,13 +1694,13 @@ El subtítulo del wizard refleja el ramal: "Paso 1 de 1" o "Paso 1 de 2".
 
 ```csharp
 public sealed record CausaFallaCatalogo(
-    Guid CausaFallaId,
+    int CausaFallaId,
     string Codigo,                          // "DESGASTE_NORMAL", "FALLA_LUBRICACION", etc.
     string Descripcion,
     DateTime SincronizadoEn);
 
 public sealed record TipoFallaCatalogo(
-    Guid TipoFallaId,
+    int TipoFallaId,
     string Codigo,                          // "MECANICA", "HIDRAULICA", "ELECTRICA", etc.
     string Descripcion,
     DateTime SincronizadoEn);
@@ -1787,19 +1787,19 @@ public enum TipoRutina
 }
 
 public sealed record Rutina(
-    Guid RutinaId,
+    int RutinaId,
     string Codigo,                          // "INSP. BULL.MOTOR"
     string Nombre,
     TipoRutina Tipo,                        // Tecnica en MVP
     string GrupoMantenimiento,              // "BULLDOZER" — descriptor de aplicabilidad
-    Guid ParteId,                           // parte mayor a la que aplica la rutina
+    int ParteId,                           // parte mayor a la que aplica la rutina
     string ParteCodigo,                     // denormalizado — "MOTOR"
     IReadOnlyList<ItemRutina> Items,
     DateTime SincronizadoEn);
 
 public sealed record ItemRutina(
-    Guid ItemId,
-    Guid ActividadId,                       // qué hay que hacer en este item
+    int ItemId,
+    int ActividadId,                       // qué hay que hacer en este item
     string? Instruccion,                    // texto guía opcional
     bool Obligatorio);
 ```
@@ -1837,8 +1837,8 @@ public sealed class Inspeccion
 {
     public Guid InspeccionId        { get; private set; }
     public TipoInspeccion Tipo      { get; private set; }   // NUEVO — Tecnica por ahora
-    public Guid EquipoId            { get; private set; }
-    public Guid RutinaId            { get; private set; }
+    public int EquipoId            { get; private set; }
+    public int RutinaId            { get; private set; }
     // ... resto idéntico
 }
 ```
@@ -1854,11 +1854,11 @@ public sealed class Inspeccion
 public sealed record InspeccionIniciada_v1(
     Guid InspeccionId,
     TipoInspeccion Tipo,                    // NUEVO — siempre Tecnica en MVP
-    Guid EquipoId,
-    Guid RutinaId,
+    int EquipoId,
+    int RutinaId,
     string RutinaCodigo,
     string TecnicoIniciador,
-    Guid ProyectoId,
+    int ProyectoId,
     UbicacionGps Ubicacion,
     DateTime IniciadaEn,                    // timestamp del sistema (TimeProvider)
     DateOnly FechaReportada,                // NUEVO 2026-04-30 — fecha que el técnico
@@ -1913,14 +1913,14 @@ public enum TipoInspeccion
 
 ```csharp
 public sealed record RutinaMonitoreo(
-    Guid RutinaMonitoreoId,
+    int RutinaMonitoreoId,
     string Nombre,                                  // p. ej. "Sistema eléctrico"
     string GrupoMantenimiento,                      // p. ej. "Camioneta" — descriptor, no mecanismo de asignación
     IReadOnlyList<ItemRutinaMonitoreo> Items,
     DateTime SincronizadoEn);
 
 public sealed record ItemRutinaMonitoreo(
-    Guid ItemId,
+    int ItemId,
     string Parte,                                   // "Batería"
     string Actividad,                               // "Medición de voltaje"
     EvaluacionEsperada Evaluacion);                 // numérica O cualitativa (mutuamente exclusivas)
@@ -1975,7 +1975,7 @@ Ejemplos del archivo `inspeccion.xlsx`:
 ```csharp
 public sealed record MedicionRegistrada_v1(
     Guid InspeccionId,
-    Guid ItemId,                    // item de la rutina (snapshot en InspeccionIniciada_v1)
+    int ItemId,                    // item de la rutina (snapshot en InspeccionIniciada_v1)
     decimal ValorMedido,
     string? Observacion,            // opcional — p. ej. "multímetro con pila baja"
     bool FueraDeRango,              // calculado por el handler contra MedicionEsperada
@@ -1983,14 +1983,14 @@ public sealed record MedicionRegistrada_v1(
 
 public sealed record EvaluacionCualitativaRegistrada_v1(
     Guid InspeccionId,
-    Guid ItemId,
+    int ItemId,
     CalificacionCualitativa Calificacion,
     string? Observacion,
     DateTime RegistradaEn);
 
 public sealed record ItemMonitoreoOmitido_v1(
     Guid InspeccionId,
-    Guid ItemId,
+    int ItemId,
     string Motivo,                  // p. ej. "multímetro descargado, no pude medir"
     DateTime OmitidoEn);
 ```
@@ -2019,7 +2019,7 @@ Cuando `Tipo=Monitoreo`, el evento incluye:
 
 ```csharp
 public sealed record ItemRutinaMonitoreoSnapshot(
-    Guid ItemId,
+    int ItemId,
     string Parte,
     string Actividad,
     EvaluacionEsperada Evaluacion);
@@ -2062,9 +2062,9 @@ Sin cambio respecto a inspección técnica — V-F4 (§15.5) sigue siendo "Dicta
 ```csharp
 public sealed record IniciarInspeccionMonitoreo(
     Guid InspeccionId,
-    Guid EquipoId,
-    Guid ProyectoId,
-    Guid RutinaMonitoreoId,                         // selección del técnico (decisión 4)
+    int EquipoId,
+    int ProyectoId,
+    int RutinaMonitoreoId,                         // selección del técnico (decisión 4)
     string IniciadaPor,
     UbicacionGps Ubicacion,
     DateOnly FechaReportada,
@@ -2202,16 +2202,16 @@ Para las rutinas Preoperacionales, los items con `(Parte, Actividad)` siguen vig
 public sealed record HallazgoRegistrado_v1(
     Guid InspeccionId, Guid HallazgoId,
     OrigenHallazgo Origen,                          // PreOperacional | Manual
-    Guid? NovedadPreopId,                           // poblado si Origen == PreOperacional (I12b)
+    int? NovedadPreopId,                           // poblado si Origen == PreOperacional (I12b)
     ResultadoVerificacion? ResultadoVerificacion,   // poblado si Origen == PreOperacional (I12c)
-    Guid ParteId,                                   // siempre, validado aplicable a la rutina del aggregate
-    Guid? ActividadId,                              // poblado si Origen == PreOperacional
+    int ParteId,                                   // siempre, validado aplicable a la rutina del aggregate
+    int? ActividadId,                              // poblado si Origen == PreOperacional
     string? ActividadDescripcion,                   // poblado si Origen == Manual (texto libre)
     string NovedadTecnica,                          // texto libre obligatorio
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     UbicacionGps? Ubicacion,                        // GPS al registrar (opcional)
     string EmitidoPor, DateTime RegistradoEn);
@@ -2248,15 +2248,15 @@ public sealed record HallazgoRegistrado_v1(
 public sealed record Hallazgo(
     Guid HallazgoId,
     OrigenHallazgo Origen,
-    Guid? NovedadPreopId,
-    Guid ParteId,
-    Guid? ActividadId,                              // del catálogo si Origen == PreOperacional
+    int? NovedadPreopId,
+    int ParteId,
+    int? ActividadId,                              // del catálogo si Origen == PreOperacional
     string? ActividadDescripcion,                   // texto libre si Origen == Manual
     string NovedadTecnicaDescripcion,
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     IReadOnlyList<Guid> AdjuntosIds,
     DateTime RegistradoEn);
@@ -2343,16 +2343,16 @@ El comando `VerificarNovedadPreoperacional` que existía antes desaparece. Se re
 ```csharp
 public sealed record RegistrarHallazgo(
     Guid InspeccionId,
-    Guid? NovedadPreopId,                           // null si es manual
+    int? NovedadPreopId,                           // null si es manual
     ResultadoVerificacion? ResultadoVerificacion,   // obligatorio si NovedadPreopId no null
-    Guid ParteId,
-    Guid? ActividadId,
+    int ParteId,
+    int? ActividadId,
     string? ActividadDescripcion,
     string NovedadTecnica,
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     UbicacionGps? Ubicacion,
     string EmitidoPor) : ICommand;
@@ -2513,7 +2513,7 @@ Decisiones del usuario para el comando `EstimarRepuesto` y su evento:
 public sealed record EstimarRepuesto(
     Guid InspeccionId,
     Guid HallazgoId,
-    Guid SkuId,
+    int SkuId,
     decimal Cantidad,
     string Justificacion,
     UbicacionGps? Ubicacion,
@@ -2523,7 +2523,7 @@ public sealed record RepuestoEstimadoAgregado_v1(
     Guid InspeccionId,
     Guid HallazgoId,
     Guid RepuestoEstimadoId,
-    Guid SkuId,
+    int SkuId,
     decimal Cantidad,
     string Unidad,                          // derivada del catálogo del SKU
     string Justificacion,
@@ -2815,7 +2815,7 @@ RepuestoEstimadoActualizado_v1 (cantidad=2, justificacion="Filtro doble en este 
 ```csharp
 public sealed record DescartarNovedadPreop(
     Guid InspeccionId,
-    Guid NovedadPreopOrigenId,           // una sola novedad por comando
+    int NovedadPreopOrigenId,           // una sola novedad por comando
     string DescartadoPor,                // username del técnico
     IReadOnlyCollection<string> Capabilities);
 ```
@@ -2911,14 +2911,14 @@ Todos validan que la inspección esté `EnEjecucion` y que el `HallazgoId` exist
 public sealed record EditarHallazgo(
     Guid InspeccionId,
     Guid HallazgoId,
-    Guid ParteId,                                   // permite cambiar parte
-    Guid? ActividadId,                              // si Origen == PreOperacional
+    int ParteId,                                   // permite cambiar parte
+    int? ActividadId,                              // si Origen == PreOperacional
     string? ActividadDescripcion,                   // si Origen == Manual
     string NovedadTecnica,
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     string EmitidoPor) : ICommand;
 
@@ -2927,14 +2927,14 @@ public sealed record HallazgoActualizado_v1(
     Guid HallazgoId,
     // mismos campos editables que en RegistrarHallazgo, pero sin Origen ni NovedadPreopId
     // (esos no se pueden cambiar — son metadata fija desde el registro original)
-    Guid ParteId,
-    Guid? ActividadId,
+    int ParteId,
+    int? ActividadId,
     string? ActividadDescripcion,
     string NovedadTecnica,
     AccionRequerida AccionRequerida,
     string? AccionCorrectiva,
-    Guid? CausaFallaId,
-    Guid? TipoFallaId,
+    int? CausaFallaId,
+    int? TipoFallaId,
     string? ObservacionCampo,
     string EmitidoPor,
     DateTime ActualizadoEn);
@@ -3177,7 +3177,7 @@ Los repuestos estimados pueden duplicarse cuando dos hallazgos distintos requier
 // DTO de request HTTP — vive en Sinco.Inspecciones.Adapters.Mye
 public sealed record CrearOTCorrectivaRequest_v1(
     Guid InspeccionId,                                   // idempotency key
-    Guid EquipoId,
+    int EquipoId,
     PrioridadOT Prioridad,                               // derivada de hallazgos críticos
     string DescripcionTrabajo,                           // texto consolidado
     IReadOnlyList<Guid> HallazgosRelacionados,           // ambos orígenes
@@ -3187,7 +3187,7 @@ public sealed record CrearOTCorrectivaRequest_v1(
     string TecnicoFirmante);
 
 public sealed record RepuestoBomConsolidado(
-    Guid SkuId,
+    int SkuId,
     string CodigoSku,
     decimal CantidadTotal,
     string Unidad,
@@ -3197,7 +3197,7 @@ public enum PrioridadOT { Baja, Normal, Alta, Urgente }
 
 // Respuesta de MYE
 public sealed record CrearOTCorrectivaResponse_v1(
-    Guid OTCorrectivaIdSinco,                            // el ID técnico interno de MYE
+    int OTCorrectivaIdSinco,                            // el ID técnico interno de MYE
     string OTCorrectivaNumero,                           // autonumérico humano "OT-123456" — visible al usuario
     DateTime CreadaEn);
 ```
@@ -3487,18 +3487,18 @@ public sealed class Hallazgo
     public string EmitidoPor            { get; set; } = default!;
 
     // Vinculación al árbol del equipo / rutina
-    public Guid ParteEquipoId           { get; set; }   // OBLIGATORIO siempre (I-H1)
+    public int ParteEquipoId           { get; set; }   // OBLIGATORIO siempre (I-H1)
     public Guid? ActividadRutinaId      { get; set; }   // opcional (si está fuera de rutina)
     public string ActividadDescripcion  { get; set; } = default!;
 
     // Origen
     public OrigenHallazgo Origen        { get; set; }   // PreOperacional | Manual | Seguimiento
-    public Guid? NovedadPreopOrigenId   { get; set; }   // inmutable; sólo si Origen=PreOperacional
+    public int? NovedadPreopOrigenId   { get; set; }   // inmutable; sólo si Origen=PreOperacional
     public Guid? SeguimientoOrigenId    { get; set; }   // inmutable; sólo si Origen=Seguimiento — apunta al SeguimientoHallazgo escalado (trazabilidad cross-inspección)
 
     // Catálogos cerrados de Sinco MYE
-    public Guid? TipoFallaId            { get; set; }   // obligatorio si AccionRequerida ≠ NoRequiereIntervencion
-    public Guid? CausaFallaId           { get; set; }   // obligatorio si AccionRequerida ≠ NoRequiereIntervencion
+    public int? TipoFallaId            { get; set; }   // obligatorio si AccionRequerida ≠ NoRequiereIntervencion
+    public int? CausaFallaId           { get; set; }   // obligatorio si AccionRequerida ≠ NoRequiereIntervencion
 
     // Decisión técnica
     public AccionRequerida AccionRequerida  { get; set; }
@@ -3559,6 +3559,12 @@ I-H11  Si Origen = Seguimiento → AccionRequerida debe ser RequiereIntervencion
 ```
 
 ### 15.4 Catálogo final del MVP — 20 eventos
+
+> **Convención de tipos de IDs (decisión 2026-05-04, opción 1b):**
+> - **IDs del ERP (PKs de tablas Sinco) → `int`** (System.Int32, 32-bit). Ejemplos: `EquipoId`, `ProyectoId`/`ObraId`, `RutinaId`, `ParteId`/`ParteEquipoId`, `ActividadId`, `CausaFallaId`, `TipoFallaId`, `NovedadPreopId`, `SkuId`/`InsumoId`, `OTCorrectivaIdSinco`, `ItemId`, `RutinaMonitoreoId`. Acompañados de `<X>Codigo: string` cuando aplica (legible para UI/URLs, ej. `equipoCodigo="D11T-001"`, `obraCodigo="OB-2026-CALI-001"`, `rutinaCodigo="INSP. BULL.MOTOR"`).
+> - **IDs internos del módulo (generados por el cliente / aggregate) → `Guid`** (preferido v7 para ordenamiento natural por tiempo). Ejemplos: `InspeccionId`, `HallazgoId`, `RepuestoId`, `AdjuntoId` (cuando es del Blob Storage propio), `SeguimientoHallazgoId`. Estos IDs no existen en el ERP y no necesitan convivir con códigos legibles.
+> - **Path params HTTP del ERP**: usan códigos legibles cuando existen (ej. `GET /equipos/{equipoCodigo}` con `D11T-001`). Bodies y responses usan `int` para los `<X>Id` y `string` para los `<X>Codigo`.
+
 
 ```
 Aggregate InspeccionTecnica (16 eventos):
@@ -3839,12 +3845,12 @@ public sealed class SeguimientoHallazgo
 {
     // Identidad
     public Guid SeguimientoId          { get; private set; }
-    public Guid EquipoId               { get; private set; }   // sigue al equipo cross-proyecto
+    public int EquipoId               { get; private set; }   // sigue al equipo cross-proyecto
 
     // Origen (referencias inmutables)
     public Guid HallazgoOrigenId       { get; private set; }
     public Guid InspeccionOrigenId     { get; private set; }
-    public Guid ParteEquipoId          { get; private set; }
+    public int ParteEquipoId          { get; private set; }
     public string DescripcionOrigen    { get; private set; } = default!;
 
     // Apertura
@@ -3893,10 +3899,10 @@ public enum EstadoSeguimiento
 ```csharp
 public sealed record SeguimientoAbierto_v1(
     Guid SeguimientoId,
-    Guid EquipoId,
+    int EquipoId,
     Guid HallazgoOrigenId,
     Guid InspeccionOrigenId,
-    Guid ParteEquipoId,
+    int ParteEquipoId,
     string DescripcionOrigen,
     string AbiertoPor,
     DateTime AbiertoEn
@@ -4079,9 +4085,9 @@ Campos clave que **debe** exponer (una fila por inspección del técnico):
 public sealed record BandejaItem(
     Guid InspeccionId,
     string TecnicoId,
-    Guid EquipoId, string EquipoCodigo,
-    Guid RutinaId, string RutinaCodigo, string RutinaNombre,
-    Guid ProyectoId, string ProyectoNombre,
+    int EquipoId, string EquipoCodigo,
+    int RutinaId, string RutinaCodigo, string RutinaNombre,
+    int ProyectoId, string ProyectoNombre,
     DateTime IniciadaEn,
     InspeccionEstado Estado,
     int HallazgosCount,
@@ -4156,12 +4162,12 @@ Notas operativas:
 
 ```csharp
 public sealed record InspeccionAbiertaPorEquipoView(
-    Guid EquipoId,                  // KEY con índice único Postgres parcial
+    int EquipoId,                  // KEY con índice único Postgres parcial
                                      // (filtrado por Estado=EnEjecucion)
     Guid InspeccionId,
     string TecnicoIniciador,
     DateTime IniciadaEn,
-    Guid ProyectoId);
+    int ProyectoId);
 ```
 
 **Eventos consumidos:**
@@ -4527,7 +4533,7 @@ public void Apply(GeneracionOTRechazada_v1 e)
 // En el outbox / saga side, no en el aggregate
 public sealed record DictamenVigenteSyncFallida_v1(
     Guid InspeccionId,
-    Guid EquipoId,
+    int EquipoId,
     DictamenOperacion Dictamen,
     string DetalleError,
     DateTime FallidaEn);

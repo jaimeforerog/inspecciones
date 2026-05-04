@@ -132,18 +132,21 @@ Lista viva de novedades **pendientes** (no snapshot). Consultada cuando el técn
 
 Detalle textual de una novedad. Se invoca cuando el técnico expande una novedad de la lista P-1. **No incluye contenido ni metadata de adjuntos** (eso es responsabilidad de P-3).
 
-- **Path param**: `{id}` = GUID de la novedad obtenido de P-1.
+- **Path param**: `{id}` = `int` (PK de la novedad) obtenido de P-1.
 - **Auth**: capability `ejecutar-inspeccion`. El ERP valida que la novedad pertenezca a una obra accesible al usuario; si no, devuelve `404` (mismo código que "no existe" — no revela existencia).
 - **Response 200**:
   ```json
   {
-    "id": "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
-    "equipoId": "D11T-001",
+    "id": 9001,
+    "equipoId": 1234,
+    "equipoCodigo": "D11T-001",
     "equipoDescripcion": "Caterpillar D11T Bulldozer",
     "equipoGrupo": "MAQ-PESADA",
-    "obraId": "OB-2026-CALI-001",
+    "obraId": 5678,
+    "obraCodigo": "OB-2026-CALI-001",
     "obraDescripcion": "Vía Cali-Buenaventura tramo 3",
-    "parteId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+    "parteId": 12,
+    "parteCodigo": "HIDR-BOMBA",
     "parteDescripcion": "Sistema hidráulico — bomba principal",
     "operadorId": "joperalta",
     "operadorNombre": "Juan Peralta",
@@ -155,8 +158,8 @@ Detalle textual de una novedad. Se invoca cuando el técnico expande una novedad
     "descripcion": "Detecté goteo de aceite en la bomba hidráulica al iniciar turno...",
     "observaciones": "Llené el reservorio con 2 L antes de continuar la jornada...",
     "estado": "pendiente",
-    "rutinaPreopId": "RUT-PREOP-MAQ-001",
-    "itemRutinaId": "ITEM-HIDR-FUGAS",
+    "rutinaPreopId": 401,
+    "itemRutinaId": 4012,
     "tieneAdjuntos": true,
     "cantidadAdjuntos": 2
   }
@@ -180,27 +183,27 @@ Detalle textual de una novedad. Se invoca cuando el técnico expande una novedad
 
 Lista metadata de adjuntos de una novedad. **Endpoint barato** que se invoca solo cuando el técnico decide procesar una novedad (verificar / seguimiento / descartar con evidencia visual). Si nunca se invoca P-3, el ERP no carga metadata pesada — patrón lazy.
 
-- **Path param**: `{id}` = GUID de la novedad.
+- **Path param**: `{id}` = `int` (PK de la novedad).
 - **Auth**: capability `ejecutar-inspeccion`. ERP valida acceso a la obra (404 si no).
 - **Response 200**:
   ```json
   {
-    "novedadId": "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
+    "novedadId": 9001,
     "adjuntos": [
       {
-        "id": "11111111-2222-3333-4444-555555555555",
+        "id": 70001,
         "tipo": "foto",
         "mime": "image/jpeg",
         "tamano": 2458920,
-        "urlPreview": "https://cdn.sinco.local/preop/preview/11111111-...jpg",
+        "urlPreview": "https://cdn.sinco.local/preop/preview/70001.jpg",
         "subidoEn": "2026-04-28T06:46:01-05:00"
       },
       {
-        "id": "22222222-3333-4444-5555-666666666666",
+        "id": 70002,
         "tipo": "foto",
         "mime": "image/jpeg",
         "tamano": 1987234,
-        "urlPreview": "https://cdn.sinco.local/preop/preview/22222222-...jpg",
+        "urlPreview": "https://cdn.sinco.local/preop/preview/70002.jpg",
         "subidoEn": "2026-04-28T06:46:34-05:00"
       }
     ]
@@ -213,7 +216,7 @@ Lista metadata de adjuntos de una novedad. **Endpoint barato** que se invoca sol
 
 Descarga el contenido binario de un adjunto específico (foto en resolución completa, PDF, etc.). Se invoca cuando el técnico abre un adjunto a pantalla completa.
 
-- **Path param**: `{id}` = GUID del adjunto obtenido de P-3.
+- **Path param**: `{id}` = `int` (PK del adjunto) obtenido de P-3.
 - **Auth**: capability `ejecutar-inspeccion`. ERP valida acceso a la obra de la novedad parent.
 - **Response 200**: binario con `Content-Type` apropiado (`image/jpeg`, `application/pdf`, etc.) y `Content-Disposition: inline`.
 - **Cache**: el ERP debe servir con `Cache-Control: private, max-age=86400` y `ETag` para que el cliente cachee el contenido (los adjuntos no cambian — son inmutables una vez subidos). Cliente puede revalidar con `If-None-Match` y recibir `304 Not Modified`.
@@ -247,7 +250,7 @@ Marca la novedad como verificada por la inspección técnica. Cierra el ciclo de
 - **Response 200 OK**:
   ```json
   {
-    "novedadId": "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
+    "novedadId": 9001,
     "estado": "verificada",
     "inspeccionId": "5e7c9a31-4b2d-4f8a-9c1e-3d5e7f9a1b3c",
     "accionRequerida": "RequiereIntervencion",
@@ -274,16 +277,13 @@ Cierra **una o varias novedades** como **descartadas** por el técnico (decisió
   ```json
   {
     "inspeccionId": "5e7c9a31-4b2d-4f8a-9c1e-3d5e7f9a1b3c",
-    "novedadIds": [
-      "8a3f2c9e-1d4b-4c7a-9f5e-2b6d8e7f0a91",
-      "9b4f3d8e-2e5c-5d8b-af6f-3c7e9f8a2b04"
-    ],
+    "novedadIds": [9001, 9002],
     "motivo": "Repetidas de la novedad MOTOR-VALV (HD-001) ya verificada en esta inspección. Falsa alarma replicada por el operador en turnos consecutivos.",
     "descartadaPor": "rmartinez"
   }
   ```
 - **Restricciones del body**:
-  - `novedadIds`: array no vacío de guids, sin duplicados, todas pertenecientes a `inspeccionId`. **El módulo MVP siempre envía arrays de 1**. Capacidad bulk preservada en el contrato del ERP por flexibilidad futura (máx **🚧 N a confirmar con David** — sugerencia 100).
+  - `novedadIds`: array no vacío de `int` (PKs), sin duplicados, todas pertenecientes a `inspeccionId`. **El módulo MVP siempre envía arrays de 1**. Capacidad bulk preservada en el contrato del ERP por flexibilidad futura (máx **🚧 N a confirmar con David** — sugerencia 100).
   - `motivo`: **obligatorio**, texto plano libre, máximo **4000 caracteres**, sin markdown ni HTML. **Autogenerado por el módulo** con plantilla `"Cerrado por {usuario} el {fecha} UTC desde Inspecciones"` — el técnico no lo escribe. (Decisión 2026-04-30 final: el icono "ojo tachado" descarta sin modal.) En descartes futuros desde otros canales (sagas de limpieza, batch admin), el motivo puede ser distinto.
   - `descartadaPor`: username del técnico (string opaco).
   - **Sin `descartadaEn` en el body**: el ERP genera el timestamp al recibir la solicitud.
@@ -294,8 +294,8 @@ Cierra **una o varias novedades** como **descartadas** por el técnico (decisió
     "descartadaEn": "2026-04-30T14:35:42-05:00",
     "motivo": "Repetidas de la novedad MOTOR-VALV...",
     "novedadesDescartadas": [
-      { "novedadId": "8a3f2c9e-...", "estado": "descartada" },
-      { "novedadId": "9b4f3d8e-...", "estado": "descartada" }
+      { "novedadId": 9001, "estado": "descartada" },
+      { "novedadId": 9002, "estado": "descartada" }
     ]
   }
   ```
@@ -329,13 +329,13 @@ Crea OT correctiva en MYE con BOM consolidado de la inspección. **Crítico** �
 - **Body**:
   ```json
   {
-    "inspeccionId": "guid",
-    "equipoId": "string",
+    "inspeccionId": "guid (interno del módulo)",
+    "equipoId": 1234,
     "prioridad": "Baja | Normal | Alta | Urgente",
     "descripcionTrabajo": "string consolidado",
-    "hallazgosRelacionados": ["guid", ...],
+    "hallazgosRelacionados": ["guid (interno del módulo)", ...],
     "bom": [
-      { "skuId": "guid", "codigoSku": "string", "cantidadTotal": 0.0, "unidad": "string", "hallazgosOrigen": ["guid", ...] }
+      { "skuId": 4501, "codigoSku": "EMP-HID-D11T-001", "cantidadTotal": 2.0, "unidad": "unidad", "hallazgosOrigen": ["guid (interno del módulo)", ...] }
     ],
     "dictamen": "PuedeOperar | ConRestriccion | NoPuedeOperar",
     "responsableCosto": "Proyecto | DepartamentoEquipos",
@@ -344,12 +344,13 @@ Crea OT correctiva en MYE con BOM consolidado de la inspección. **Crítico** �
     "solicitadaPor": "username"
   }
   ```
+  > **Tipos de IDs:** `inspeccionId` y `hallazgosRelacionados` son **Guid** (generados internamente por el módulo, identifican streams del aggregate). `equipoId` y `skuId` son **int** (PKs del ERP). El ERP recibe ambos formatos en el mismo body.
 - **`responsableCosto`** (decisión 2026-04-30): enum cerrado de 2 valores. `Proyecto` = la obra donde está el equipo asume el costo; `DepartamentoEquipos` = el área que administra los equipos como activo asume el costo. Capturado por el aprobador en la pantalla del paso 3.42b (capability `generar-ot`). **🚧 TODO con David**: confirmar el nombre exacto del campo del DTO en MYE y los valores literales admitidos (`"Proyecto"`/`"DepartamentoEquipos"` vs identificadores numéricos / códigos cortos). Mientras se confirma, asumimos los strings de arriba.
 - **`solicitadaPor`** (decisión 2026-04-30 ADR-007): username del aprobador con capability `generar-ot` que disparó el comando `GenerarOT`. Distinto de `tecnicoFirmante` (puede ser otra persona). Si MYE no acepta el campo, omitir y mantenerlo solo del lado del módulo en `OTSolicitada_v1`.
 - **Response 200**:
   ```json
   {
-    "otCorrectivaIdSinco": "guid",
+    "otCorrectivaIdSinco": 88001,
     "otCorrectivaNumero": "OT-123456",
     "creadaEn": "iso-8601"
   }
@@ -383,9 +384,9 @@ Sube el PDF de la inspección como adjunto de la OT correctiva ya creada en MYE.
 - **Response 200 OK**:
   ```json
   {
-    "adjuntoIdSinco": "guid",
-    "otCorrectivaIdSinco": "guid",
-    "tamanoBytes": 0,
+    "adjuntoIdSinco": 90001,
+    "otCorrectivaIdSinco": 88001,
+    "tamanoBytes": 2458920,
     "subidoEn": "iso-8601"
   }
   ```
@@ -468,7 +469,7 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
   {
     "items": [
       {
-        "equipoId": "D11T-001",
+        "equipoId": 1234,
         "codigo": "D11T-001",
         "descripcion": "Caterpillar D11T Bulldozer",
         "marca": "Caterpillar",
@@ -477,7 +478,8 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
         "numeroSerie": "CAT-D11T-2018-7234",
         "numeroEconomico": "ECON-1145",
         "grupo": "MAQ-PESADA",
-        "obraId": "OB-2026-CALI-001",
+        "obraId": 5678,
+        "obraCodigo": "OB-2026-CALI-001",
         "obraDescripcion": "Vía Cali-Buenaventura tramo 3",
         "estado": "operativo",
         "medidores": [
@@ -488,6 +490,7 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
     ]
   }
   ```
+- **`equipoId` (int) vs `codigo` (string)** (decisión 2026-05-04, opción b): el `equipoId` es la PK int del ERP — usado por el módulo para todas las referencias internas. El `codigo` es la cadena legible para UI (mostrar al técnico, path params de URLs como `/equipos/{equipoCodigo}`). Mismo patrón aplica a `obraId` (int) + `obraCodigo` (string).
 - **Headers**: `X-Total-Count`, `X-Page`, `X-Page-Size`.
 - **Sin contadores `novedadesPreopPendientes` ni `seguimientosAbiertos`**: el módulo los calcula de sus proyecciones locales (no responsabilidad del ERP).
 - **Notas**:
@@ -505,7 +508,7 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
 - **Response 200**:
   ```json
   {
-    "equipoId": "D11T-001",
+    "equipoId": 1234,
     "codigo": "D11T-001",
     "descripcion": "Caterpillar D11T Bulldozer",
     "marca": "Caterpillar",
@@ -514,7 +517,8 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
     "numeroSerie": "CAT-D11T-2018-7234",
     "numeroEconomico": "ECON-1145",
     "grupo": "MAQ-PESADA",
-    "obraId": "OB-2026-CALI-001",
+    "obraId": 5678,
+    "obraCodigo": "OB-2026-CALI-001",
     "obraDescripcion": "Vía Cali-Buenaventura tramo 3",
     "estado": "operativo",
     "medidores": [
@@ -523,25 +527,25 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
     ],
     "partes": [
       {
-        "parteId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+        "parteId": 12,
         "codigo": "MOTOR",
         "descripcion": "Motor — Cat C32",
         "padreId": null,
         "nivel": 0
       },
       {
-        "parteId": "a1b2c3d4-...",
+        "parteId": 34,
         "codigo": "MOTOR-INYECCION",
         "descripcion": "Sistema de inyección",
-        "padreId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+        "padreId": 12,
         "nivel": 1
       }
     ],
-    "rutinaTecnicaId": "rt-001-bull-motor",
+    "rutinaTecnicaId": 101,
     "rutinasMonitoreoIds": [
-      "rm-001-elec",
-      "rm-002-trans",
-      "rm-003-frenos"
+      201,
+      202,
+      203
     ]
   }
   ```
@@ -585,9 +589,9 @@ Catálogo cerrado de causas de falla. **Crítico MVP** — referenciado por cada
   ```json
   {
     "items": [
-      { "causaFallaId": "f1a2b3c4-...", "codigo": "CAU-DESGASTE", "descripcion": "Desgaste normal de operación" },
-      { "causaFallaId": "f5e6d7c8-...", "codigo": "CAU-FATIGA", "descripcion": "Fatiga del material" },
-      { "causaFallaId": "f9a0b1c2-...", "codigo": "CAU-CONTAM", "descripcion": "Contaminación / suciedad" }
+      { "causaFallaId": 1, "codigo": "CAU-DESGASTE", "descripcion": "Desgaste normal de operación" },
+      { "causaFallaId": 2, "codigo": "CAU-FATIGA", "descripcion": "Fatiga del material" },
+      { "causaFallaId": 3, "codigo": "CAU-CONTAM", "descripcion": "Contaminación / suciedad" }
     ],
     "totalCount": 47
   }
@@ -607,9 +611,9 @@ Catálogo cerrado de tipos de falla. **Crítico MVP** — referenciado por cada 
   ```json
   {
     "items": [
-      { "tipoFallaId": "t1a2b3c4-...", "codigo": "TIP-MECANICA", "descripcion": "Mecánica" },
-      { "tipoFallaId": "t5e6d7c8-...", "codigo": "TIP-HIDRAULICA", "descripcion": "Hidráulica" },
-      { "tipoFallaId": "t9a0b1c2-...", "codigo": "TIP-ELECTRICA", "descripcion": "Eléctrica" }
+      { "tipoFallaId": 1, "codigo": "TIP-MECANICA", "descripcion": "Mecánica" },
+      { "tipoFallaId": 2, "codigo": "TIP-HIDRAULICA", "descripcion": "Hidráulica" },
+      { "tipoFallaId": 3, "codigo": "TIP-ELECTRICA", "descripcion": "Eléctrica" }
     ],
     "totalCount": 8
   }
@@ -626,7 +630,7 @@ Catálogo de obras (que el módulo internamente conoce como "proyectos"). **Crí
   {
     "items": [
       {
-        "obraId": "OB-2026-CALI-001",
+        "obraId": 5678,
         "codigo": "OB-2026-CALI-001",
         "descripcion": "Vía Cali-Buenaventura tramo 3",
         "tipo": "Carretera"
@@ -669,23 +673,23 @@ Catálogo de definiciones de rutinas técnicas. Sincronizado nocturnamente con e
   {
     "items": [
       {
-        "rutinaId": "rt-001-bull-motor",
+        "rutinaId": 101,
         "codigo": "INSP. BULL.MOTOR",
         "nombre": "Inspección técnica Bulldozer — Motor",
         "tipo": "Tecnica",
         "grupoMantenimiento": "BULLDOZER",
-        "parteId": "f2e8b1c4-3a9d-4e7f-b8c6-1a2d3e4f5a67",
+        "parteId": 12,
         "parteCodigo": "MOTOR",
         "items": [
           {
-            "itemId": "it-bull-motor-001",
-            "actividadId": "act-001",
+            "itemId": 5001,
+            "actividadId": 301,
             "instruccion": "Verificar nivel de aceite en mirilla con motor frío",
             "obligatorio": true
           },
           {
-            "itemId": "it-bull-motor-002",
-            "actividadId": "act-002",
+            "itemId": 5002,
+            "actividadId": 302,
             "instruccion": null,
             "obligatorio": false
           }
@@ -715,12 +719,12 @@ Catálogo completo de definiciones de rutinas de monitoreo. Sincronizado nocturn
   {
     "items": [
       {
-        "rutinaMonitoreoId": "rm-001-elec",
+        "rutinaMonitoreoId": 201,
         "nombre": "Sistema eléctrico",
         "grupoMantenimiento": "Camioneta",
         "items": [
           {
-            "itemId": "it-elec-001",
+            "itemId": 6001,
             "parte": "Batería",
             "actividad": "Medición de voltaje",
             "tipoEvaluacion": "Numerica",
@@ -730,7 +734,7 @@ Catálogo completo de definiciones de rutinas de monitoreo. Sincronizado nocturn
             "valorMax": 12.5
           },
           {
-            "itemId": "it-elec-002",
+            "itemId": 6002,
             "parte": "Conectores batería",
             "actividad": "Revisar estado",
             "tipoEvaluacion": "Cualitativa"
@@ -771,13 +775,13 @@ Búsqueda interactiva durante el wizard de hallazgo. **Critical UX** — latenci
   {
     "items": [
       {
-        "insumoId": "ins-3333-4444",
+        "insumoId": 4501,
         "codigoSku": "EMP-HID-D11T-001",
         "descripcion": "Empaque bomba hidráulica D11T",
         "unidad": "unidad"
       },
       {
-        "insumoId": "ins-5555-6666",
+        "insumoId": 4502,
         "codigoSku": "ACE-HID-15W40",
         "descripcion": "Aceite hidráulico 15W40",
         "unidad": "litros"
@@ -806,8 +810,8 @@ Sync nocturno del catálogo completo de insumos. Alimenta la proyección local `
   ```json
   {
     "items": [
-      { "insumoId": "ins-3333-4444", "codigoSku": "EMP-HID-D11T-001", "descripcion": "Empaque bomba hidráulica D11T", "unidad": "unidad" },
-      { "insumoId": "ins-5555-6666", "codigoSku": "ACE-HID-15W40", "descripcion": "Aceite hidráulico 15W40", "unidad": "litros" }
+      { "insumoId": 4501, "codigoSku": "EMP-HID-D11T-001", "descripcion": "Empaque bomba hidráulica D11T", "unidad": "unidad" },
+      { "insumoId": 4502, "codigoSku": "ACE-HID-15W40", "descripcion": "Aceite hidráulico 15W40", "unidad": "litros" }
     ],
     "totalCount": 8472,
     "ultimaModificacion": "2026-04-29T03:14:00-05:00"
