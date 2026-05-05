@@ -52,19 +52,13 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 
 
 
-### #10 — Limpiar residuo de `Items[]` + `ActividadId` en definición §12.11.1 de Rutina técnica 🟢
-
-**Origen:** revisión del ADR-004 punto 1 (cobertura M-17), 2026-05-05 — detectada inconsistencia entre §12.10.3-§12.10.5 (rutina técnica = filtro del catálogo de partes, sin items con actividades) y §12.11.1 (refinamiento mayo 2026 que reintrodujo `IReadOnlyList<ItemRutina> Items` con `ActividadId` en cada item).
-**Fecha:** 2026-05-05
-**Tipo:** doc · consistencia
-**Descripción:** §12.10.3 elimina `ItemRutinaId` del Hallazgo y §12.10.5 explicita que la rutina técnica es **filtro del catálogo de partes**, no checklist con items. Sin embargo §12.11.1 (refinamiento mayo 2026) presenta `Rutina` con `IReadOnlyList<ItemRutina> Items` y `ItemRutina(ItemId, ActividadId, Instruccion, Obligatorio)`. Es residuo del modelo previo no limpiado en el refinamiento de IDs (Guid→int). La verdad vigente confirmada (2026-05-05) es §12.10. Hay que limpiar §12.11.1 para que el shape de Rutina técnica sea coherente: solo metadata + ParteId mayor (id, codigo, nombre, tipo, grupoMantenimiento, parteId, parteCodigo, sincronizadoEn), sin `Items[]`.
-**Disparador para abrir slice:** previo al slice del adapter M-17 o del handler `IniciarInspeccion`. Decisión doc-only — actualizar §12.11.1 antes de codear el adapter.
-**Notas:** ADR-004 ya documenta el shape mínimo correcto (post-patch 2026-05-05 §9.15 "Refinamientos posteriores"). Este followup es solo limpieza del modelo §12.11.1 para no dejar definición contradictoria entre dos secciones del mismo doc. Cross-ref: ADR-004 punto 1.
-
-
-
-
 ## Cerrados
+
+### #10 — Limpiar residuo de `Items[]` + `ActividadId` en definición §12.11.1 de Rutina técnica ✅
+
+**Origen:** revisión del ADR-004 punto 1 (cobertura M-17), 2026-05-05.
+**Fecha apertura / cierre:** 2026-05-05 / 2026-05-05
+**Resolución:** §12.11.1 limpiado — eliminados `IReadOnlyList<ItemRutina> Items` y el record `ItemRutina(ItemId, ActividadId, Instruccion, Obligatorio)` del shape vigente de `Rutina` técnica. Definición ahora coherente con §12.10.5 (rutina = filtro del catálogo de partes, no checklist navegable). Lista de "Cambios respecto a versión previa" actualizada para documentar la eliminación con cross-ref a §12.10.5 y a ADR-004 §9.15 "Refinamientos posteriores" punto 1. Las referencias residuales a `ItemRutina` en §12.7 (líneas 1311, 1448) **no se tocaron** — están dentro de secciones marcadas como históricas/superseded (banner línea 1409 + 1437) y son audit trail legítimo del proceso de reconciliación con plantillas Excel del ERP. Las notas en §12.10 (1586, 1590, 2260) que explican por qué `ItemRutinaId` se eliminó del Hallazgo siguen siendo contenido válido de trazabilidad. La rutina de monitoreo (§12.11.5) **sí** mantiene `IReadOnlyList<ItemRutinaMonitoreo>` con `EvaluacionEsperada` — entidad distinta con flujo distinto (Fase 2), no afectada por este followup.
 
 ### #8 — Push SignalR: ¿cuándo exactamente? ✅
 

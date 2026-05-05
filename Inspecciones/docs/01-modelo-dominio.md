@@ -1792,23 +1792,18 @@ public sealed record Rutina(
     string Nombre,
     TipoRutina Tipo,                        // Tecnica en MVP
     string GrupoMantenimiento,              // "BULLDOZER" — descriptor de aplicabilidad
-    int ParteId,                           // parte mayor a la que aplica la rutina
+    int ParteId,                            // parte mayor a la que aplica la rutina
     string ParteCodigo,                     // denormalizado — "MOTOR"
-    IReadOnlyList<ItemRutina> Items,
     DateTime SincronizadoEn);
-
-public sealed record ItemRutina(
-    int ItemId,
-    int ActividadId,                       // qué hay que hacer en este item
-    string? Instruccion,                    // texto guía opcional
-    bool Obligatorio);
 ```
 
 **Cambios respecto a versión previa:**
 - ❌ `RutinaPadreId` eliminado (no existe en el ERP).
+- ❌ `IReadOnlyList<ItemRutina> Items` y el record `ItemRutina` **eliminados** (limpieza 2026-05-05, followup #10). La rutina técnica MVP es **filtro del catálogo de partes**, no checklist con items navegables. Ver §12.10.5 — el módulo de inspecciones técnicas no expone selector de actividades; para hallazgos manuales el técnico escribe `ActividadDescripcion` como texto libre. El catálogo `Actividad` viaja por separado bajo ADR-004 y se consume solo en lectura (renderizar la actividad heredada cuando un hallazgo viene del preop con `Origen=PreOperacional`).
 - ✅ `Tipo: TipoRutina` agregado (escalabilidad — un solo valor `Tecnica` en MVP).
 - ✅ `ParteId` + `ParteCodigo` agregados a `Rutina` — la rutina cubre una parte mayor del equipo.
-- ✅ `ItemRutina` simplificado — sin `ParteId` (la parte ya está fijada a nivel rutina). Si emerge necesidad de sub-partes, se agrega `ParteId` opcional como cambio aditivo.
+
+**Cross-ref:** ADR-004 §9.15 "Refinamientos posteriores (2026-05-05)" punto 1 documenta el shape mínimo de M-17 (`GET /api/v1/catalogos/rutinas`) coherente con esta definición. La rutina de monitoreo (§12.11.5) **sí** trae `IReadOnlyList<ItemRutinaMonitoreo>` con `EvaluacionEsperada` — es una entidad distinta con flujo distinto (Fase 2).
 
 **Endpoint del catálogo (vigente al 2026-05-04):** `GET /api/v1/catalogos/rutinas` — sync nocturno, alimenta `RutinaTecnicaLocal`. Cierra el "Hallazgo 1" detectado en la revisión por flujos del 2026-05-04 (rutina técnica MVP sin sync claro previo). Detalle del contrato: §3.4 catálogos de `06-contrato-apis-erp.md`.
 
