@@ -147,7 +147,16 @@ Hipótesis confirmada en chat con Jaime el 2026-04-30: estos equipos están en g
 
 Hallazgos derivados para Azure:
 
-1. **Sync de catálogos (ADR-004)**: para clientes con > 30K SKUs (CONCRESCOL, PAVIMENTOS, CASS, REDES), el full sync diario es costoso. Implementar **sync incremental basado en `updatedAt`** del lado ERP — el contrato lo permite si los endpoints aceptan `?updatedSince=`. Confirmar con David al definir M-3..M-7.
+1. **Sync de catálogos (ADR-004)**: para clientes con > 30K SKUs (CONCRESCOL, PAVIMENTOS, CASS, REDES), el full sync diario es costoso.
+
+   **Decisión revisada 2026-05-05 (análisis detallado del comportamiento de sync para insumos vs rutinas-monitoreo):**
+
+   - **Piloto típico (≤10K SKUs, ≤500 KB wire gzip):** ADR-004 vigente sin cambios — sync on-login + ETag canonical + snapshot completo. La frecuencia diaria de cambios al catálogo de insumos está mitigada con `If-None-Match` (304s en días sin cambio).
+   - **Piloto intensivo (>20K SKUs, >1.5 MB wire gzip):** activar **followup #9** (`prefetch-by-proyecto + lookup on-demand`) **antes de Fase 3 frontend**, no después. Razón: la cuota IndexedDB en iOS Safari + ITP 7 días + el tamaño del catálogo combinan riesgo real de pérdida de cache. Diseño documentado en followup #9 con thresholds objetivos.
+   - **Mitigación operativa cero-código aplicable a cualquier piloto:** pedir a David que el bump del ETag del catálogo de insumos se consolide en un único `version++` diario (cron 23:55 que aplica todos los cambios pendientes del día y emite un solo bump). Esto convierte "5 cambios = 5 invalidaciones" en "5 cambios = 1 invalidación", sin tocar el módulo Azure. Pregunta abierta a David en `07-preguntas-destrabar-followups.md`.
+   - **Rutinas de monitoreo (Fase 2):** caso resuelto por ADR-004 estándar — volumen máximo esperado <1 MB wire incluso en outliers (200-1000 rutinas × 15-30 items × ~100 bytes), frecuencia trimestral. No requiere estrategia especial.
+
+   La opción de "sync incremental basado en `updatedAt`" mencionada antes (delta sync server-side) fue **evaluada y rechazada** el 2026-05-05 — la complejidad del changelog del lado ERP no se justifica para 1-2 cambios/año en la mayoría de los catálogos. Se reabriría solo si el piloto evidencia que `prefetch-by-proyecto` (followup #9) tampoco es suficiente.
 2. **PostgreSQL Flexible**: tier inicial puede ser modesto (B2s o equivalente). La carga real está en **eventos de inspecciones**, no en catálogos. Un cliente como EXPLANAN haciendo 1-3 inspecciones diarias por equipo puede generar 90-300 inspecciones/día * 92 equipos = manejable.
 3. **Azure Blob (adjuntos + PDFs)**: con el PDF por inspección (decisión 2026-04-30, §17 ADR-007) y adjuntos del wizard de hallazgo, dimensionar cuota ≥ 1 TB para el primer año asumiendo retención de 7 años (reglas operativas de archivo).
 

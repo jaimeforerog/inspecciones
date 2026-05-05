@@ -35,7 +35,7 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 
 
 
-### #9 — Prefetch-by-proyecto vs sync nocturno completo de catálogos grandes 🟢
+### #9 — Prefetch-by-proyecto vs sync completo de catálogos grandes 🟡 disparador alcanzado (piloto grande)
 
 **Origen:** conversación de diseño 2026-05-05 sobre eficiencia de la sincronización de catálogos. Usuario propuso reemplazar el sync nocturno completo (ADR-004) por cache on-demand puro, argumentando que el técnico solo usa una fracción mínima del catálogo (~1 %).
 **Fecha:** 2026-05-05
@@ -47,8 +47,28 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 - Equipos nuevos (altas) no se descubrirían hasta que alguien los busque con red.
 - iOS ITP 7 días borra cache; con sync nocturno se reconstruye sola, con on-demand el técnico recarga durante la jornada (potencialmente sin red).
 - Reasignación de técnico a otro proyecto un lunes: con cache on-demand puro, ese día queda bloqueado hasta que tome red.
-**Disparador para abrir slice:** datos reales del piloto (Fase 9) que evidencien que el sync nocturno completo está saturando (cuota IndexedDB en iOS, bandwidth VPN, tiempo de sync nocturno >X minutos, o quejas de técnicos por lentitud al arrancar). Antes de eso, NO abrir — la complejidad de cachear "lo correcto" es alta y el ahorro chico.
-**Notas:** Si emerge en piloto, el camino es híbrido (no on-demand puro): catálogos chicos siguen con sync completo + catálogos grandes pasan a prefetch-by-proyecto + lookup on-demand. Ese diseño preserva offline duro mientras reduce el footprint. Cross-ref: ADR-008 sección "Comportamiento por plataforma" (riesgo iOS) y `08-volumenes-clientes-erp.md` (volúmenes reales).
+**Disparador para abrir slice:** datos reales del piloto (Fase 9) que evidencien que el sync completo de un catálogo grande está saturando alguno de los **thresholds objetivos (decisión 2026-05-05, análisis específico de insumos + rutinas monitoreo)**:
+
+- Tamaño promedio del response al sync de un catálogo > **2 MB en wire (gzip)** sostenidamente.
+- Cuota IndexedDB en iOS Safari por encima del **50 %** atribuible a un solo catálogo (riesgo de eviction prematura por ITP).
+- Bandwidth de sync por técnico > **5 MB/día sostenido**.
+- Quejas de técnicos por "lentitud al arrancar la app" trazables al sync de catálogos.
+
+**Caso concreto identificado (insumos):** clientes con > 20K SKUs (volumen máx observado: 34,428 — ver `08-volumenes-clientes-erp.md` §2). En piloto chico (avg 7K SKUs ≈ 400 KB wire) ADR-004 estándar es suficiente; en piloto intensivo (>20K SKUs ≈ >1.5 MB wire) **activar followup pre-Fase 3 frontend**. Rutinas de monitoreo (Fase 2) tienen volumen <1 MB wire incluso en outliers — caso resuelto por ADR-004 estándar.
+
+**Disparador alcanzado (decisión 2026-05-05):** **el cliente piloto será uno grande** (decisión Jaime). Confirmado el caso problemático antes de Fase 3 frontend. Followup pasa de diferido (esperar piloto) a **agenda activa** — el patrón híbrido para insumos debe estar diseñado e implementado antes de que el primer slice del frontend consuma `RepuestoLocal`.
+
+**Decisiones bloqueantes pendientes** (preguntas 9, 10 y nueva a Daniel en `07-preguntas-destrabar-followups.md`):
+
+1. Cardinalidad real SKU-Proyecto en el ERP (catálogo central vs scoped). Make-or-break del approach: si los SKUs son centrales y los técnicos efectivamente acceden a cualquiera del catálogo entero, el filtro `?proyecto=` no reduce nada y el patrón falla.
+2. ¿Puede el ERP exponer `GET /api/v1/insumos?proyecto={id}` (lista filtrada) y `GET /api/v1/insumos/{id}` (lookup individual)?
+3. UX cuando un técnico necesita un SKU "fuera de su prefetch" sin red — opciones (a) bloqueo, (b) hallazgo sin SKU, (c) cache de SKUs recientes.
+
+Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
+
+**Cliente piloto exacto:** TBD — preguntar al equipo de Sinco. Saber el cliente determina volumen real de SKUs (data agregada por cliente para insumos no estaba en el corte 2026-04-30, solo total).
+
+**Notas:** Si emerge en piloto, el camino es híbrido (no on-demand puro): catálogos chicos siguen con sync completo + catálogos grandes pasan a prefetch-by-proyecto (`GET /api/v1/<catalogo>?proyecto={id}`) + lookup on-demand individual (`GET /api/v1/<catalogo>/{id}`). Ese diseño preserva offline duro mientras reduce el footprint. **Mitigación complementaria sin cambio de arquitectura (Opción 2 de la decisión 2026-05-05):** pedir a David consolidar bumps de ETag de insumos en un único `version++` diario (ver pregunta nueva en `07-preguntas-destrabar-followups.md`). Cross-ref: ADR-008 sección "Comportamiento por plataforma" (riesgo iOS) y `08-volumenes-clientes-erp.md` §2 (volúmenes reales) y §3 hallazgo 7 (dimensionamiento Azure).
 
 
 

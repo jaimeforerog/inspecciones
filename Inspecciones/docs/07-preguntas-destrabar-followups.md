@@ -35,6 +35,39 @@ Tres opciones a evaluar:
 
 **Bloquea:** slice 3.37 (wizard de hallazgo) si la respuesta es (B) o (C) — afecta los comandos disponibles y el modelo del wizard.
 
+### Pregunta nueva — UX cuando el técnico busca un SKU fuera de su prefetch (decisión 2026-05-05, piloto grande)
+
+**Contexto:** el cliente piloto será **uno grande** (decisión Jaime 2026-05-05). Followup #9 (`prefetch-by-proyecto + lookup on-demand` para insumos) se activó. El patrón funciona así:
+
+- Al login, la PWA descarga **un subset de SKUs del catálogo total**, filtrado por proyecto del técnico (ej. ~5K de los 30K totales). Eso es el **prefetch**.
+- Cuando el técnico, dentro del wizard de hallazgo, busca un SKU **que sí existe en el catálogo total pero NO está en su prefetch** (caso típico: SKU raro que su proyecto rara vez usa, o SKU agregado al ERP después de su login del día), el selector no lo encuentra localmente.
+
+**Pregunta para Daniel:** ¿qué hace la UX en ese momento?
+
+Tres opciones a evaluar:
+
+- **(a) Bloqueo con red:** el selector dice "este SKU no está disponible offline. Conectate a internet para buscarlo." El técnico tap "buscar online" → si tiene red, request al server → muestra el SKU → lo selecciona. Si no tiene red, no puede asignar el SKU; debe dejar el hallazgo sin asignación de repuesto y completarlo después con red. Más simple de implementar; pone fricción al técnico cuando está offline.
+
+- **(b) Hallazgo sin SKU:** la app permite guardar el hallazgo registrando texto libre del repuesto (ej. *"sello hidráulico cat 8t-9123"*) sin `SkuId`. Cuando vuelve la red, otro flujo lo resuelve (UI de reconciliación, o se le pide al técnico volver y elegir el SKU correcto). Más permisivo offline pero genera **deuda de datos** — el ERP recibe hallazgos con repuestos sin código que requieren conciliación posterior.
+
+- **(c) Cache "recientes":** además del prefetch del proyecto, la app mantiene una **lista local de los últimos N SKUs que el técnico usó en cualquier proyecto** (ej. 200 SKUs recientes). Si ya usó `RP-998` antes en otra obra, está en cache. Si nunca lo usó, sigue sin estarlo y cae a (a) o (b). Más sofisticado, alivia el caso "técnico rota entre proyectos" pero requiere lógica adicional cliente-side.
+
+**Combinaciones:** las opciones no son excluyentes. Por ejemplo (a) + (c) es viable: cache recientes + bloqueo cuando no está + opción de buscar online si hay red.
+
+**Qué desbloquea:** UX del paso "asignar repuesto" del wizard de hallazgo. Slices del frontend que consumen `RepuestoLocal`.
+
+**Bloquea:** Fase 3 frontend del wizard de hallazgo (slice 3.37 `POST /hallazgos` y siguientes que asignan repuestos).
+
+**Datos que ayudan a la decisión:**
+
+- Frecuencia esperada de "SKU fuera del prefetch" en operación real → depende de respuesta a Pregunta 9 a David sobre cardinalidad SKU-Proyecto.
+- Si los SKUs son scoped por proyecto y el prefetch cubre 100% del caso típico → opción (a) basta.
+- Si son centrales y "fuera del prefetch" es común → conviene (a) + (c), o evaluar (b).
+
+**Cross-refs:** FOLLOWUPS.md #9, Pregunta 9 a David (cardinalidad SKU-Proyecto), Pregunta 10 a David (endpoint individual de lookup).
+
+---
+
 ### Pregunta nueva — Badge SLA del seguimiento: color naranja a los 20 días (image10)
 
 **Contexto:** §15.8.6 del modelo define los buckets de antigüedad del seguimiento por color:
@@ -274,6 +307,98 @@ El modelo separa dos responsabilidades (decisión 2026-05-04):
 **Qué desbloquea:** slice del wizard de hallazgo (paso 3.37 `POST /hallazgos`).
 
 **Bloquea:** no hay bloqueo inmediato; se necesita antes de Santiago llegar al slice de importación.
+
+---
+
+### Pregunta 8 — Consolidación diaria del bump de ETag para `/catalogos/insumos` (decisión 2026-05-05)
+
+**Contexto:** ADR-004 (refinamientos posteriores 2026-05-05, punto 4) define ETag canonical como mecanismo de cache HTTP entre cliente PWA y ERP. La forma propuesta del ETag es un **contador incremental por catálogo** (ej. `version` en una tabla `catalogos_metadata`). El cliente envía `If-None-Match: "v42"`; el ERP compara y responde 304 si nada cambió, o 200 OK con body completo si la versión avanzó.
+
+El catálogo de **insumos / SKUs** es el caso problemático identificado en el análisis 2026-05-05 (ver `08-volumenes-clientes-erp.md` §3 hallazgo 7 actualizado): clientes intensivos pueden tener > 30K SKUs (~10 MB raw, ~2 MB con gzip) y agregan SKUs **diariamente** (compras nuevas, materiales nuevos por proyecto). Con la implementación literal del ETag, **cada INSERT bumpa la versión** → si admin agrega 5 SKUs en un día, la versión va `v42 → v47` y cada bump invalida el cache de los técnicos que sincronicen entre uno y otro.
+
+**Pregunta concreta:**
+
+¿Pueden implementar el bump del ETag de `insumos` como un **proceso consolidado diario** (cron 23:55 hora Bogotá) en lugar de un trigger por INSERT/UPDATE? La forma propuesta:
+
+```sql
+-- Trigger por INSERT/UPDATE: actualiza last_modified de la fila pero NO bumpa version
+-- Cron diario 23:55: si hay cambios pendientes desde el último bump, ejecuta:
+UPDATE catalogos_metadata
+SET version = version + 1, last_modified = NOW()
+WHERE catalog_name = 'insumos'
+  AND EXISTS (
+    SELECT 1 FROM insumos
+    WHERE updated_at > (SELECT last_modified FROM catalogos_metadata WHERE catalog_name = 'insumos')
+  );
+```
+
+**Beneficio cuantificable:**
+
+- Sin consolidación: 5 cambios al día = 5 invalidaciones del ETag. 30 técnicos × 5 syncs × 2 MB = **300 MB de bandwidth desperdiciado/día**.
+- Con consolidación: 5 cambios al día = 1 invalidación del ETag. 30 técnicos × 1 sync × 2 MB = **60 MB/día**.
+- **Ratio de mejora: 5x reducción de bandwidth** sin tocar el módulo Azure ni la PWA, solo el ERP.
+
+**Trade-off aceptado:**
+
+- Latencia de hasta 24h entre alta del SKU y disponibilidad para el técnico (consistente con la latencia ya aceptada en ADR-004 §9.15 original para todos los catálogos — hasta 24h entre cambio admin y propagación).
+- El ERP debe distinguir "fila nueva insertada" (last_modified de la fila) vs "version bump aplicado" (last_modified del metadata row).
+
+**Qué desbloquea:** mitigación operativa cero-código del caso problemático de insumos. Permite mantener ADR-004 estándar para piloto chico (≤10K SKUs) sin activar el followup #9 (`prefetch-by-proyecto + lookup on-demand`) preventivamente.
+
+**Bloquea:** ningún slice del módulo Azure depende de esto — es optimización del lado ERP. Pero si no se implementa, el piloto puede generar bandwidth innecesario que precipite la activación del followup #9 antes de tiempo.
+
+**Cross-refs:** ADR-004 §9.15 punto 4 (refinamientos 2026-05-05), `08-volumenes-clientes-erp.md` §3 hallazgo 7, FOLLOWUPS.md #9.
+
+---
+
+### Pregunta 9 — Cardinalidad SKU-Proyecto en el ERP (URGENTE — decisión 2026-05-05, piloto grande)
+
+**Contexto:** el cliente piloto será **uno grande** (decisión Jaime 2026-05-05). Followup #9 pasa de diferido a agenda activa — antes de Fase 3 frontend hay que cerrar el diseño del patrón híbrido para insumos (`prefetch-by-proyecto + lookup on-demand`). Esta pregunta es **make-or-break** del approach.
+
+**Pregunta concreta:** en el ERP Sinco, ¿los SKUs del catálogo de insumos son **catálogo central corporativo** (todas las obras/proyectos los ven) o están **scoped por proyecto** (cada proyecto tiene su lista de SKUs aprobados)?
+
+Concretamente para clientes intensivos como EXPLANAN, FUNDACIONES, REDES, PAVIMENTOS:
+
+1. ¿Existe una tabla del estilo `proyecto_insumos (proyecto_id, sku_id)` que define qué SKUs aplican a cada proyecto, o cualquier técnico puede asignar cualquier SKU del catálogo total a cualquier inspección?
+2. Si existe ese scoping per-proyecto: ¿qué proporción típica del catálogo total tiene un proyecto promedio? (ej. 5%, 20%, 50%).
+3. Si NO existe scoping: ¿hay una heurística aproximada de "SKUs frecuentes de un proyecto" que el ERP pueda materializar (ej. SKUs usados en hallazgos del último año)?
+
+**Por qué importa:**
+
+- Si los SKUs son **scoped por proyecto** → prefetch al login con `?proyecto={id}` cubre 100% del caso operativo típico. Patrón funciona. Bandwidth se reduce de 2 MB a ~400 KB.
+- Si son **centrales sin scoping** → prefetch no reduce volumen significativamente, hay que implementar "SKUs frecuentes recientes" o aceptar lookup on-demand para una proporción alta de casos.
+- Si son **centrales pero con uso concentrado** (ej. 80% de los hallazgos usan el mismo 10% de SKUs) → heurística top-N por frecuencia es viable.
+
+**Qué desbloquea:** diseño del adapter M-X (catálogo de insumos) y del read model `RepuestoLocal` en el módulo Azure. Define la UX del wizard de hallazgo cuando se asigna repuesto.
+
+**Bloquea:** Fase 3 frontend (slices del wizard de hallazgo que consumen `RepuestoLocal`). Sin esta respuesta, no se puede cerrar el contrato del adapter ni la UX del selector de SKU.
+
+---
+
+### Pregunta 10 — Endpoints filtrados de insumos (decisión 2026-05-05, piloto grande)
+
+**Contexto:** dependiente de la respuesta a Pregunta 9. Si los SKUs son scoped por proyecto (o el ERP puede materializar "SKUs frecuentes del proyecto"), necesitamos exponer dos endpoints en el ERP para soportar el patrón prefetch-by-proyecto.
+
+**Endpoints propuestos:**
+
+```http
+GET /api/v1/insumos?proyecto={proyectoId}        # subset filtrado, prefetch al login
+GET /api/v1/insumos/{skuId}                      # lookup individual on-demand
+```
+
+**Preguntas concretas:**
+
+1. ¿El ERP puede exponer `GET /api/v1/insumos?proyecto={id}`? Si los SKUs son scoped, el filtro es un JOIN simple. Si no son scoped pero hay heurística de "frecuentes del proyecto", ¿la pueden materializar en una vista o tabla auxiliar?
+2. ¿El endpoint individual `GET /api/v1/insumos/{skuId}` ya existe o es trabajo nuevo? Lo necesitamos para el lookup on-demand cuando un técnico busca un SKU fuera de su prefetch (con red).
+3. ¿Soportan ETag (canonical en ADR-004 punto 4) por cliente individual del filtro `?proyecto=`? Es decir, dos técnicos del mismo proyecto comparten ETag, dos técnicos de proyectos distintos tienen ETags distintos.
+
+**Trade-off aceptado:** el endpoint filtrado por proyecto es más complejo del lado ERP que el endpoint sin filtro (ese ya está cubierto por sync nocturno tradicional). Pero la mejora bandwidth/cuota IndexedDB en piloto grande lo justifica.
+
+**Qué desbloquea:** contrato exacto del adapter del módulo Azure que consume insumos, dimensionamiento del prefetch al login, y la UX del selector de SKU (con o sin botón "buscar online" para SKUs fuera de prefetch).
+
+**Bloquea:** mismo que Pregunta 9 — Fase 3 frontend que consume `RepuestoLocal`.
+
+**Cross-refs:** Pregunta 9 (depende), FOLLOWUPS.md #9, ADR-004 §9.15.
 
 ---
 
