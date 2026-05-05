@@ -35,22 +35,6 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 
 
 
-### #8 — Push SignalR: ¿cuándo exactamente? 🟢
-
-**Origen:** revisión por flujos 2026-05-04 — `02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 4.
-**Fecha:** 2026-05-04
-**Tipo:** doc · ADR-005
-**Descripción:** ADR-005 dice "push al cliente cuando termina la integración", pero hay **dos integraciones en pipeline** tras la firma con OT: M-1 (POST OT) y M-1b (PDF adjunto). Tres opciones para el timing del push SignalR:
-- **(a)** Push tras éxito de M-1 (OT generada con número visible inmediatamente; PDF puede tardar más, se notifica aparte si falla). UX más reactiva.
-- **(b)** Push solo tras M-1 + M-1b ambos exitosos (estado "OT con PDF lista"). UX más conservadora — usuario espera más.
-- **(c)** Dos pushes separados (uno por cada integración). UX más informativa pero potencialmente ruidosa.
-Mi sugerencia: **(a)** explicitada en ADR-005 — push tras M-1 con `OTGenerada` + push opcional tras M-1b solo si falla. El técnico ve el número de OT lo antes posible (lo más útil); el adjunto PDF es retroactivo y no bloquea operaciones.
-**Decisión necesaria:** elegir entre (a)/(b)/(c) y actualizar ADR-005 (`01-modelo-dominio.md §14`) + slice 3.51 (`InspeccionesHub`) + slice 3.27d (saga PDF).
-**Disparador para abrir slice:** previo al slice 3.51 o 3.27d. Decisión doc-only — actualizar ADR-005 antes de codear el hub.
-**Notas:** No es blocker técnico — el técnico puede ver el número de OT inmediatamente tras M-1 (lo más útil), y el PDF adjunto es retroactivo.
-
-
-
 ### #9 — Prefetch-by-proyecto vs sync nocturno completo de catálogos grandes 🟢
 
 **Origen:** conversación de diseño 2026-05-05 sobre eficiencia de la sincronización de catálogos. Usuario propuso reemplazar el sync nocturno completo (ADR-004) por cache on-demand puro, argumentando que el técnico solo usa una fracción mínima del catálogo (~1 %).
@@ -81,6 +65,12 @@ Mi sugerencia: **(a)** explicitada en ADR-005 — push tras M-1 con `OTGenerada`
 
 
 ## Cerrados
+
+### #8 — Push SignalR: ¿cuándo exactamente? ✅
+
+**Origen:** revisión por flujos 2026-05-04 — `02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 4.
+**Fecha apertura / cierre:** 2026-05-04 / 2026-05-05
+**Resolución:** opción **(a)** confirmada — push `OTGenerada` apenas M-1 completa (sin esperar al PDF), silencio durante M-1b si va bien, push `AdjuntoPdfFallido` solo si M-1b falla. Razones: el técnico necesita el número de OT en segundos tras firma para validación inmediata; esperar al PDF (~minutos) genera percepción de bloqueo; el PDF en sí es retroactivo (visible al consultar la OT en MYE), solo el caso de error requiere notificación reactiva. Aplicado en ADR-005 (`01-modelo-dominio.md §14`): tabla del catálogo de eventos SignalR ampliada con columna "Notas" + nuevo evento `AdjuntoPdfFallido` mapeado a `AdjuntoPdfFallido_v1`. Nueva sub-sección "Patrón de timing M-1 vs M-1b" documenta la decisión y rechaza explícitamente las opciones (b) y (c) con razones.
 
 ### #7 — Inconsistencia P-5: ¿al asignar o al firmar? ✅
 

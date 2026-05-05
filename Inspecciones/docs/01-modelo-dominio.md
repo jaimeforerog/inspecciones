@@ -3414,12 +3414,31 @@ Esto es híbrido: SignalR primario, polling como respaldo. Garantiza que el téc
 
 ### Eventos SignalR (catálogo)
 
-| Evento | Disparado por | Payload |
-|---|---|---|
-| `OTGenerada` | `InspeccionCerrada_v1` | `InspeccionId, OTCorrectivaIdSinco, OTCorrectivaNumero, CerradaEn` |
-| `InspeccionCerradaSinOT` | `InspeccionCerradaSinOT_v1` | `InspeccionId, CerradaEn` |
-| `OTGeneracionFallida` | `OTGeneracionFallida_v1` | `InspeccionId, MotivoError, FallidaEn` |
-| `InspeccionEstadoCambiado` (futuro) | Cualquier transición de estado | Para multi-técnico colaborando en tiempo real |
+| Evento | Disparado por | Payload | Notas |
+|---|---|---|---|
+| `OTGenerada` | `InspeccionCerrada_v1` (post M-1 exitoso) | `InspeccionId, OTCorrectivaIdSinco, OTCorrectivaNumero, CerradaEn` | **Push principal** — apenas M-1 completa. El PDF puede seguir procesándose. |
+| `InspeccionCerradaSinOT` | `InspeccionCerradaSinOT_v1` | `InspeccionId, CerradaEn` | Cierre sin OT (intervención automática o rechazo de aprobador). |
+| `OTGeneracionFallida` | `OTGeneracionFallida_v1` | `InspeccionId, MotivoError, FallidaEn` | Falla de M-1. La OT no se creó. |
+| `AdjuntoPdfFallido` | `AdjuntoPdfFallido_v1` | `InspeccionId, OTCorrectivaIdSinco, MotivoError` | Falla de M-1b. La OT existe pero quedó sin PDF — requiere remediación manual. |
+| `InspeccionEstadoCambiado` (futuro) | Cualquier transición de estado | `InspeccionId, EstadoAnterior, EstadoNuevo` | Para multi-técnico colaborando en tiempo real. |
+
+### Patrón de timing M-1 vs M-1b (decisión 2026-05-05, followup #8)
+
+El flujo post-firma con OT involucra dos integraciones serializadas:
+
+1. **M-1** (`POST /mye/ot-correctivas`) — crea la OT en MYE. Rápido (~segundos).
+2. **M-1b** (`POST /mye/ot-correctivas/{id}/adjuntos`) — adjunta el PDF generado por `GenerarPdfInspeccionSaga`. Más lento (~minutos: render QuestPDF + upload Blob + POST multipart).
+
+Push hacia el cliente sigue el patrón **(a)** — push apenas M-1 termina, silencio durante M-1b si va bien, push solo si M-1b falla:
+
+- ✅ **`OTGenerada`** apenas M-1 completa. El técnico ve el número de OT en segundos tras firma — lo más útil para validación inmediata.
+- 🔇 **Sin push cuando M-1b completa exitosamente.** El PDF visible al consultar la OT en MYE es retroactivo; no requiere notificación reactiva. La saga emite `PdfAdjuntadoAOT_v1` al stream para auditoría pero el proyector lateral SignalR lo ignora.
+- ⚠️ **`AdjuntoPdfFallido`** si M-1b falla. La OT existe pero sin PDF — caso anómalo que requiere remediación manual; el técnico/supervisor debe saberlo.
+
+Alternativas evaluadas y rechazadas:
+
+- **(b) Push solo tras M-1 + M-1b ambos exitosos:** rechazada por la latencia adicional de minutos antes de mostrar el número de OT. Si la app se cierra entre firma y M-1b éxito, el técnico pierde la notificación primaria.
+- **(c) Dos pushes separados (uno por M-1, otro por M-1b éxito):** rechazada por ruido UX. El push de M-1b éxito no aporta valor accionable — el PDF es retroactivo.
 
 ### Stack Azure
 
