@@ -66,6 +66,34 @@ Mi sugerencia: **(a)** explicitada en ADR-005 — push tras M-1 con `OTGenerada`
 
 
 
+### #9 — Prefetch-by-proyecto vs sync nocturno completo de catálogos grandes 🟢
+
+**Origen:** conversación de diseño 2026-05-05 sobre eficiencia de la sincronización de catálogos. Usuario propuso reemplazar el sync nocturno completo (ADR-004) por cache on-demand puro, argumentando que el técnico solo usa una fracción mínima del catálogo (~1 %).
+**Fecha:** 2026-05-05
+**Tipo:** doc · ADR-004 · perf
+**Descripción:** Evaluar si los catálogos grandes (`equipos` ~10K, `repuestos`/`SKUs` ~190K) deberían moverse de sync nocturno completo (ADR-004 vigente) a un patrón **prefetch-by-proyecto-asignado + lookup on-demand**. Los catálogos chicos (causas, tipos de falla, partes, actividades, ubicaciones — ~5K entidades, <500 KB total) seguirían con sync nocturno completo porque es imposible predecir cuáles usará el técnico. La propuesta es híbrida, no reemplazo total: al login, prefetch de equipos/SKUs del proyecto del técnico (~500-1000 equipos). Si el técnico es reasignado, el host PWA dispara re-prefetch. Lookup on-demand cubre casos fuera del prefetch cuando hay red.
+**Razones para no actuar ahora (mantener ADR-004 vigente):**
+- Volumen real cabe holgado: 260K entidades comprimidas en JSON ≈ 5-15 MB en IndexedDB (vs 90 MB de fotos OPFS por jornada). El "derroche" es marginal.
+- Cache on-demand puro **rompe el caso de uso central** — técnico llega a obra sin red en equipo nunca tocado, no puede iniciar.
+- Equipos nuevos (altas) no se descubrirían hasta que alguien los busque con red.
+- iOS ITP 7 días borra cache; con sync nocturno se reconstruye sola, con on-demand el técnico recarga durante la jornada (potencialmente sin red).
+- Reasignación de técnico a otro proyecto un lunes: con cache on-demand puro, ese día queda bloqueado hasta que tome red.
+**Disparador para abrir slice:** datos reales del piloto (Fase 9) que evidencien que el sync nocturno completo está saturando (cuota IndexedDB en iOS, bandwidth VPN, tiempo de sync nocturno >X minutos, o quejas de técnicos por lentitud al arrancar). Antes de eso, NO abrir — la complejidad de cachear "lo correcto" es alta y el ahorro chico.
+**Notas:** Si emerge en piloto, el camino es híbrido (no on-demand puro): catálogos chicos siguen con sync completo + catálogos grandes pasan a prefetch-by-proyecto + lookup on-demand. Ese diseño preserva offline duro mientras reduce el footprint. Cross-ref: ADR-008 sección "Comportamiento por plataforma" (riesgo iOS) y `08-volumenes-clientes-erp.md` (volúmenes reales).
+
+
+
+### #10 — Limpiar residuo de `Items[]` + `ActividadId` en definición §12.11.1 de Rutina técnica 🟢
+
+**Origen:** revisión del ADR-004 punto 1 (cobertura M-17), 2026-05-05 — detectada inconsistencia entre §12.10.3-§12.10.5 (rutina técnica = filtro del catálogo de partes, sin items con actividades) y §12.11.1 (refinamiento mayo 2026 que reintrodujo `IReadOnlyList<ItemRutina> Items` con `ActividadId` en cada item).
+**Fecha:** 2026-05-05
+**Tipo:** doc · consistencia
+**Descripción:** §12.10.3 elimina `ItemRutinaId` del Hallazgo y §12.10.5 explicita que la rutina técnica es **filtro del catálogo de partes**, no checklist con items. Sin embargo §12.11.1 (refinamiento mayo 2026) presenta `Rutina` con `IReadOnlyList<ItemRutina> Items` y `ItemRutina(ItemId, ActividadId, Instruccion, Obligatorio)`. Es residuo del modelo previo no limpiado en el refinamiento de IDs (Guid→int). La verdad vigente confirmada (2026-05-05) es §12.10. Hay que limpiar §12.11.1 para que el shape de Rutina técnica sea coherente: solo metadata + ParteId mayor (id, codigo, nombre, tipo, grupoMantenimiento, parteId, parteCodigo, sincronizadoEn), sin `Items[]`.
+**Disparador para abrir slice:** previo al slice del adapter M-17 o del handler `IniciarInspeccion`. Decisión doc-only — actualizar §12.11.1 antes de codear el adapter.
+**Notas:** ADR-004 ya documenta el shape mínimo correcto (post-patch 2026-05-05 §9.15 "Refinamientos posteriores"). Este followup es solo limpieza del modelo §12.11.1 para no dejar definición contradictoria entre dos secciones del mismo doc. Cross-ref: ADR-004 punto 1.
+
+
+
 
 ## Cerrados
 

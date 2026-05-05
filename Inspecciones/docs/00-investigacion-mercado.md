@@ -1371,7 +1371,8 @@ Cobertura completa del inventario §12.9.7 del modelo de dominio:
 | Catálogo | Endpoint | Frecuencia esperada de cambio |
 |---|---|---|
 | Equipos (master) | `GET /api/v1/equipos` | Mensual (altas/bajas) |
-| Rutinas | `GET /api/v1/rutinas` | Trimestral o menos |
+| Rutinas técnicas (**M-17**) | `GET /api/v1/catalogos/rutinas` | Trimestral o menos. **Shape mínimo** — sin `Items[]` ni `ActividadId` (ver "Refinamientos posteriores 2026-05-05") |
+| Rutinas monitoreo (**M-16**, Fase 2) | `GET /api/v1/catalogos/rutinas-monitoreo` | Trimestral o menos. Shape completo con `Items[]` + `EvaluacionEsperada` (§12.11.5) — diferido a Fase 2 |
 | Partes | `GET /api/v1/catalogos/partes` | Una vez al arranque + raras adiciones |
 | Causas de falla | `GET /api/v1/catalogos/causas-falla` | Una vez al arranque + raras adiciones |
 | Tipos de falla | `GET /api/v1/catalogos/tipos-falla` | Una vez al arranque + raras adiciones |
@@ -1414,6 +1415,32 @@ Si la operación demanda mejor responsividad (ej. en operaciones grandes con cam
 1. Promover el botón admin de v1.1 a v1.0.
 2. Reducir intervalo del cron a 4-6h en catálogos críticos.
 3. Si aparece un caso real de "necesito real-time", evaluar webhook push desde ERP — pero solo entonces, no preventivamente.
+
+### Refinamientos posteriores (2026-05-05)
+
+**Punto 1 — Cobertura explícita de M-17 (rutinas técnicas) y M-16 (rutinas monitoreo Fase 2).**
+
+ADR-004 aplica a M-17 (`GET /api/v1/catalogos/rutinas`) con un **shape mínimo**:
+
+```csharp
+public sealed record RutinaTecnica(
+    int RutinaId,
+    string Codigo,                  // "INSP. BULL.MOTOR"
+    string Nombre,
+    TipoRutina Tipo,                // Tecnica
+    string GrupoMantenimiento,      // descriptor
+    int ParteId,                    // parte mayor que define el alcance
+    string ParteCodigo,             // denormalizado
+    DateTime SincronizadoEn);
+```
+
+**Sin `Items[]` ni `ActividadId`.** La rutina técnica MVP es **filtro del catálogo de partes** (§12.10.5 del modelo), no checklist navegable. El catálogo de actividades (`Actividad`) viaja por separado bajo este mismo ADR-004 y se consume **solo en lectura** (renderizar la descripción de la actividad heredada cuando un hallazgo viene del preop con `Origen=PreOperacional`). El módulo de inspecciones técnicas no expone selector de actividades — para hallazgos manuales el técnico escribe `ActividadDescripcion` como texto libre (§12.10.3).
+
+Esta clarificación reduce el payload de M-17 de ~5 MB (con items expandidos hipotéticos) a ~500 KB para 4.5K rutinas técnicas — beneficioso para offline en iOS donde la cuota es más conservadora.
+
+**M-16 (rutinas de monitoreo, Fase 2)** cae bajo la misma estrategia ADR-004 cuando llegue Fase 2, con shape **completo**: `RutinaMonitoreo` con `IReadOnlyList<ItemRutinaMonitoreo>` y `EvaluacionEsperada` numérica/cualitativa por item (§12.11.5 del modelo). En el caso de monitoreo los items **sí** son navegables y forman el checklist que el técnico recorre.
+
+**Cross-references:** §12.10.3-§12.10.5 (Hallazgo sin `ItemRutinaId`, rutina como filtro de partes), §12.11.5 (rutinas de monitoreo Fase 2). Followup #10 abierto para limpiar residuo de `Items[]` + `ActividadId` en §12.11.1 del modelo (donde el refinamiento de mayo 2026 reintrodujo el shape viejo por error).
 
 ---
 
