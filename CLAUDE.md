@@ -87,10 +87,12 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 
 ## Arranque del trabajo
 
+**Persona del orquestador:** `templates/agent-personas/orchestrator.md` define el contrato completo (catálogo de comandos, criterios de paso entre fases, manejo de veredictos, roles propios infra-wire/azure-ops/doc-writer, DoD, prohibiciones). Resumen del flujo:
+
 1. Cuando el usuario diga "vamos con `XComando`":
 2. Invocar `domain-modeler` con `templates/agent-personas/domain-modeler.md` y la referencia a `01-modelo-dominio.md §15` correspondiente.
 3. Esperar firma del usuario en `spec.md`.
-4. Invocar `red` → `green` → `refactorer` → `reviewer` en orden.
+4. Invocar `red` → `green` → `refactorer` → `reviewer` en orden, validando criterios de paso entre fases (METHODOLOGY.md §2.2 + orchestrator.md "Criterios de paso").
 5. Como orquestador (`infra-wire`): registrar handler en Wolverine, proyección en Marten, endpoint HTTP, hub SignalR si aplica.
 6. Commit único `feat(slice-{N}): {comando}` con referencia al `spec.md`.
 

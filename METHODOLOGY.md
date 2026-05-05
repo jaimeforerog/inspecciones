@@ -66,9 +66,9 @@ Se pasa a la siguiente fase solo cuando se cumple el criterio. Nunca se solapan.
 
 ---
 
-## 3. Squad de agentes (5 roles)
+## 3. Squad de agentes (5 roles + orquestador)
 
-Cada rol tiene un **prompt persona** estable en `templates/agent-personas/`, consume artefactos específicos y produce artefactos específicos. El orquestador (la conversación principal con el usuario) es quien invoca a cada agente vía la herramienta Agent.
+Cada rol tiene un **prompt persona** estable en `templates/agent-personas/`, consume artefactos específicos y produce artefactos específicos. El **orquestador** es la conversación principal con el usuario (no se invoca vía Agent tool) — su contrato vive en `templates/agent-personas/orchestrator.md` y define cómo identifica el siguiente comando, valida criterios de paso entre fases, invoca a cada sub-persona, y maneja los veredictos del reviewer. Los cinco roles especializados (`domain-modeler`, `red`, `green`, `refactorer`, `reviewer`) sí se invocan vía Agent.
 
 ### 3.1 `domain-modeler`
 
@@ -100,7 +100,11 @@ Cada rol tiene un **prompt persona** estable en `templates/agent-personas/`, con
 **Produce:** `review-notes.md` con uno de tres veredictos: **approved**, **approved-with-followups**, **request-changes**.
 **Regla:** si `request-changes`, vuelve al rol correspondiente (red, green o refactorer) con los puntos específicos.
 
-### 3.6 Roles que asume el orquestador
+### 3.6 Orquestador (conversación principal con el usuario)
+
+**Persona en `templates/agent-personas/orchestrator.md`.** Coordina las cinco fases del ciclo TDD, identifica el siguiente comando del catálogo, valida criterios de paso, invoca sub-personas vía Agent y maneja veredictos del reviewer. No se invoca vía Agent tool — es el rol del modelo principal.
+
+**Roles que asume directamente** (no son sub-personas):
 
 - **infra-wire**: registrar handler en Wolverine, proyección en Marten, endpoint HTTP, DTOs, hub SignalR si aplica. Se ejecuta **después** de que el slice pasó review.
 - **azure-ops**: bicep/Terraform, pipelines, observabilidad, Azure landing zone. Cadencia por hito, no por slice.
@@ -245,5 +249,5 @@ Para slices de la PWA (Fase 5 del roadmap), la spec se reformula:
 - `templates/slice-spec.md` — plantilla del spec.
 - `templates/test-red.md` — plantilla del red-notes.
 - `templates/review-notes.md` — plantilla del review.
-- `templates/agent-personas/` — prompts de los 5 agentes.
+- `templates/agent-personas/` — prompts del orquestador + 5 sub-agentes.
 - `FOLLOWUPS.md` — backlog de deuda técnica sin slice propio.
