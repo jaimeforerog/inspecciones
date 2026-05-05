@@ -79,7 +79,7 @@ Forma esperada de respuestas 4xx/5xx (a confirmar con cada equipo):
 
 | Endpoint | Slice consumidor |
 |---|---|
-| P-5 `POST /preop/novedades/{id}/verificar` | Saga `CerrarInspeccionSaga` (paso 3.28) |
+| P-5 `POST /preop/novedades/{id}/verificar` | Adapter del comando `RegistrarHallazgo` cuando `Origen=PreOperacional` — al asignar la novedad, **no** desde la saga de cierre (§3.1 detalle P-5 + §15.9 modelo) |
 | P-6 `POST /preop/novedades/descartar` (bulk-first, 1..N — decisión 2026-04-30) | Adapter del comando `DescartarNovedadesPreop` (paso 3.29) |
 | M-1 `POST /mye/ot-correctivas` | Saga (paso 3.27) |
 | M-1b `POST /mye/ot-correctivas/{id}/adjuntos` (multipart, decisión 2026-04-30) | `EjecutarOTSaga` (paso 3.27d) tras éxito de M-1 |
@@ -112,7 +112,7 @@ Forma esperada de respuestas 4xx/5xx (a confirmar con cada equipo):
 | P-2 | GET | `/api/v1/preop/novedades/{id}` | 🚧 | Detalle de novedad cuando el técnico la expande | §4.1 (implícito) |
 | P-3 | GET | `/api/v1/preop/novedades/{id}/adjuntos` | 🚧 | Lista metadata de adjuntos de la novedad | §4.1 (implícito) |
 | P-4 | GET | `/api/v1/preop/adjuntos/{id}` | 🚧 | Descarga binario de un adjunto específico | §4.1 (implícito) |
-| P-5 | POST | `/api/v1/preop/novedades/{id}/verificar` | 🚧 | Saga de cierre (por cada novedad verificada) | §4.2 + §3.28 |
+| P-5 | POST | `/api/v1/preop/novedades/{id}/verificar` | 🚧 | Adapter del comando `RegistrarHallazgo` con `Origen=PreOperacional` — al asignar la novedad (no al firmar) | §4.1 + adapter Preop |
 | P-6 | POST | `/api/v1/preop/novedades/descartar` | 🚧 | Adapter de `DescartarNovedadesPreop` (1..N novedades en JSON, decisión 2026-04-30) | §4.3 + §3.29 |
 
 #### P-1 `GET /api/v1/preop/novedades`

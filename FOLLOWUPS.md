@@ -35,21 +35,6 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 
 
 
-### #7 — Inconsistencia P-5: ¿al asignar o al firmar? 🟢
-
-**Origen:** revisión por flujos 2026-05-04 — `02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 2.
-**Fecha:** 2026-05-04
-**Tipo:** doc · consistencia
-**Descripción:** Dos lugares del contrato `06-contrato-apis-erp.md` dicen cosas distintas sobre cuándo se invoca P-5 `POST /preop/novedades/{id}/verificar`:
-- **Detalle P-5 (§3.1)** dice: *"Cuándo se invoca: cuando el técnico asigna la novedad... No al firmar la inspección. La asignación dispara el outbox; la firma no necesita re-emitir."*
-- **Resumen §1.8** (resiliencia outbox) dice: *"P-5 ... | Saga `CerrarInspeccionSaga` (paso 3.28)"* — el paso 3.28 corre al firmar.
-Mi lectura: el detalle de P-5 ("al asignar") es la versión vigente y el resumen §1.8 quedó desactualizado. Razones: (a) P-6 descartar también dice "al tocar el ojo tachado, no al firmar" — patrón consistente entre verificar y descartar. (b) La irreversibilidad documentada en P-5 ("queda verificada incluso si la inspección se cancela") solo tiene sentido si la verificación es en tiempo real. (c) Reduce la atomicidad de la saga `CerrarInspeccionSaga` (un POST menos por hallazgo, más rápida).
-**Decisión necesaria:** elegir una de las dos (sugerencia: "al asignar") y limpiar el otro lugar. Si vamos con "al asignar", §1.8 debe quitar P-5 de la columna "consumida por saga" y poner "Adapter del comando `RegistrarHallazgo` cuando Origen=PreOperacional". Si vamos con "al firmar", el detalle de P-5 debe rectificarse.
-**Disparador para abrir slice:** previo al slice 3.28 / 3.49 (adapter Preop). Es decisión doc-only — al elegir cuál es la fuente de verdad, alinear ambos lugares y confirmar con el patrón unificado §15.9.
-**Notas:** No bloqueante en el corto plazo. Antes de codear el adapter Preop hay que tener una sola fuente de verdad sobre el momento de invocación.
-
-
-
 ### #8 — Push SignalR: ¿cuándo exactamente? 🟢
 
 **Origen:** revisión por flujos 2026-05-04 — `02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 4.
@@ -96,6 +81,12 @@ Mi sugerencia: **(a)** explicitada en ADR-005 — push tras M-1 con `OTGenerada`
 
 
 ## Cerrados
+
+### #7 — Inconsistencia P-5: ¿al asignar o al firmar? ✅
+
+**Origen:** revisión por flujos 2026-05-04 — `02f-flujo-inspeccion-tecnica-manual.md` Hallazgo 2.
+**Fecha apertura / cierre:** 2026-05-04 / 2026-05-05
+**Resolución:** opción **"al asignar"** confirmada como fuente de verdad. Razones: (a) consistencia con P-6 descartar que también es "al tocar el icono ojo tachado, no al firmar"; (b) la irreversibilidad documentada en §3.1 P-5 ("queda verificada incluso si la inspección se cancela") solo tiene sentido si la verificación se sincroniza en tiempo real, no al cierre; (c) reduce la atomicidad de `CerrarInspeccionSaga` (un POST menos por hallazgo). Aplicado: dos inconsistencias corregidas en `06-contrato-apis-erp.md` — línea 82 (resumen §1.8 outbox) y línea 115 (tabla catálogo P-5) ahora dicen "Adapter del comando `RegistrarHallazgo` con `Origen=PreOperacional`" en lugar de "Saga `CerrarInspeccionSaga`". Detalle §3.1 P-5 ya estaba correcto y queda como fuente de verdad. Patrón unificado §15.9 del modelo confirmado consistente con esta decisión.
 
 ### #6 — Daniel — rol formal en el equipo ✅
 
