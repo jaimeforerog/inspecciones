@@ -1442,6 +1442,115 @@ Esta clarificación reduce el payload de M-17 de ~5 MB (con items expandidos hip
 
 **Cross-references:** §12.10.3-§12.10.5 (Hallazgo sin `ItemRutinaId`, rutina como filtro de partes), §12.11.5 (rutinas de monitoreo Fase 2). Followup #10 abierto para limpiar residuo de `Items[]` + `ActividadId` en §12.11.1 del modelo (donde el refinamiento de mayo 2026 reintrodujo el shape viejo por error).
 
+**Punto 2 — Interacción con iOS ITP 7 días (cross-ref ADR-008 §6.7).**
+
+ADR-004 asume cache local persistente entre ciclos nocturnos. En iOS Safari, el ITP (Intelligent Tracking Prevention) borra todo el storage de origen tras 7 días consecutivos sin abrir la PWA — incluyendo catálogos cacheados.
+
+**Consecuencias para el patrón stale-while-revalidate:**
+
+- Tras eviction, no hay nada stale para servir. El cliente debe estar online antes de operar. ADR-004 stale-while-revalidate no aplica.
+- El primer sync post-eviction es full payload (200 OK, ~5-15 MB), no delta con 304s. Bandwidth pico esperado.
+- Si 30 técnicos iOS regresan simultáneamente tras 7 días, full-syncs concurrentes al ERP/VPN.
+
+**Mitigaciones (mayoría delegadas a ADR-008):**
+
+- Heartbeat push diario para PWAs instaladas mantiene el reloj ITP reseteado (ADR-008 §6.7). Es la mitigación primaria.
+- Bootstrap del cliente distingue "cache presente con ETag" vs "cache ausente post-eviction"; en el segundo caso bloquea operación hasta sync online completado.
+- Métrica server-side: contar requests sin `If-None-Match` provenientes de técnicos previamente sincronizados → indica eviction iOS reciente.
+
+**No mitigado (gap aceptado):** un técnico iOS que está offline al momento de un eviction (ej. arranca PWA sin red por primera vez tras 7 días) **no puede operar**. Es el gap recurrente de iOS y se acepta hasta que el piloto evidencie pérdida real de productividad — entonces se evalúa Capacitor wrapper (camino de evolución de ADR-008).
+
+**Punto 3 — Manejo de fallo del cron nocturno y staleness aceptable.**
+
+ADR-004 original dice "stale-while-revalidate como fallback" pero no define política operativa ante fallos persistentes del cron. Refinamientos:
+
+**Política de reintento del cron:**
+
+- Intento principal: 3 AM hora Bogotá (hardcoded MVP, parametrizable v2).
+- Backoff intra-noche: 3:30, 4:00, 4:30. Total 4 intentos en 1.5h.
+- Tras 4 fallos: log estructurado + alarma a operativo. No reintenta hasta la próxima noche.
+- Razón: VPNs típicamente recuperan en minutos; >1.5h de caída sugiere problema serio que requiere intervención humana, no más reintentos automáticos.
+
+**Reintento oportunista al arranque del cliente:**
+
+- Cuando un cliente arranca con cache stale (>24h desde `lastSyncedAt`), el bootstrap dispara sync inmediato sin esperar al próximo nocturno. stale-while-revalidate sigue aplicando: la cache vieja se sirve al UI mientras el sync corre en background.
+
+**Métrica server-side (Application Insights):**
+
+- `dias_desde_ultimo_sync_exitoso` por catálogo y por cliente piloto.
+- Alarma operativo cuando supera 2 días en cualquier catálogo.
+- Razón: 1 día es posible (cron falló una noche, normal); 2 días = patrón anómalo que merece investigación.
+
+**Política de bloqueo por staleness extrema:**
+
+- Cuando un catálogo crítico (equipos, rutinas técnicas, partes) lleva >7 días sin sync exitoso, el cliente **bloquea escritura nueva** (no permite iniciar inspecciones nuevas) hasta que un sync online se complete.
+- Razón: a 7 días la cache puede tener IDs renombrados/descontinuados, riesgo de captura sobre datos inválidos. Coincide con la ventana ITP iOS — si llegamos a 7 días algo grave pasa que merece detener escritura.
+- Inspecciones ya iniciadas pueden cerrarse normalmente (la captura usó cache vigente al momento de iniciar; la firma no requiere catálogos refrescos).
+
+**Recomendación: promover botón admin "refrescar ahora" de v1.1 a v1.0.**
+
+Originalmente diferido a v1.1 en ADR-004 §9.15. Con este punto 3 cobra sentido promoverlo a v1.0: si el cron falla N noches consecutivas, el operativo no debería esperar al próximo nocturno para forzar recuperación. Costo de implementación bajo (endpoint admin `POST /api/v1/admin/catalogos/refrescar` que dispara los mismos handlers del cron de manera ad-hoc). Reabre la decisión deferida del ADR-004 original.
+
+**Punto 4 — ETag canonical, `If-Modified-Since` queda como secundario.**
+
+ADR-004 original menciona ambos headers `If-Modified-Since` y `ETag`. En la práctica ETag es preferible y suficiente:
+
+**Razones:**
+
+- **Inmune al clock skew** entre el cron Azure y el ERP on-prem. `If-Modified-Since` depende de que ambos relojes estén sincronizados al segundo, lo cual no se puede garantizar entre máquinas separadas sin NTP forzado.
+- **Cubre bajas y altas** del catálogo, no solo modificaciones. Una fila borrada no tiene timestamp; un ETag (versión o hash) sí captura el estado completo.
+- **Implementación más simple en el ERP**: solo expone un header por catálogo, no necesita persistir Last-Modified por fila + agregar.
+
+**Forma del ETag (decisión MVP):**
+
+- Versión incremental por catálogo: `ETag: "v42"`. El ERP mantiene un contador por tabla maestra de catálogo que se incrementa en cada cambio (alta, modificación, baja). Simple, debugeable, naturalmente ordenable.
+- Alternativa equivalente: `ETag: "{epoch_max_updated_at}-{count}"` si el ERP no quiere agregar columna de versión. Mismo efecto.
+
+**Contrato HTTP:**
+
+- Cliente envía `If-None-Match: "v42"`.
+- ERP responde:
+  - `304 Not Modified` si la versión actual del catálogo es "v42" (sin body).
+  - `200 OK` con `ETag: "v43"` y body completo si hay cambios.
+- Header `Cache-Control: max-age=86400, stale-while-revalidate=604800` se mantiene como en ADR-004 original.
+
+**`If-Modified-Since` queda como secundario:** si el ERP ya lo expone para otros consumidores, el cliente puede enviarlo además del `If-None-Match` — pero no es contrato vinculante. ETag es el único requerido. Si el ERP solo soporta uno, debe ser ETag.
+
+**Punto 5 — Eliminación del cron nocturno en favor de sync on-login.**
+
+Tras revisar el costo-beneficio del cron nocturno frente a sync al arranque de la app, se decide **eliminar el cron** y mantener únicamente sync on-login con red disponible. ETag, snapshots, stale-while-revalidate y todo el resto del ADR-004 quedan intactos — el cambio es exclusivamente operacional.
+
+**Patrón vigente (post-cambio):**
+
+- Al abrir la PWA con red disponible, el bootstrap dispara sync de los 9 catálogos en paralelo (cada uno con `If-None-Match: "{etag-cliente}"`).
+- En estado estable, todos responden `304 Not Modified` en ~450 ms total. UI arranca con cache local sin bloquearse (stale-while-revalidate sirve mientras el sync corre en background).
+- Si hay cambios, el catálogo afectado responde `200 OK` con body completo; el cliente actualiza su `etag` y `lastSyncedAt`.
+
+**Razones para el cambio:**
+
+- Sync on-login resetea naturalmente el reloj ITP de iOS (ADR-008 §6.7) cada vez que el técnico abre la app — el heartbeat push deja de ser crítico para catálogos.
+- Elimina infraestructura: scheduler Wolverine, backoff intra-noche, timezone hardcoded, alarmas dedicadas al cron.
+- Aprovecha el ciclo natural de uso: el técnico abre la app cuando va a trabajar — momento natural de sincronizar.
+- Sin desperdicio en días sin uso (vacaciones, festivos).
+
+**Lo que sobrescribe del punto 3:**
+
+- ❌ Política de reintento del cron (3 AM + backoff). Ya no aplica.
+- ❌ Métrica server-side `dias_desde_ultimo_sync_exitoso`. Pasa a ser cliente-side: el cliente envía su `lastSyncedAt` en cada sync; server agrega para reporting.
+- ✅ Reintento oportunista al arranque → se convierte en el sync principal.
+- ✅ Bloqueo por staleness extrema (>7 días) sigue aplicando.
+- ✅ Botón admin "refrescar ahora" sigue siendo v1.0.
+
+**Healthcheck del ERP separado:**
+
+La pérdida de la "alarma proactiva si ERP cae" (que el cron nocturno fallido generaba) se compensa con un **healthcheck Application Insights** independiente del sync de catálogos: ping cada 5 min desde Azure al endpoint de health del ERP. Es responsabilidad de Fase 1 (paso 1.12 Application Insights) y no parte del módulo de inspecciones.
+
+**Trade-offs aceptados:**
+
+- Carga al ERP concentrada en 8-9 AM (técnicos arrancan jornada). Volumen real esperado: 30 técnicos × 9 catálogos × ~5 KB headers ≈ 1.4 MB total distribuidos en 30 min. Despreciable.
+- Latencia al arrancar la app: ~450 ms en estado estable, mitigada por stale-while-revalidate.
+- Sin alarma operativa derivada del propio sync — delegada al healthcheck Application Insights.
+
 ---
 
 ## 9.16 ADR-008 — Almacenamiento local offline cliente PWA y sincronización de comandos (2026-05-04)
