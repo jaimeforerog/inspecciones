@@ -225,6 +225,7 @@ Para slices de la PWA (Fase 5 del roadmap), la spec se reformula:
 2. **Refactor sin cambio de comportamiento en otro slice.** Si el refactorer necesita tocar código fuera del slice actual, abre un slice `refactor-{N}` separado con sus propios tests de regresión.
 3. **Bug en producción.** TDD al revés: test que reproduce el bug (rojo) → fix (verde) → refactor. Mismo workflow, distinta semántica.
 4. **Bloqueo cross-team con Sinco on-prem.** Si un slice depende de un endpoint Sinco aún no expuesto (Fase 4 del roadmap), se trabaja contra el contrato acordado vía mock + WireMock. El slice se marca `🟡 mock-only` hasta que el equipo Sinco entregue el endpoint real.
+5. **Embargo de docs (vigente desde 2026-05-05).** Pausa de edits NO-triviales a `Inspecciones/docs/*` hasta cerrar 3-4 slices reales. Razón: la doc:código ratio acumulada hace que cada cambio de scope amplifique a ~5x archivos (sesión 2026-05-05 evidenció 5 cambios → ~25 archivos editados). Detalle del alcance + qué se permite + cómo levantar en `CLAUDE.md` "Embargo de docs". Aplica al orquestador y a sub-personas.
 
 ---
 
