@@ -17,6 +17,32 @@ Thumbs.db
 bin/
 obj/
 .vs/
+.vscode/
+
+# .NET
+*.swp
+TestResults/
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+*.user
+*.userprefs
+.dotnet/
+appsettings.*.local.json
+*.dotnet-tools-cache
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# User secrets (no commitear secretos locales)
+secrets.json
+*.pfx
 
 # Archivos grandes (videos de reuniones, etc.) — usar Git LFS si se necesita versionar
 *.mp4

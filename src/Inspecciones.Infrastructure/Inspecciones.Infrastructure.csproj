@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Adapters hacia sistemas externos (Sinco ERP via REST, Azure Blob, SignalR).
+    Proyecciones Marten lateral (read models, side effects).
+    Configuración concreta de servicios para Inyección de dependencias.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inspecciones.Application\Inspecciones.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.Marten" />
+    <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.Azure.SignalR" />
+  </ItemGroup>
+
+</Project>

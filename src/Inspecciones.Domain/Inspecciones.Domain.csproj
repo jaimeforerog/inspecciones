@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Dominio puro — no tiene dependencias externas más allá del BCL.
+    Aggregates, eventos, value objects e invariantes viven acá.
+    Naming en español: Inspeccion, Hallazgo, Repuesto, Seguimiento.
+  -->
+
+</Project>

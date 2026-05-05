@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Comandos, handlers, sagas. Depende de Domain + Marten + Wolverine.
+    Aquí viven los slices: handler de cada comando, validación de invariantes
+    delegada al aggregate, atomicidad transaccional con SaveChangesAsync.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inspecciones.Domain\Inspecciones.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.Marten" />
+  </ItemGroup>
+
+</Project>
