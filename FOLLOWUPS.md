@@ -35,6 +35,24 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 
 
 
+### #11 — `CapabilityRequeridaException`: dominio vs capa HTTP 🟢
+
+**Origen:** slice 1a review hallazgo #1
+**Fecha:** 2026-05-05
+**Tipo:** deuda técnica · domain extension
+**Descripción:** `CapabilityRequeridaException` está definida en `Inspecciones.Domain/Inspecciones/Excepciones.cs` junto al resto de excepciones del agregado, pero nunca es lanzada por el dominio — PRE-1 (capability) vive en la capa HTTP. Cobertura 0 %. Evaluar en slice 1b si debe mantenerse en el dominio (para que la capa HTTP la referencie con semántica clara) o moverse a la capa de aplicación/API donde realmente se lanza.
+**Disparador para abrir slice:** cierre de slice 1b (handler HTTP). El handler es quien valida PRE-1; en ese momento quedará claro si la excepción pertenece al dominio o a la capa de aplicación.
+**Notas:** sin cambio de código hasta slice 1b. Si el handler decide lanzarla desde el dominio delegando la verificación al agregado, covertura sube sola. Si la sigue lanzando la capa HTTP, mover la definición.
+
+### #12 — Test de evento desconocido en `AplicarEvento` 🟢
+
+**Origen:** slice 1a review hallazgo #3
+**Fecha:** 2026-05-05
+**Tipo:** deuda técnica · test
+**Descripción:** La rama `default: throw new InvalidOperationException(...)` en `Inspeccion.AplicarEvento` no tiene test directo porque en slice 1a el único evento válido es `InspeccionIniciada_v1`. Fabricar un test en 1a sería plomería sin valor de documentación. Cuando llegue el primer evento nuevo al agregado (slice 2+), el `red` de ese slice debe añadir un test negativo: pasar un tipo de evento anónimo/falso a `Inspeccion.Reconstruir` y verificar que lanza `InvalidOperationException`. Ese momento es el natural para cubrir la rama defensiva.
+**Disparador para abrir slice:** el primer slice que agregue un segundo `case` en `AplicarEvento` (ej. `RegistrarHallazgo`, `FirmarInspeccion`). El `red` de ese slice lo resuelve.
+**Notas:** ningún cambio en 1a. La rama defensiva opera correctamente; solo falta el test que la documente.
+
 ### #9 — Prefetch-by-proyecto vs sync completo de catálogos grandes 🟡 disparador alcanzado (piloto grande)
 
 **Origen:** conversación de diseño 2026-05-05 sobre eficiencia de la sincronización de catálogos. Inicialmente sobre reemplazar el sync nocturno por cache on-demand puro. **Resuelto parcialmente 2026-05-05 (ADR-004 canonical):** el cron nocturno se eliminó en favor de sync on-app-open con `If-None-Match`. Este followup queda activo solo para evaluar el patrón **prefetch-by-proyecto + lookup on-demand** para catálogos grandes (insumos ~190K) — el sync on-app-open delta sigue trayendo el catálogo completo en la primera carga post-eviction iOS.

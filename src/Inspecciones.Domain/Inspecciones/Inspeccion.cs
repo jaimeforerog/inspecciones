@@ -43,8 +43,63 @@ public sealed class Inspeccion
         RutinaTecnicaLocal rutina,
         DateTimeOffset ahora)
     {
-        // STUB — fase red. Implementación en fase green.
-        throw new NotImplementedException();
+        // PRE-2 — el proyecto del comando debe estar entre los asignados al técnico.
+        if (!claims.ProyectosAsignados.Contains(cmd.ProyectoId))
+        {
+            throw new ProyectoNoAutorizadoException(
+                $"El técnico {claims.TecnicoIniciador} no tiene asignación al proyecto {cmd.ProyectoId}.");
+        }
+
+        // PRE-4 — el equipo debe pertenecer al proyecto del comando.
+        if (equipo.ProyectoId != cmd.ProyectoId)
+        {
+            throw new EquipoNoPerteneceAProyectoException(
+                $"El equipo {equipo.EquipoCodigo} pertenece al proyecto {equipo.ProyectoId}, " +
+                $"no al proyecto {cmd.ProyectoId} del comando.");
+        }
+
+        // PRE-5 — el equipo debe tener rutina técnica asignada en el ERP (I-I2).
+        if (equipo.RutinaTecnicaId is null)
+        {
+            throw new EquipoSinRutinaTecnicaException(
+                $"El equipo {equipo.EquipoCodigo} no tiene rutina técnica asignada en el ERP. " +
+                "Contacta al admin del catálogo en Sinco.");
+        }
+
+        // PRE-6 — la rutina del catálogo local debe coincidir con la referenciada por el equipo
+        // y ser de tipo técnica (I-I2). Defensa contra cache stale o sync inconsistente.
+        if (rutina.RutinaId != equipo.RutinaTecnicaId.Value || rutina.Tipo != TipoRutina.Tecnica)
+        {
+            throw new RutinaTecnicaNoSincronizadaException(
+                $"La rutina referenciada por el equipo {equipo.EquipoCodigo} no está sincronizada " +
+                "en el catálogo local — refresca catálogos.");
+        }
+
+        // PRE-7 — FechaReportada debe estar en el rango [hoy-30, hoy] (I-I3).
+        var hoy = DateOnly.FromDateTime(ahora.UtcDateTime);
+        var limiteInferior = hoy.AddDays(-30);
+        if (cmd.FechaReportada > hoy || cmd.FechaReportada < limiteInferior)
+        {
+            throw new FechaReportadaFueraDeRangoException(
+                $"FechaReportada {cmd.FechaReportada:yyyy-MM-dd} está fuera del rango aceptable " +
+                $"[{limiteInferior:yyyy-MM-dd}, {hoy:yyyy-MM-dd}].");
+        }
+
+        var evento = new InspeccionIniciada_v1(
+            InspeccionId: cmd.InspeccionId,
+            Tipo: TipoInspeccion.Tecnica,
+            EquipoId: cmd.EquipoId,
+            RutinaId: rutina.RutinaId,
+            RutinaCodigo: rutina.Codigo,
+            TecnicoIniciador: claims.TecnicoIniciador,
+            ProyectoId: cmd.ProyectoId,
+            Ubicacion: cmd.UbicacionInicio,
+            IniciadaEn: ahora,
+            FechaReportada: cmd.FechaReportada,
+            LecturaMedidorPrimario: cmd.LecturaMedidorPrimario,
+            LecturaMedidorSecundario: cmd.LecturaMedidorSecundario);
+
+        return new object[] { evento };
     }
 
     /// <summary>
@@ -82,7 +137,18 @@ public sealed class Inspeccion
     /// </summary>
     public void Apply(InspeccionIniciada_v1 e)
     {
-        // STUB — fase red. Implementación en fase green.
-        throw new NotImplementedException();
+        InspeccionId = e.InspeccionId;
+        Tipo = e.Tipo;
+        Estado = EstadoInspeccion.EnEjecucion;
+        EquipoId = e.EquipoId;
+        RutinaId = e.RutinaId;
+        RutinaCodigo = e.RutinaCodigo;
+        TecnicoIniciador = e.TecnicoIniciador;
+        ProyectoId = e.ProyectoId;
+        Ubicacion = e.Ubicacion;
+        IniciadaEn = e.IniciadaEn;
+        FechaReportada = e.FechaReportada;
+        LecturaMedidorPrimario = e.LecturaMedidorPrimario;
+        LecturaMedidorSecundario = e.LecturaMedidorSecundario;
     }
 }
