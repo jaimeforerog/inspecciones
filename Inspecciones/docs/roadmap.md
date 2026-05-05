@@ -43,8 +43,8 @@
 | 0.18 | Recibir DDL del preoperacional + contratar shape DTO | 🚧 | Espera por equipo del preop |
 | 0.19 | Confirmar alcance de rutina técnica única por grupo | ✅ | Decidido 2026-04-27 (§12.10 + §12.11): una sola rutina técnica por grupo de mantenimiento (no se subdivide motor/hidráulica/post-mantenimiento). MVP usa único `TipoInspeccion = Tecnica`. Monitoreo (con `MedicionEsperada` rango min/max) queda en 10.4 — refinado 2026-04-30 §12.11.5. |
 | 0.20 | Limpieza de referencias obsoletas en §2.1, §6, I7 del modelo | ✅ | Banners `⚠️ SECCIÓN HISTÓRICA` y notas inline `⚠️ OBSOLETO` añadidos en §2.1, §3, §6, §7, §7.4.5, §12.10.8, §12.10.9, §12.10.10 e I7 (2026-04-28). Tabla §15.11 marcada como completada. |
-| 0.21 | Refinamientos finales del modelo y contrato (sesión 2026-05-04) | ✅ | **(a) Tipos de IDs:** PKs del ERP migran de `Guid` a `int` (System.Int32) con `<X>Codigo: string` para UI/URLs; IDs internos del módulo siguen `Guid` v7. Aplicado a modelo, eventos, comandos, contrato y followups (~470 líneas modificadas). **(b) Rutina técnica per-equipo (β):** cardinalidad 1 rutina/equipo, asignación explícita en ERP — `M-3b` trae `rutinaTecnicaId: int`. Técnico no elige (auto-resuelta — UX MVP preservada). **(c) Rutinas monitoreo per-equipo:** 2-3 rutinas/equipo, técnico elige. **(d) Consolidación M-3b:** absorbe partes + asignación de rutinas en una sola llamada. M-4 eliminado. **(e) M-17 nuevo (crítico MVP):** `GET /catalogos/rutinas` — sync nocturno de rutinas técnicas, cierra gap detectado en revisión por flujos. **(f) M-16 (Fase 2 diferido):** `GET /catalogos/rutinas-monitoreo`. **(g) Adjuntos en monitoreo cerrados:** anclaje xor (`ItemId` o `HallazgoId`), siempre opcional, límite 5/entidad. **(h) Backend preop:** confirmado SQL Server relacional on-prem (era "asumido"). |
-| 0.22 | Diagramas de flujo y workflows visuales (sesión 2026-05-04) | ✅ | Creados 6 docs nuevos + 3 HTMLs interactivos: **flowcharts narrativos** `02f` técnica MVP, `02g` monitoreo Fase 2, `02h` seguimientos. **Workflows basados en nodos** (BPMN/n8n style con carriles por actor) `02i` técnica, `02j` monitoreo, `02k` seguimientos. **HTMLs interactivos** equivalentes con Mermaid v10 + svg-pan-zoom para mejor visualización. Cubren ciclo completo: sync nocturno, inicio, importar preop, hallazgos, repuestos, adjuntos, firma, sagas post-firma, aprobación OT, monitoreo Fase 2, ciclo del aggregate `SeguimientoHallazgo`. |
+| 0.21 | Refinamientos finales del modelo y contrato (sesión 2026-05-04, refinada 2026-05-05) | ✅ | **(a) Tipos de IDs:** PKs del ERP migran de `Guid` a `int` (System.Int32) con `<X>Codigo: string` para UI/URLs; IDs internos del módulo siguen `Guid` v7. Aplicado a modelo, eventos, comandos, contrato y followups (~470 líneas modificadas). **(b) Rutina técnica per-equipo (β):** cardinalidad 1 rutina/equipo, asignación explícita en ERP — `M-3b` trae `rutinaTecnicaId: int`. Técnico no elige (auto-resuelta — UX MVP preservada). **(c) Rutinas monitoreo por grupo de mantenimiento (refinado 2026-05-05):** asignación **derivada por grupo**, no per-equipo. M-3b trae `grupoMantenimientoId` del equipo; M-16 trae cada rutina con `grupoMantenimientoId`. Cliente filtra `r.grupoMantenimientoId == equipo.grupoMantenimientoId`. Sin tabla intermedia en ERP. Técnico elige entre las rutinas activas del grupo. **(d) Consolidación M-3b:** absorbe partes + `rutinaTecnicaId` + `grupoMantenimientoId` en una sola llamada. M-4 eliminado. **(e) M-17 nuevo (crítico MVP):** `GET /catalogos/rutinas` — sync de rutinas técnicas (on-app-open desde 2026-05-05 ADR-004 canonical), cierra gap detectado en revisión por flujos. **(f) M-16 promovido a MVP 2026-05-05** (antes Fase 2): `GET /catalogos/rutinas-monitoreo` — sync on-app-open. **(g) Adjuntos en monitoreo cerrados:** anclaje xor (`ItemId` o `HallazgoId`), siempre opcional, límite 5/entidad. **(h) Backend preop:** confirmado SQL Server relacional on-prem (era "asumido"). **(i) ADR-004 sync on-app-open canonical (2026-05-05):** sin cron nocturno; cliente PWA dispara sync delta cada apertura con `If-None-Match`; persistencia IndexedDB; sin red al abrir → último cached. |
+| 0.22 | Diagramas de flujo y workflows visuales (sesión 2026-05-04) | ✅ | Creados 6 docs nuevos + 3 HTMLs interactivos: **flowcharts narrativos** `02f` técnica MVP, `02g` monitoreo Fase 2, `02h` seguimientos. **Workflows basados en nodos** (BPMN/n8n style con carriles por actor) `02i` técnica, `02j` monitoreo, `02k` seguimientos. **HTMLs interactivos** equivalentes con Mermaid v10 + svg-pan-zoom para mejor visualización. Cubren ciclo completo: sync de catálogos (cambiado a on-app-open en 2026-05-05), inicio, importar preop, hallazgos, repuestos, adjuntos, firma, sagas post-firma, aprobación OT, monitoreo (promovido a MVP 2026-05-05), ciclo del aggregate `SeguimientoHallazgo`. |
 | 0.23 | EDA Sinco — alineación §3.2 + §5 (sesión 2026-05-03/04) | ✅ | Modelo §8 aclara que el patrón aplicado es §3.2 "Comando asíncrono" del guide EDA Sinco (no §3.4 "Evento de integración") por restricción de infraestructura (ERP on-prem sin bus). ADR-006 mapea los 3 mecanismos del guide §5 (clave de idempotencia, detección por estado, concurrencia optimista) a su implementación concreta en el módulo. |
 
 ---
@@ -77,14 +77,11 @@
 
 ## Fase 2 — Autenticación y autorización
 
-> **⚠️ Aclaración 2026-04-29:** Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente, no app standalone. El módulo NO elige IdP autónomamente — hereda el contexto del usuario del host. Los pasos abajo asumen Entra ID (recomendación original del ADR-002), pero son condicionales: si el host PWA usa otra cosa, los pasos 2.2/2.3/2.4 los implementa el host (no este módulo) y este módulo solo aporta validación cloud-side del token recibido (2.6/2.7) y autorización por claim (2.5/2.8).
+> **⚠️ Aclaración 2026-04-29 + decisión 2026-05-05:** Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente. El módulo **no maneja identidad** — hereda 100% del host PWA y consume el contexto (token + claims) tal como llega. **Decisión 2026-05-05 (Jaime):** se descarta cualquier sync de usuarios al IdP, app registration propio o catálogo local de usuarios. El módulo solo: (a) valida cloud-side el token que llega del host, (b) autoriza por capability (no por perfil), (c) usa el `tecnicoId` que viaja en el JWT como dato opaco. Cualquier gestión de identidad — alta, baja, asignación de proyectos, perfiles — vive en el ERP/host.
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 2.1 | Confirmar mecanismo actual de auth del host PWA Sinco MYE móvil | ⏳ | **Bloqueante real de ADR-002** |
-| 2.2 | Diseño de sync usuarios Sinco → IdP del host | ⏳ | Pull-based, vía REST sobre VPN — **solo si el host no lo tiene ya** |
-| 2.3 | Implementar job de sync de usuarios | ⏳ | Wolverine timer trigger — **solo si el host no lo tiene ya** |
-| 2.4 | Configurar app registration en el IdP del host | ⏳ | OAuth2/OIDC scopes — **responsabilidad del host PWA** |
+| 2.1 | Confirmar mecanismo actual de auth del host PWA Sinco MYE móvil | ⏳ | **Bloqueante real de ADR-002**. Necesario para definir cómo se valida el token cloud-side (issuer, JWKS, claims esperadas) |
 | 2.5 | Definir matriz comando → capability requerida (least privilege) | ⏳ | **No predefine perfiles del ERP** (técnico, supervisor, etc.). La matriz define **capabilities** (verbos como `ejecutar-inspeccion`, `generar-ot`, `auditar-inspecciones`, `recibir-alertas-sla`, `recibir-alertas-ot-fallida`, `recibir-alertas-ot-rechazada` —última agregada 2026-04-30) que el host PWA mapea a su catálogo de perfiles ERP. El módulo nunca consulta "eres técnico" — consulta "tienes capability X". Independiente del IdP elegido (ADR-002). |
 | 2.6 | Implementar JWT validation middleware en backend cloud | ⏳ | Configurable según IdP del host |
 | 2.7 | Implementar JWT validation en APIs Sinco on-prem | ⏳ | Cross-team con equipos Sinco |
@@ -121,6 +118,23 @@
 | 3.15 | Validaciones pre-firma V-F1 a V-F7 | ⏳ | En el handler `FirmarInspeccion` |
 | 3.16 | Tests unitarios del aggregate | ⏳ | Cobertura ≥80% en lógica de dominio |
 
+### 3.B' Extensión Monitoreo del aggregate `Inspeccion` (NUEVO MVP — decisión 2026-05-05)
+
+> **Decisión 2026-05-05 (Jaime):** monitoreo entra al MVP — antes estaba en Fase 10.4 diferido. Aggregate **unificado** con discriminador `Tipo: TipoInspeccion ∈ {Tecnica, Monitoreo}` (no aggregate separado). Reusa firma, dictamen, sagas OT, seguimientos. Modelo en `01-modelo-dominio.md §12.11.5`.
+
+| # | Paso | Estado | Notas |
+|---|---|---|---|
+| 3.16a | Enum `TipoInspeccion = {Tecnica, Monitoreo}` + value objects `MedicionEsperada`, `EvaluacionCualitativaEsperada`, `ItemRutinaMonitoreoSnapshot` | ⏳ | §12.11.5 puntos 1, 3, 7 |
+| 3.16b | Eventos monitoreo (3): `MedicionRegistrada_v1`, `EvaluacionCualitativaRegistrada_v1`, `ItemMonitoreoOmitido_v1` | ⏳ | §12.11.5 punto 5. Soft delete no aplica — items no se borran, se omiten con motivo |
+| 3.16c | Extender `InspeccionIniciada_v1` con `RutinaMonitoreoSeleccionadaId` + `ItemsSnapshot` (nullable cuando `Tipo=Tecnica`) | ⏳ | §12.11.5 punto 7. Snapshot necesario porque `FueraDeRango` se calcula contra `MedicionEsperada` snapshoteada |
+| 3.16d | Extender `OrigenHallazgo` con valor `Monitoreo` + invariantes (Origen=Monitoreo → MedicionOrigenId obligatorio + AccionRequerida=RequiereSeguimiento + Tipo del stream=Monitoreo) | ⏳ | §12.11.5 punto 8 |
+| 3.16e | Comando + handler `IniciarInspeccionMonitoreo` (hermano de `IniciarInspeccion`) | ⏳ | §12.11.5 punto 11. Valida I-I1, I-I2 (adaptado: equipo cuyo grupo no tiene rutinas-monitoreo activas → 422), I-I3 + nueva regla `rutina.GrupoMantenimientoId == equipo.GrupoMantenimientoId` (decisión 2026-05-05). Emite `InspeccionIniciada_v1` con `Tipo=Monitoreo` + items snapshoteados |
+| 3.16f | Comando + handler `RegistrarMedicion` — emite atómicamente `MedicionRegistrada_v1` (con `FueraDeRango` calculado) + `HallazgoRegistrado_v1` (con `Origen=Monitoreo`, `RequiereSeguimiento`) cuando fuera de rango | ⏳ | §12.11.5 punto 6. Tests obligatorios: dentro de rango (1 evento), fuera (2 eventos atómicos), revalidación que `RutinaMonitoreoLocal` tiene rango snapshoteado |
+| 3.16g | Comando + handler `RegistrarEvaluacionCualitativa` — emite `EvaluacionCualitativaRegistrada_v1` + atómicamente `HallazgoRegistrado_v1` cuando `Calificacion=Malo` | ⏳ | §12.11.5 punto 6. Decisión 2026-04-30: solo `Malo` dispara hallazgo, no `Regular` |
+| 3.16h | Comando + handler `OmitirItemMonitoreo` — emite `ItemMonitoreoOmitido_v1` con motivo (texto libre del técnico) | ⏳ | Cubre el caso "no pude medir" (multímetro descargado, sensor inaccesible, etc.). No dispara hallazgo. La firma valida que items omitidos no quedan sin justificar |
+| 3.16i | Extender comando `AdjuntarArchivo` para anclar adjunto a `ItemId` (xor con `HallazgoId`) | ⏳ | §12.11.5 punto 12. Invariante `(ItemId == null) XOR (HallazgoId == null)`. En `Tipo=Tecnica`, `ItemId` siempre null |
+| 3.16j | Tests del aggregate para flujo monitoreo completo: iniciar → medir N items (mix dentro/fuera de rango + cualitativos) → omitir uno → adjuntar fotos a items → firmar | ⏳ | Cobertura ≥85% rama monitoreo. Rebuild test obligatorio (CLAUDE.md) — replay de eventos sobre stream vacío reproduce estado |
+
 ### 3.C Aggregate `SeguimientoHallazgo`
 
 | # | Paso | Estado | Notas |
@@ -156,16 +170,20 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 3.32 | Job de sync inicial + cron diario | ⏳ | ADR-004. **Decisión 2026-04-30**: para clientes con > 10K SKUs (CONCRESCOL ~34K, PAVIMENTOS, CASS, REDES) implementar **sync incremental basado en `?updatedSince=` del lado ERP** — full sync diario es costoso. Confirmar con David al definir endpoints si aceptan filtro temporal. **Decisión 2026-05-04**: el sync alimenta `RutinaTecnicaLocal` desde **M-17** (`GET /catalogos/rutinas`, crítico MVP — no estaba antes). En Fase 2 se agrega `RutinaMonitoreoLocal` desde **M-16** (`GET /catalogos/rutinas-monitoreo`). Detalle de volúmenes en `08-volumenes-clientes-erp.md` hallazgo 7. |
-| 3.33 | Proyección local: `EquipoLocal`, `ParteLocal`, `RepuestoLocal`, `ProyectoLocal`, `RutinaTecnicaLocal`, `CausaFallaLocal`, `TipoFallaLocal` | ⏳ | 7 catálogos para MVP. `ProyectoLocal` se sincroniza desde `GET /api/v1/catalogos/obras` del ERP — adapter traduce. **`EquipoLocal`** trae el detalle vía **M-3b** (decisión 2026-05-04) con `rutinaTecnicaId: int` (singular, asignación per-equipo) y `rutinasMonitoreoIds: int[]` (vacío en MVP, populated en Fase 2). **`RutinaTecnicaLocal`** se popula vía M-17 nocturno; resuelve client-side el id del equipo contra el catálogo. Fase 2 agrega `RutinaMonitoreoLocal`. |
-| 3.34 | Estrategia stale-while-revalidate | ⏳ | Si VPN cae |
+| 3.32 | Sync inicial al primer login + sync delta on-app-open (sin cron nocturno) | ⏳ | ADR-004 (decisión canonical 2026-05-05 — sin cron). Bootstrap de la PWA dispara `GET /api/v1/catalogos/<X>` con `If-None-Match: "{etag-cliente}"` por catálogo, en paralelo. Response típico = `304 Not Modified`. Sin scheduler en backend. **Decisión 2026-04-30**: para clientes con > 10K SKUs (CONCRESCOL ~34K, PAVIMENTOS, CASS, REDES) seguir evaluando `?updatedSince=` para deltas más finos en M-16/I-2 — confirmar con David. **Decisión 2026-05-04**: alimenta `RutinaTecnicaLocal` desde **M-17**. **Decisión 2026-05-05**: alimenta también `RutinaMonitoreoLocal` desde **M-16** (monitoreo MVP). Detalle de volúmenes en `08-volumenes-clientes-erp.md` hallazgo 7. |
+| 3.33 | Proyección local: `EquipoLocal`, `ParteLocal`, `RepuestoLocal`, `ProyectoLocal`, `RutinaTecnicaLocal`, `RutinaMonitoreoLocal`, `CausaFallaLocal`, `TipoFallaLocal` | ⏳ | 8 catálogos para MVP (decisión 2026-05-05: monitoreo entra al MVP, agrega `RutinaMonitoreoLocal`). Persistencia en **IndexedDB cliente** (object store `catalogos`, ver ADR-008 §9.16). `ProyectoLocal` se sincroniza desde `GET /api/v1/catalogos/obras` del ERP — adapter traduce. **`EquipoLocal`** trae el detalle vía **M-3b** (decisión 2026-05-04, refinada 2026-05-05) con `rutinaTecnicaId: int` (singular, asignación per-equipo) y `grupoMantenimientoId: int` (mecanismo de asignación rutinas-monitoreo por grupo). **`RutinaTecnicaLocal`** se popula vía M-17 on-app-open; resuelve client-side el id del equipo contra el catálogo. **`RutinaMonitoreoLocal`** se popula vía M-16 on-app-open; cliente filtra por `grupoMantenimientoId` para resolver rutinas del equipo (sin tabla intermedia en ERP). |
+| 3.34 | Estrategia stale-while-revalidate (sin red al abrir → último cached) | ⏳ | Decisión 2026-05-05: si la app abre sin red, el bootstrap usa la cache local (banner discreto "modo offline"). Sync se reintenta cuando vuelva la red. Bloqueo por staleness extrema (>7 días sin sync) sigue aplicando — ver ADR-004 Punto 3 vigente |
 | 3.35 | Health checks por catálogo | ⏳ | App Insights |
 
 ### 3.F APIs cloud (REST hacia el frontend)
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 3.36 | Endpoint `POST /inspecciones` (iniciar) | ⏳ | Body lleva: `equipoId`, `proyectoId`, `ubicacion` (GPS), `fechaReportada` (DateOnly, decisión 2026-04-30 cierre #2), `lecturaMedidorPrimario?` y `lecturaMedidorSecundario?` (decisión 2026-04-30 cierre #3). Valida invariantes I-I1, I-I2, I-I3 (§15.7). **I-I1**: una sola inspección abierta por equipo. Si ya hay activa, response retorna `200 OK` con `inspeccionId` existente y flag `redirected: true`. **I-I2**: equipo cuyo grupo no tiene rutina → 422 `GRUPO_SIN_RUTINA`. **I-I3**: `FechaReportada` fuera del rango `[hoy-30d, hoy]` → 422 `FECHA_REPORTADA_FUERA_DE_RANGO`. Tests obligatorios: (a) equipo libre con rutina → 200, (b) equipo con activa → 200 redirect, (c) concurrente → race resuelto por §15.12.6, (d) equipo sin rutina → 422, (e) `fechaReportada` futura → 422, (f) `fechaReportada` 31+ días atrás → 422, (g) `fechaReportada=hoy` → 200, (h) `fechaReportada=hoy-30d` (borde) → 200, (i) lecturas de medidores capturadas correctamente, (j) lecturas de medidores ausentes (equipo sin medidores) → 200. |
+| 3.36 | Endpoint `POST /inspecciones` (iniciar — `Tipo=Tecnica` implícito) | ⏳ | Body lleva: `equipoId`, `proyectoId`, `ubicacion` (GPS), `fechaReportada` (DateOnly, decisión 2026-04-30 cierre #2), `lecturaMedidorPrimario?` y `lecturaMedidorSecundario?` (decisión 2026-04-30 cierre #3). Valida invariantes I-I1, I-I2, I-I3 (§15.7). **I-I1**: una sola inspección abierta por equipo. Si ya hay activa, response retorna `200 OK` con `inspeccionId` existente y flag `redirected: true`. **I-I2**: equipo cuyo grupo no tiene rutina → 422 `GRUPO_SIN_RUTINA`. **I-I3**: `FechaReportada` fuera del rango `[hoy-30d, hoy]` → 422 `FECHA_REPORTADA_FUERA_DE_RANGO`. Tests obligatorios: (a) equipo libre con rutina → 200, (b) equipo con activa → 200 redirect, (c) concurrente → race resuelto por §15.12.6, (d) equipo sin rutina → 422, (e) `fechaReportada` futura → 422, (f) `fechaReportada` 31+ días atrás → 422, (g) `fechaReportada=hoy` → 200, (h) `fechaReportada=hoy-30d` (borde) → 200, (i) lecturas de medidores capturadas correctamente, (j) lecturas de medidores ausentes (equipo sin medidores) → 200. |
+| 3.36b | Endpoint `POST /inspecciones/monitoreo` (NUEVO MVP — decisión 2026-05-05) | ⏳ | Body extiende 3.36 con `rutinaMonitoreoId: int` (selección del técnico). Despacha al mismo aggregate `Inspeccion` con `Tipo=Monitoreo`. Valida I-I1, I-I3 + nueva regla §12.11.5: `RutinaMonitoreoLocal[id].GrupoMantenimientoId == EquipoLocal[id].GrupoMantenimientoId` → 422 `RUTINA_FUERA_DE_GRUPO` si no coincide. I-I2 adaptado: equipo cuyo grupo no tiene rutinas-monitoreo activas → 422 `GRUPO_SIN_RUTINAS_MONITOREO`. Tests obligatorios: (a) éxito feliz, (b) rutina de otro grupo → 422, (c) grupo sin rutinas activas → 422, (d) `rutinaMonitoreoId` inexistente → 404, (e) inicio concurrente con técnica del mismo equipo → solo una gana por I-I1, (f) snapshot de items se serializa completo en `InspeccionIniciada_v1.ItemsSnapshot`. |
+| 3.36c | Endpoint `POST /inspecciones/{id}/items/{itemId}/medicion` (NUEVO MVP) | ⏳ | Body `{ valorMedido, observacion? }` para items numéricos. Handler invoca `RegistrarMedicion` (3.16f). Valida que `Tipo` del aggregate sea `Monitoreo`, `itemId ∈ ItemsSnapshot`, item es numérico (no cualitativo). Tests: dentro de rango → 200 (1 evento), fuera de rango → 200 (2 eventos atómicos: medición + hallazgo), item cualitativo → 422, item ya medido → 409, item omitido → 422. |
+| 3.36d | Endpoint `POST /inspecciones/{id}/items/{itemId}/evaluacion` (NUEVO MVP) | ⏳ | Body `{ calificacion: "Bueno"|"Regular"|"Malo", observacion? }`. Handler invoca `RegistrarEvaluacionCualitativa` (3.16g). Valida `Tipo=Monitoreo`, item es cualitativo. Tests: Bueno/Regular → 1 evento, Malo → 2 eventos atómicos, item numérico → 422, item ya evaluado → 409. |
+| 3.36e | Endpoint `POST /inspecciones/{id}/items/{itemId}/omitir` (NUEVO MVP) | ⏳ | Body `{ motivo }` (mínimo 10 chars). Handler invoca `OmitirItemMonitoreo` (3.16h). No dispara hallazgo. Tests: éxito feliz, item ya medido/evaluado → 422, motivo vacío → 400. |
 | 3.37 | Endpoint `POST /inspecciones/{id}/hallazgos` | ⏳ | |
 | 3.38 | Endpoint `PATCH /inspecciones/{id}/hallazgos/{hid}` | ⏳ | |
 | 3.39 | Endpoint `DELETE /inspecciones/{id}/hallazgos/{hid}` | ⏳ | Soft delete |
@@ -218,7 +236,7 @@
 
 > **Fuente canónica del contrato**: [`Inspecciones/docs/06-contrato-apis-erp.md`](Inspecciones/docs/06-contrato-apis-erp.md). Las tablas debajo son mapeo de pasos del roadmap a endpoints; el detalle de request/response/idempotencia/shape vive en el archivo 06.
 
-> **Riesgo de programa**: 25 endpoints reconciliados (14 obligatorios MVP + 3 condicionales + 8 diferidos al post-MVP) en 4 módulos diferentes de Sinco con 4 equipos distintos. Coordinación cross-team es bloqueante.
+> **Riesgo de programa**: 25 endpoints reconciliados (16 obligatorios MVP + 1 condicional + 8 diferidos al post-MVP) en 3 módulos de Sinco con 3 equipos distintos (Preop, MYE núcleo, Inventario). Equipo Seguridad/IT eliminado del cross-team (decisión 2026-05-05 — toda la identidad viene del host PWA, sin endpoints U-* propios). Coordinación cross-team sigue siendo bloqueante.
 
 ### 4.A Equipo del Preoperacional
 
@@ -234,7 +252,7 @@
 | # | Paso | Estado | Notas |
 |---|---|---|---|
 | 4.5 | `GET /equipos?q=&page=&size=` — lista liviana M-3 (autocomplete) | 🚧 | El ERP filtra por obras del usuario via JWT. Sin `?obra=` explícito (decisión 2026-04-30 + refinada 2026-05-04). NO incluye partes ni rutinas (esas viven en M-3b). |
-| 4.6 | `GET /equipos/{equipoCodigo}` — detalle M-3b (CONSOLIDADO 2026-05-04) | 🚧 | **Crítico MVP refactorizado**: incluye `partes[]` (absorbe el viejo M-4) + `rutinaTecnicaId: int` (singular, nuevo) + `rutinasMonitoreoIds: int[]` (plural, Fase 2) + `obraId: int` con `obraCodigo: string`. Una sola llamada al seleccionar equipo. Detalle en M-3b de `06-contrato-apis-erp.md`. |
+| 4.6 | `GET /equipos/{equipoCodigo}` — detalle M-3b (CONSOLIDADO 2026-05-04, refinado 2026-05-05) | 🚧 | **Crítico MVP refactorizado**: incluye `partes[]` (absorbe el viejo M-4) + `rutinaTecnicaId: int` (singular, asignación per-equipo) + `grupoMantenimientoId: int` + `grupoMantenimiento: string` (mecanismo de asignación rutinas-monitoreo por grupo, Fase 2 — sin `rutinasMonitoreoIds[]`) + `obraId: int` con `obraCodigo: string`. Una sola llamada al seleccionar equipo. Detalle en M-3b de `06-contrato-apis-erp.md`. |
 | 4.7 | ~~`GET /equipos/{id}/partes`~~ — M-4 ELIMINADO | ❌ | Absorbido por M-3b (decisión 2026-05-04). El árbol de partes viaja embebido en el detalle del equipo. Slices que apuntaban a M-4 deben migrar a M-3b. |
 | 4.8 | ~~`GET /partes/{id}`~~ — DIFERIDO | ⏸ | Las partes viajan embebidas en M-3b. No requiere endpoint de detalle separado en MVP. Si emerge necesidad puntual (ej. catálogo cross-equipo), se reactiva. |
 | 4.9 | `POST /mye/ot-correctivas` (crear OT) | 🚧 | Cuerpo: hallazgos, repuestos, dictamen, técnico, `responsableCosto` (decisión 2026-04-30, enum `Proyecto`/`DepartamentoEquipos`), `solicitadaPor` (ADR-007). **Idempotencia real obligatoria** sobre `Idempotency-Key=InspeccionId`: misma key → mismo `200 OK` con mismo `OTCorrectivaIdSinco`, persistente, ventana ≥30 días. Detalle del contrato en ADR-003 §13. |
@@ -245,8 +263,8 @@
 | 4.12 | `GET /catalogos/tipos-falla` | 🚧 | ADR-004 |
 | 4.13 | `GET /catalogos/grupos` | ⏸ | Diferido (decisión 2026-04-30) — M-3b trae `grupo` denormalizado en cada equipo. |
 | 4.14 | `GET /catalogos/obras` (catálogo de proyectos — el ERP usa "obras" en URL; adapter mapea a `ProyectoLocal`) | 🚧 | |
-| 4.14b | `GET /catalogos/rutinas` — M-17 (NUEVO 2026-05-04, crítico MVP) | 🚧 | Sync nocturno de definiciones de rutinas técnicas. Alimenta `RutinaTecnicaLocal`. Filtra `tipo=Tecnica` server-side (el módulo solo consume rutinas técnicas). Cierra gap detectado en revisión por flujos: el modelo asumía sync que el contrato no tenía. Detalle en M-17 de `06-contrato-apis-erp.md`. |
-| 4.14c | `GET /catalogos/rutinas-monitoreo` — M-16 (DIFERIDO Fase 2) | ⏸ | Sync nocturno de rutinas de monitoreo (Fase 2). Sin filtro por grupo (asignación equipo↔rutinas vive en M-3b). Detalle en M-16 de `06-contrato-apis-erp.md`. |
+| 4.14b | `GET /catalogos/rutinas` — M-17 (NUEVO 2026-05-04, crítico MVP) | 🚧 | Sync on-app-open de definiciones de rutinas técnicas (decisión 2026-05-05 ADR-004 canonical — sin cron). Alimenta `RutinaTecnicaLocal` en IndexedDB cliente. Filtra `tipo=Tecnica` server-side (el módulo solo consume rutinas técnicas). Cierra gap detectado en revisión por flujos: el modelo asumía sync que el contrato no tenía. Detalle en M-17 de `06-contrato-apis-erp.md`. |
+| 4.14c | `GET /catalogos/rutinas-monitoreo` — M-16 (NUEVO crítico MVP — decisión 2026-05-05) | 🚧 | Sync on-app-open de rutinas de monitoreo (decisión 2026-05-05 ADR-004 canonical — sin cron). Cada rutina trae `grupoMantenimientoId` (decisión 2026-05-05 — mecanismo de asignación por grupo, sin tabla intermedia equipo↔rutina en ERP). Cliente filtra el catálogo local por grupo del equipo. Detalle en M-16 de `06-contrato-apis-erp.md`. **Pendiente cross-team con David** — pregunta 6 de `07-preguntas-destrabar-followups.md`. |
 
 ### 4.C Equipo Inventario
 
@@ -256,12 +274,9 @@
 | 4.16 | `GET /repuestos/{id}` (detalle) | 🚧 | |
 | 4.17 | `GET /catalogos/insumos` | 🚧 | Sync nocturno |
 
-### 4.D Equipo de RRHH / Identidad
+### 4.D Equipo de RRHH / Identidad — ❌ NO APLICA (decisión 2026-05-05)
 
-| # | Paso | Estado | Notas |
-|---|---|---|---|
-| 4.18 | `GET /usuarios?role=tecnico` (sync hacia el IdP del host) | 🚧 | Condicional al ADR-002 (tentativo). Solo aplica si el host PWA no tiene ya el sync. |
-| 4.19 | `GET /usuarios/{id}` (detalle con proyectos asignados — el ERP los nombra "obras") | 🚧 | |
+> **Decisión 2026-05-05 (Jaime):** el módulo **no consume endpoints de usuarios** — toda la identidad viene del host PWA vía JWT. Pasos 4.18 y 4.19 (endpoints U-1, U-2 del contrato) eliminados. Sin sync de usuarios, sin catálogo local de usuarios, sin coordinación cross-team con el equipo de seguridad/IT Sinco. Ver Fase 2 actualizada.
 
 ---
 
@@ -295,7 +310,17 @@
 | 5.15 | Pantalla 7b: OT generada (push SignalR) | ⏳ | |
 | 5.16 | Pantalla 7c: error MYE | ⏳ | |
 
-### 5.C Pantallas del flujo novedades preop
+### 5.B' Pantallas del flujo monitoreo (NUEVO MVP — decisión 2026-05-05)
+
+> Wireframes en `Inspecciones/docs/02e-wireframes-monitoreo.html` (Daniel). Validación con Sergio pendiente — paso 8.4.
+
+| # | Paso | Estado | Notas |
+|---|---|---|---|
+| 5.16a | Selector de tipo de inspección al iniciar (Técnica vs Monitoreo) | ⏳ | Si el grupo del equipo no tiene rutinas-monitoreo activas, ocultar opción Monitoreo |
+| 5.16b | Selector de rutina de monitoreo (cards de las rutinas activas del grupo) | ⏳ | Filtra `RutinaMonitoreoLocal` por `grupoMantenimientoId` del equipo. Cardinalidad típica 2-3 rutinas |
+| 5.16c | Pantalla principal monitoreo: lista de items con captura inline | ⏳ | Items numéricos (input + unidad) y cualitativos (radios Bueno/Regular/Malo). Botón cámara por item. Botón "omitir" con motivo. Indicador visual de fuera de rango / `Malo` con badge "se abrirá hallazgo automático" |
+| 5.16d | Wizard de hallazgo automático auto-generado al medir fuera de rango / Malo | ⏳ | Pre-rellena `Origen=Monitoreo`, `MedicionOrigenId=ItemId`, `ParteEquipoId` heredado, `NovedadTecnica` autogenerada (editable). Técnico solo confirma o ajusta |
+| 5.16e | Pantalla de cierre/firma monitoreo | ⏳ | Reusa 5.13 con validaciones extra: items omitidos sin justificar bloquean firma. Dictamen libre (V-F4 + V-F8 aplican). Resumen muestra items dentro/fuera/omitidos |
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
@@ -362,7 +387,7 @@
 | 8.1 | Consultor lee `04-brief-consultor-producto.md` | ⏳ | ~30 min |
 | 8.2 | Sesión de validación 2h | ⏳ | 5 áreas críticas priorizadas |
 | 8.3 | Aplicar feedback al modelo / wireframes | ⏳ | Iterativo |
-| 8.4 | Validar con consultor el alcance de la rutina técnica única por grupo | ⏳ | El modelo vigente (§12.10/§12.11) define una rutina técnica por grupo de mantenimiento. Sergio confirma si la operación real tolera no subdividir motor/hidráulica o si emerge la necesidad de "contexto de inspección" como cambio aditivo. También sondea qué mediciones críticas esperaría en Monitoreo (Fase 2). |
+| 8.4 | Validar con consultor el alcance de la rutina técnica única por grupo + flujo de monitoreo MVP | ⏳ | El modelo vigente (§12.10/§12.11) define una rutina técnica por grupo de mantenimiento. Sergio confirma si la operación real tolera no subdividir motor/hidráulica o si emerge la necesidad de "contexto de inspección" como cambio aditivo. **Crítico 2026-05-05** — al haberse incluido monitoreo al MVP, Sergio debe validar específicamente: (a) UX de captura de items numéricos vs cualitativos (`02e-wireframes-monitoreo.html`), (b) regla de hallazgo automático solo en `Malo` (no `Regular`), (c) caso de uso real para "Omitir item" con motivo, (d) si "rutinas por grupo" (decisión 2026-05-05) refleja la operación real o si emerge necesidad de overrides per-equipo. |
 
 ---
 
@@ -384,10 +409,10 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 10.1 | Mediciones (`MedicionRegistrada_v1`) | ⏸ | Más relevante en inspección de monitoreo |
+| 10.1 | Mediciones (`MedicionRegistrada_v1`) | ✅ | **Movido al MVP el 2026-05-05** — incluido como parte de §3.B' (extensión Monitoreo). Ver pasos 3.16b + 3.36c |
 | 10.2 | Programación previa de inspección (estado `Programada`) | ⏸ | Aditivo |
 | 10.3 | Modo offline (PWA + IndexedDB + Background Sync) | ⏸ | Estimaciones ya hechas |
-| 10.4 | Tipo de inspección "Monitoreo" | ⏸ | **Detallado 2026-04-30 con `inspeccion.xlsx` de Jaime — modelado en §12.11.5.** Aditivo al enum `TipoInspeccion`. Aggregate nuevo `RutinaMonitoreo` (catálogo, distinto de `Rutina` técnica). N rutinas por grupo (Sistema eléctrico / Transmisión / Frenos), técnico elige al iniciar. Items con dos modos: `MedicionEsperada(min,max,unidad)` numérico O `EvaluacionCualitativaEsperada` con enum `Bueno/Regular/Malo` (mutuamente exclusivos). Eventos nuevos: `MedicionRegistrada_v1`, `EvaluacionCualitativaRegistrada_v1`, `ItemMonitoreoOmitido_v1`. Trigger hallazgo automático con `RequiereSeguimiento`: numérico fuera de rango O cualitativo `Malo`. Sync de catálogo desde ERP (ADR-004). Dictamen libre como en técnica. Comando hermano `IniciarInspeccionMonitoreo`. Endpoint MYE pendiente: `GET /api/v1/rutinas-monitoreo?grupo={g}` — ver doc 07 pregunta nueva a David. |
+| 10.4 | Tipo de inspección "Monitoreo" | ✅ | **Movido al MVP el 2026-05-05 (decisión Jaime).** Implementación distribuida en §3.B' (aggregate), §3.E (`RutinaMonitoreoLocal`), §3.F (endpoints `POST /inspecciones/monitoreo`, item-medicion/evaluacion/omitir), §4.B (`M-16` 🚧), §5.B' (pantallas — wireframes en `02e-wireframes-monitoreo.html`). Detalle del modelo en §12.11.5. Asignación equipo↔rutinas-monitoreo derivada por grupo (decisión 2026-05-05) — sin tabla intermedia en ERP |
 | 10.5 | ~~Comando bulk para descarte de novedades duplicadas~~ | ❌ | **Descartado el 2026-04-30** tras revisión del mock del diseño. La observación de Sergio se atiende con descarte rápido individual (motivo autogenerado, sin modal) — un tap por novedad, sin selección múltiple. Modelado en §15.9 "Descarte rápido inline". El contrato del ERP P-6 preserva capacidad bulk para flexibilidad futura. |
 | 10.6 | Evento `SeguimientoRevisadoSinCambio_v1` | ⏸ | Si emerge necesidad de reportería |
 | 10.7 | Botón admin "refrescar catálogo ahora" | ⏸ | ADR-004 |
@@ -403,7 +428,7 @@
 
 | # | Riesgo | Mitigación |
 |---|---|---|
-| R1 | Coordinación cross-team Sinco para 18 endpoints activos (15 obligatorios MVP + 3 condicionales) en 4 módulos diferentes; 9 diferidos al post-MVP. **Refinado 2026-05-04**: M-3b consolidado (absorbe M-4) + M-17 nuevo (crítico) + M-16 diferido a Fase 2 | SOW interno + escalación a CTO si bloqueos persisten |
+| R1 | Coordinación cross-team Sinco para 17 endpoints activos (16 obligatorios MVP + 1 condicional M-2) en 3 módulos diferentes; 8 diferidos al post-MVP. **Refinado 2026-05-04**: M-3b consolidado (absorbe M-4) + M-17 nuevo (crítico). **Refinado 2026-05-05**: (a) M-16 promovido de Fase 2 a MVP por inclusión de monitoreo en MVP — entra a urgent cross-team con David. (b) U-1/U-2 eliminados — sin coordinación con Seguridad/IT, identidad 100% del host PWA | SOW interno + escalación a CTO si bloqueos persisten |
 | R2 | Primer Azure de Sinco — landing zone "lite" como deuda técnica | ADR-001 documenta divergencias EDA, plan de migración aditivo |
 | R3 | DDL preop bloqueado del lado del equipo del preop | Workstream paralelo, mock del DTO mientras tanto |
 | R4 | Conectividad VPN inestable | Stale-while-revalidate en catálogos (ADR-004) + degradación graceful |
@@ -416,11 +441,13 @@
 ## Métricas de éxito MVP
 
 - ≥10 inspecciones técnicas completadas en piloto
+- **≥10 inspecciones de monitoreo completadas en piloto (NUEVO MVP — decisión 2026-05-05)**
 - ≥80% de hallazgos con intervención generan OT correctamente en MYE
 - 0 OT generadas con BOM inválido (rechazo MYE)
-- Tiempo medio del flujo del técnico: ≤8 min para inspección estándar
+- Tiempo medio del flujo del técnico: ≤8 min para inspección técnica estándar; ≤6 min para inspección de monitoreo (rutina con 8-12 items)
 - ≤5% de inspecciones quedan en `CierrePendienteOT` por más de 24h
-- Feedback de técnicos: ≥4/5 en facilidad de uso
+- 100% de hallazgos auto-generados por monitoreo (`Origen=Monitoreo`) abren `SeguimientoHallazgo` correctamente al firmar
+- Feedback de técnicos: ≥4/5 en facilidad de uso (técnica + monitoreo agregado)
 
 ---
 
@@ -441,8 +468,8 @@ Fase 10 (Post-MVP):           — diferido —
 ```
 
 **Próximos 3 hitos críticos:**
-1. **Arrancar Fase 3 — primer slice de backend core** (TDD multi-agente — pendiente approval del usuario para iniciar)
+1. **Arrancar Fase 3 — primer slice de backend core** (TDD multi-agente — pendiente approval del usuario para iniciar). **Decisión 2026-05-05**: MVP ahora incluye monitoreo (§3.B'); coordinar orden de slices entre técnica y monitoreo
 2. **Fase 1 — Arrancar fundaciones Azure en paralelo** (bloqueante de Fase 2-3)
-3. **Cross-team con David: confirmar M-17 + M-3b + idempotencia real M-1** (desbloquea Fase 4 — preguntas redactadas en `07-preguntas-destrabar-followups.md`)
+3. **Cross-team con David: confirmar M-17 + M-3b + M-16 + idempotencia real M-1** (desbloquea Fase 4 — preguntas redactadas en `07-preguntas-destrabar-followups.md`. M-16 ahora urgente por inclusión de monitoreo en MVP — decisión 2026-05-05)
 
 **Pasos 0.13 (ADR-002) y 0.18 (DDL preop) quedan abiertos en Fase 0** porque dependen de externos (host PWA / equipo del preop) — no se cierran solos. El 2% restante de Fase 0 los refleja.

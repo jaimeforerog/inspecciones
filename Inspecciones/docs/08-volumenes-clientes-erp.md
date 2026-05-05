@@ -138,7 +138,7 @@ Hipótesis confirmada en chat con Jaime el 2026-04-30: estos equipos están en g
 
 | Entidad | Cantidad | Notas |
 |---|---:|---|
-| Equipos | ~10,000 | Proyección `EquipoLocal` (sync nocturno, ADR-004) |
+| Equipos | ~10,000 | Proyección `EquipoLocal` (sync on-app-open, ADR-004 canonical 2026-05-05) |
 | Partes | ~53,000 | Proyección `ParteLocal` |
 | Rutinas técnicas | ~4,500 | Proyección `RutinaLocal` (filtrada por tipo=tecnica) |
 | Preoperacionales pendientes | ~20,000 (snapshot) | NO se sincroniza al módulo — lectura viva al ERP P-1 |

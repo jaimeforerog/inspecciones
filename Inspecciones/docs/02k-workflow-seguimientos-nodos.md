@@ -251,7 +251,7 @@ La escalación es el único punto del workflow donde **dos aggregates distintos 
 | S2/S3/S4 | 📱 | datastore | Badge visual (azul/naranja/rojo) | bucket | render UI |
 | Job | ⏰ | task | Wolverine scheduled task nocturno | — | iterador de seguimientos vencidos |
 | J1 | ⏰ | task | Resolver destinatarios SLA del equipo | EquipoId | lista de usernames |
-| J2 | ⏰ | datastore | Proyección catálogo MYE | sync nocturno | DestinatariosAlertasSlaPorEquipo |
+| J2 | ⏰ | datastore | Proyección catálogo MYE | sync on-app-open (cliente) o hidratación on-demand (backend) — ADR-004 canonical 2026-05-05 | DestinatariosAlertasSlaPorEquipo |
 | J3 | ⏰ | gateway | ¿Lista vacía? | lista | bool |
 | J4 | 🔧 | event | AlertaSlaSinDestinatario_v1 | — | evento de observabilidad |
 | J5 | ⏰ | task | Enviar email a cada destinatario | usernames + datos seguimiento | email enviado |

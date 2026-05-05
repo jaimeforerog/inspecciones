@@ -19,11 +19,13 @@
 
 ---
 
-## 1. Pre-condiciones — cache local poblada por sync nocturno
+## 1. Pre-condiciones — cache local poblada por sync on-app-open (decisión 2026-05-05)
+
+> Sync delta con `If-None-Match`/`ETag`. Sin cron nocturno (ADR-004 canonical 2026-05-05).
 
 ```mermaid
 flowchart LR
-    subgraph "Sync nocturno (Wolverine scheduled task)"
+    subgraph "Sync on-app-open (cliente PWA, en paralelo)"
         S1[/M-13<br>GET /catalogos/obras/] --> P1[(ProyectoLocal)]
         S2[/M-10<br>GET /catalogos/causas-falla/] --> P2[(CausaFallaLocal)]
         S3[/M-11<br>GET /catalogos/tipos-falla/] --> P3[(TipoFallaLocal)]
@@ -235,8 +237,8 @@ Detalle de eventos en `01-modelo-dominio.md` §15.4 y `05-catalogo-eventos.md`.
 
 ## 6. Lo que NO está en este diagrama
 
-- **Sync nocturno de catálogos** — ver §1 arriba (background, no parte del flujo del técnico).
-- **Inspección de monitoreo (Fase 2)** — flujo distinto (`02e-wireframes-monitoreo.html`).
+- **Sync on-app-open de catálogos** — ver §1 arriba (background paralelo al primer render, no bloquea al técnico).
+- **Inspección de monitoreo (MVP — promovido 2026-05-05)** — flujo distinto (`02e-wireframes-monitoreo.html` + `02g-flujo-inspeccion-monitoreo.md` + roadmap §3.B').
 - **Seguimientos (`SeguimientoHallazgo`)** — aggregate paralelo, ciclo independiente (§15.8 modelo).
 - **Cancelación** — variante alternativa de la firma. Estado terminal `Cancelada` sin contacto MYE.
 - **Edición / eliminación de hallazgos / repuestos / adjuntos** — comandos de mantenimiento durante `EnEjecucion`. No se muestran para no saturar.

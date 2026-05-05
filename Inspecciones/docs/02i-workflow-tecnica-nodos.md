@@ -313,7 +313,7 @@ flowchart TD
 | 3 | 📱 | task | GET equipos liviano | `q=` | array de equipos | **M-3** |
 | 4 | 📱 | datastore | Cache local de resultados | response M-3 | — | — |
 | 5 | 👤 | task | Tap en equipo seleccionado | equipoCodigo | — | — |
-| 6 | 📱 | task | GET detalle equipo | equipoCodigo | EquipoDto + partes + rutinaTecnicaId + rutinasMonitoreoIds | **M-3b** |
+| 6 | 📱 | task | GET detalle equipo | equipoCodigo | EquipoDto + partes + rutinaTecnicaId + grupoMantenimientoId | **M-3b** |
 | 7 | 📱 | datastore | EquipoLocal poblado | response M-3b | datos en cache | — |
 | 8 | 📱 | gateway | ¿rutinaTecnicaId ≠ null? | `equipo.rutinaTecnicaId` | bool | — |
 | 9 | 📱 | datastore | Query proyección Marten | EquipoId | InspeccionAbiertaPorEquipo o null | proyección `InspeccionAbiertaPorEquipoView` |
@@ -397,7 +397,7 @@ flowchart TD
 - **CRUD intermedio** (editar hallazgo, eliminar repuesto, eliminar adjunto) — comandos disponibles en `EnEjecucion` pero no son parte del happy path.
 - **Loop de seguimientos previos** (sub-workflow C complementario, ver `02h`) — el botón "↻ Traer de seguimiento" abre la lista y permite Resolver / Escalar / no-op.
 - **Job de SLA** de seguimientos — background, ver `02h`.
-- **Sync nocturno de catálogos** — pre-condición, ver `02f` §1.
+- **Sync on-app-open de catálogos** — pre-condición, ver `02f` §1 (decisión 2026-05-05 ADR-004 canonical).
 - **Reintentos de Wolverine** explícitos (5s → 30s → 2m → 10m → dead-letter) — el nodo N72 los abstrae.
 - **Validaciones de detalle** (max 4000 chars, formato GPS, etc.) — están en los handlers pero no se muestran como nodos.
 

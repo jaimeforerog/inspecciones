@@ -131,7 +131,7 @@ Sinco MYE ya tiene una **app móvil** con módulos de Preoperacional, Estado de 
 - **PostgreSQL Flexible Server** — Marten requiere Postgres. Hosting gestionado, HA opcional según ambiente.
 - **Blob Storage** — fotos de evidencia de hallazgos. SAS para upload directo desde móvil.
 - **API Management** — gateway móvil con políticas, throttling, versionado.
-- **IdP del host PWA Sinco MYE móvil** — el módulo no elige IdP; valida cloud-side el token que el host emite. Mecanismo concreto: ADR-002 (tentativo).
+- **IdP del host PWA Sinco MYE móvil** — el módulo no elige IdP, no maneja usuarios y no consume endpoints de identidad (decisión 2026-05-05). Solo valida cloud-side el token que el host emite. Mecanismo concreto: ADR-002 (tentativo, falta confirmar mecanismo del host).
 - **VPN site-to-site** — túnel hacia los APIs on-prem.
 
 ---
@@ -212,7 +212,7 @@ Sinco MYE ya tiene una **app móvil** con módulos de Preoperacional, Estado de 
 | `GET /api/v1/catalogos/obras` | MYE núcleo | A construir |
 | `GET /api/v1/insumos?parteId=&q=` | Inventario | A construir |
 | `POST /api/v1/mye/ot-correctivas` | MYE núcleo | A construir |
-| `GET /api/v1/admin/usuarios?desde={lastSync}` | User master | A construir (para sync Entra) |
+| ~~`GET /api/v1/admin/usuarios?desde={lastSync}`~~ | ~~User master~~ | ❌ Eliminado 2026-05-05 — identidad del host PWA |
 
 **Convenciones obligatorias** (definidas en B-0):
 
@@ -246,7 +246,7 @@ Generación **automática** vía saga `CerrarInspeccionSaga` al recibir `Inspecc
 
 ### ADR-004 — Sincronización de catálogos de referencia
 
-Catálogos (causas/tipos de falla, partes, ubicaciones, proyectos, equipos, rutinas, repuestos) sincronizados con **sync inicial + cron diario nocturno con `If-Modified-Since`/`ETag` + stale-while-revalidate** como fallback. Botón admin "refrescar ahora" diferido a v1.1. Reglas operativas vinculantes en el lado ERP: IDs/códigos inmutables, renombrar = cambiar solo descripción, descontinuar = `activa = false` no delete. Ventana de staleness aceptada: hasta 24h. Detalle completo en `00-investigacion-mercado.md §9.15`.
+Catálogos (causas/tipos de falla, partes, ubicaciones, proyectos, equipos, rutinas técnicas, rutinas monitoreo, repuestos) sincronizados con **sync inicial al primer login + sync delta on-app-open con `If-None-Match`/`ETag` + stale-while-revalidate** como fallback (decisión 2026-05-05 ADR-004 canonical — sin cron nocturno). Botón admin "refrescar ahora" promovido a v1.0. Reglas operativas vinculantes en el lado ERP: IDs/códigos inmutables, renombrar = cambiar solo descripción, descontinuar = `activa = false` no delete. Ventana de staleness = tiempo entre aperturas de la app por cada técnico. Detalle completo en `00-investigacion-mercado.md §9.15`.
 
 ### ADR-005 — SignalR para notificación push del cierre
 

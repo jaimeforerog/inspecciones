@@ -677,7 +677,7 @@ public enum ResultadoVerificacion { Confirmada, Descartada, RequiereSeguimiento 
 
 ## 4. Aggregates de soporte (Catálogo)
 
-Documentos `Marten` read-only mantenidos por sincronización REST contra Sinco on-prem. Estrategia de sincronización detallada en **ADR-004** (`00-investigacion-mercado.md §9.15`): sync inicial al desplegar + cron diario nocturno con `If-Modified-Since`/`ETag` + stale-while-revalidate como fallback. Reglas operativas vinculantes: IDs/códigos inmutables, renombrar = cambiar descripción, descontinuar = `activa = false` no delete.
+Documentos `Marten` read-only mantenidos por sincronización REST contra Sinco on-prem. Estrategia de sincronización detallada en **ADR-004** (`00-investigacion-mercado.md §9.15`): sync inicial al primer login + sync delta on-app-open con `If-None-Match`/`ETag` + stale-while-revalidate como fallback (decisión 2026-05-05 — sin cron nocturno). Reglas operativas vinculantes: IDs/códigos inmutables, renombrar = cambiar descripción, descontinuar = `activa = false` no delete.
 
 > **Nota:** las definiciones de tipos vigentes están en §12.7 (`EquipoLocal`, `UbicacionLocal`, `ProyectoLocal`, `RepuestoLocal`, `Rutina`) y §12.9.6 (`CausaFallaCatalogo`, `TipoFallaCatalogo`). Las definiciones que aparecen abajo son la primera versión preliminar — fueron refinadas en §12 tras la reconciliación con plantillas Excel del ERP. Léase §12.7 y §12.9.6 para los contratos vigentes.
 
@@ -734,13 +734,13 @@ public interface IReferenceDataService
 ```
 
 Implementación concreta en `Sinco.Inspecciones.Infrastructure.ReferenceData`:
-- Lectura desde proyección Marten (siempre fresh dentro del proceso, hasta cron diario nocturno).
-- Si la proyección está vacía (módulo recién desplegado o BD reseteada), la primera lectura dispara sync sincrónico desde ERP.
-- En modo degradado (VPN caído al momento del cron), la cache previa se sigue sirviendo (stale-while-revalidate).
+- Lectura desde proyección Marten cuando el backend necesita resolver un id (raro en este módulo — la mayoría del filtrado ocurre client-side desde IndexedDB).
+- Si la proyección backend está vacía o stale, hidratación bajo demanda al primer uso (no cron). El cliente PWA es la fuente principal de sync via on-app-open (ADR-004 canonical 2026-05-05).
+- En modo degradado (VPN caído), el backend usa la cache previa o pospone el resolve si no es crítico.
 
-### Job de sincronización
+### Job de sincronización (cliente PWA)
 
-Wolverine timer trigger ejecuta diariamente (~3 AM hora Bogotá):
+> **Decisión 2026-05-05 (ADR-004 canonical):** sin cron nocturno. El cliente PWA dispara sync on-app-open. La sub-sección de código abajo describe el patrón de implementación cliente — el Wolverine timer trigger original quedó superseded.
 
 ```csharp
 public sealed class SincronizarCatalogosJob
@@ -1549,12 +1549,11 @@ POST /api/v1/preop/novedades/{id}/verificar
 
 POST /api/v1/mye/ot-correctivas
        → con BOM consolidado al cerrar la inspección
-
-GET  /api/v1/admin/usuarios?desde={lastSync}
-       → para sync de identidades hacia el IdP del host PWA (condicional al ADR-002, tentativo)
 ```
 
-Total: **15 endpoints** en cuatro módulos Sinco. Pendiente actualizar §9.13 del doc principal con esta lista. **Nota:** §12.9.7 actualiza este inventario a 17 endpoints sumando catálogos de causa/tipo de falla.
+> **Nota 2026-05-05:** el endpoint `GET /api/v1/admin/usuarios?desde={lastSync}` que figuraba históricamente aquí fue **eliminado** (decisión Jaime 2026-05-05). El módulo no maneja identidad — toda viene del host PWA. Ver `06-contrato-apis-erp.md` §3.6 (NO APLICA).
+
+Total: **14 endpoints** en tres módulos Sinco (Preop, MYE núcleo, Inventario). Pendiente actualizar §9.13 del doc principal con esta lista. **Nota:** §12.9.7 actualiza este inventario sumando catálogos de causa/tipo de falla.
 
 ---
 
@@ -1731,11 +1730,11 @@ GET  /api/v1/preop/adjuntos/{id}
 POST /api/v1/preop/novedades/{id}/verificar
 
 POST /api/v1/mye/ot-correctivas
-
-GET  /api/v1/admin/usuarios?desde={lastSync}
 ```
 
-**Total: 17 endpoints** (vs. 15 anteriores). Se mantienen los 15 + dos nuevos catálogos.
+> **Nota 2026-05-05:** `GET /api/v1/admin/usuarios?desde={lastSync}` removido — identidad 100% del host PWA.
+
+**Total: 16 endpoints** (vs. 14 anteriores). Se mantienen los 14 + dos nuevos catálogos.
 
 #### 12.9.8 Patrones visuales adoptados de la app real
 
@@ -1770,9 +1769,9 @@ Decisión del usuario: eliminar el enum `TipoRutina` del modelo del módulo (tod
 > - Eliminar `RutinaPadreId` (no existe en el ERP real).
 > - Agregar `ParteId` + `ParteCodigo` a `Rutina` como variables separadas (la parte mayor a la que aplica la rutina).
 > - Agregar `Tipo: TipoRutina` discriminador escalable. En MVP solo aplica `Tecnica`; el campo queda preparado para tipos futuros (`PostMantenimiento`, `Certificacion`) sin migrar el catálogo. **NO se unifica con `RutinaMonitoreo`** — esa entidad permanece separada por las razones operativas en §12.11.5 (lifecycle distinto del item, comandos hermanos, evento `InspeccionIniciada_v1` con shape distinto).
-> - Cardinalidad: **una rutina técnica por equipo** (única). La asignación es **explícita per-equipo en el ERP** (mismo mecanismo que monitoreo, pero con cardinalidad 1 vs N). El `M-3b` del contrato (`GET /equipos/{id}`) trae `rutinaTecnicaId: Guid` (singular) además de `rutinasMonitoreoIds: Guid[]` (plural Fase 2).
+> - Cardinalidad: **una rutina técnica por equipo** (única). La asignación es **explícita per-equipo en el ERP**. El `M-3b` del contrato (`GET /equipos/{id}`) trae `rutinaTecnicaId: int` (singular). **Asimetría con monitoreo (decisión 2026-05-05):** las rutinas de monitoreo NO usan asignación per-equipo — se derivan por `grupoMantenimientoId` que también viaja en M-3b. Ver §12.11.5 punto 9.
 
-**Razón histórica para distinguir rutinas técnicas vs otras:** el módulo nuevo solo conoce **rutinas técnicas** (y rutinas de monitoreo en Fase 2 — entidad separada). Las rutinas preoperacionales y de mantenimiento existen en el catálogo de Sinco, pero **no son consumidas por este módulo**:
+**Razón histórica para distinguir rutinas técnicas vs otras:** el módulo nuevo solo conoce **rutinas técnicas y rutinas de monitoreo** (entidad separada — ambas son MVP desde 2026-05-05). Las rutinas preoperacionales y de mantenimiento existen en el catálogo de Sinco, pero **no son consumidas por este módulo**:
 
 - Las rutinas preoperacionales viven en el módulo Preoperacional de Sinco MYE (otro flujo, otro consumidor).
 - Las rutinas de mantenimiento viven en MYE núcleo o módulo de planificación (otro flujo, otro consumidor).
@@ -1803,9 +1802,9 @@ public sealed record Rutina(
 - ✅ `Tipo: TipoRutina` agregado (escalabilidad — un solo valor `Tecnica` en MVP).
 - ✅ `ParteId` + `ParteCodigo` agregados a `Rutina` — la rutina cubre una parte mayor del equipo.
 
-**Cross-ref:** ADR-004 §9.15 "Refinamientos posteriores (2026-05-05)" punto 1 documenta el shape mínimo de M-17 (`GET /api/v1/catalogos/rutinas`) coherente con esta definición. La rutina de monitoreo (§12.11.5) **sí** trae `IReadOnlyList<ItemRutinaMonitoreo>` con `EvaluacionEsperada` — es una entidad distinta con flujo distinto (Fase 2).
+**Cross-ref:** ADR-004 §9.15 "Refinamientos posteriores (2026-05-05)" punto 1 documenta el shape mínimo de M-17 (`GET /api/v1/catalogos/rutinas`) coherente con esta definición. La rutina de monitoreo (§12.11.5) **sí** trae `IReadOnlyList<ItemRutinaMonitoreo>` con `EvaluacionEsperada` — es una entidad distinta con flujo distinto (también MVP desde 2026-05-05).
 
-**Endpoint del catálogo (vigente al 2026-05-04):** `GET /api/v1/catalogos/rutinas` — sync nocturno, alimenta `RutinaTecnicaLocal`. Cierra el "Hallazgo 1" detectado en la revisión por flujos del 2026-05-04 (rutina técnica MVP sin sync claro previo). Detalle del contrato: §3.4 catálogos de `06-contrato-apis-erp.md`.
+**Endpoint del catálogo (vigente al 2026-05-05):** `GET /api/v1/catalogos/rutinas` — sync on-app-open (ADR-004 canonical 2026-05-05 — sin cron), alimenta `RutinaTecnicaLocal` en IndexedDB cliente. Cierra el "Hallazgo 1" detectado en la revisión por flujos del 2026-05-04 (rutina técnica MVP sin sync claro previo). Detalle del contrato: §3.4 catálogos de `06-contrato-apis-erp.md`.
 
 **Asignación equipo ↔ rutina técnica (decisión 2026-05-04):**
 - **Mecanismo:** asignación explícita per-equipo en el ERP. `M-3b` trae `Equipo.rutinaTecnicaId: Guid` directamente.
@@ -1892,7 +1891,7 @@ El handler de `IniciarInspeccion` siempre lo emite con `Tipo = TipoInspeccion.Te
 
 > **Origen:** archivo `Inspecciones/docs/inspeccion.xlsx` enviado por Jaime el 2026-04-30. Hojas: "Rutinas monitoreo" (catálogo de items por rutina/grupo) e "Inspeccion de monitoreo" (formato de captura de ejemplo). Las decisiones 1–6 fueron confirmadas en chat el 2026-04-30.
 >
-> **Estado:** todavía no aplicado en código (Fase 2 / roadmap 10.4). Todo es aditivo respecto al MVP de inspección técnica.
+> **Estado:** **MVP** — promovido el 2026-05-05 (decisión Jaime — antes era Fase 2 / roadmap 10.4). Implementación distribuida en roadmap §3.B' (aggregate), §3.E (`RutinaMonitoreoLocal` MVP), §3.F (endpoints), §4.B (M-16 🚧 crítico MVP), §5.B' (pantallas — wireframes en `02e-wireframes-monitoreo.html`).
 
 **1. Enum `TipoInspeccion` extendido:**
 
@@ -1900,7 +1899,7 @@ El handler de `IniciarInspeccion` siempre lo emite con `Tipo = TipoInspeccion.Te
 public enum TipoInspeccion
 {
     Tecnica,
-    Monitoreo        // Fase 2 — checklist con mediciones / evaluaciones por item
+    Monitoreo        // MVP — checklist con mediciones / evaluaciones por item (decisión 2026-05-05)
 }
 ```
 
@@ -1910,7 +1909,8 @@ public enum TipoInspeccion
 public sealed record RutinaMonitoreo(
     int RutinaMonitoreoId,
     string Nombre,                                  // p. ej. "Sistema eléctrico"
-    string GrupoMantenimiento,                      // p. ej. "Camioneta" — descriptor, no mecanismo de asignación
+    int GrupoMantenimientoId,                       // PK del grupo en el ERP — mecanismo de asignación
+    string GrupoMantenimiento,                      // descriptor legible — p. ej. "Camioneta"
     IReadOnlyList<ItemRutinaMonitoreo> Items,
     DateTime SincronizadoEn);
 
@@ -1921,7 +1921,7 @@ public sealed record ItemRutinaMonitoreo(
     EvaluacionEsperada Evaluacion);                 // numérica O cualitativa (mutuamente exclusivas)
 ```
 
-> **Sobre `GrupoMantenimiento` (decisión 2026-05-04):** este campo se conserva como **descriptor** para auditoría y agrupación visual en pantalla, pero **NO es el mecanismo de asignación equipo↔rutinas**. La asignación se hace **explícitamente en el ERP por equipo** (ver punto 4 abajo). Dos equipos del mismo grupo pueden tener listas distintas de rutinas asignadas si el ERP así las configuró.
+> **Sobre `GrupoMantenimientoId` (decisión 2026-05-05 — revierte 2026-05-04):** la asignación equipo↔rutinas-monitoreo es **derivada por grupo de mantenimiento**, no per-equipo. Una rutina aplica a un equipo si y solo si `rutina.GrupoMantenimientoId == equipo.GrupoMantenimientoId`. El catálogo trae la rutina **una sola vez** y todos los equipos del grupo la consumen — sin duplicación, sin tabla intermedia equipo↔rutina del lado ERP. Dos equipos del mismo grupo ven exactamente las mismas rutinas. Esto es **distinto** de la rutina técnica, que sí lleva asignación explícita per-equipo (`Equipo.RutinaTecnicaId`) — ver fila "Asignación equipo↔rutina" en el punto 4.
 
 **3. `EvaluacionEsperada` — dos value objects paralelos (decisión 1, opción A):**
 
@@ -1956,11 +1956,11 @@ Ejemplos del archivo `inspeccion.xlsx`:
 
 **4. Diferencia con rutina técnica (decisión 4 confirmada 2026-04-30, refinada 2026-05-04):**
 
-| Aspecto | Rutina técnica (MVP) | Rutina de monitoreo (Fase 2) |
+| Aspecto | Rutina técnica (MVP) | Rutina de monitoreo (MVP — desde 2026-05-05) |
 |---|---|---|
-| Asignación equipo↔rutina | **Asignación explícita en el ERP per-equipo** (decisión 2026-05-04 — cambio respecto al MVP histórico que asumía derivación por grupo) | **Asignación explícita en el ERP per-equipo** — mismo mecanismo, distinta cardinalidad |
-| Cardinalidad | **1 rutina por equipo** (única). `M-3b` trae `rutinaTecnicaId: Guid` singular | **2–3 rutinas** por equipo (típico). `M-3b` trae `rutinasMonitoreoIds: Guid[]` plural |
-| Selección al iniciar | **Auto-resuelta** por el handler desde `Equipo.RutinaTecnicaId` (técnico no elige — única) | **El técnico elige** entre las rutinas asignadas a ese equipo (selector en UX) |
+| Asignación equipo↔rutina | **Asignación explícita en el ERP per-equipo** (decisión 2026-05-04) | **Derivada por grupo de mantenimiento** (decisión 2026-05-05 — revierte 2026-05-04). `rutina.GrupoMantenimientoId == equipo.GrupoMantenimientoId`. Sin tabla intermedia equipo↔rutina en el ERP |
+| Cardinalidad | **1 rutina por equipo** (única). `M-3b` trae `rutinaTecnicaId: int` singular | **N rutinas por grupo** (típicamente 2–3). El equipo "hereda" todas las rutinas activas de su grupo. `M-3b` ya no trae `rutinasMonitoreoIds[]` — solo `grupoMantenimientoId` |
+| Selección al iniciar | **Auto-resuelta** por el handler desde `Equipo.RutinaTecnicaId` (técnico no elige — única) | **El técnico elige** entre las rutinas activas del grupo del equipo (filtro client-side: `catalogo.filter(r => r.GrupoMantenimientoId == equipo.GrupoMantenimientoId)`) |
 | Items | Items con `ActividadId` (qué hacer) — sin medición | Items con `EvaluacionEsperada` (numérica con rango O cualitativa Bueno/Regular/Malo) |
 | Snapshot en evento | NO se snapshotean items en `InspeccionIniciada_v1` (flujo libre) | SÍ se snapshotean items en `InspeccionIniciada_v1.ItemsSnapshot` (FueraDeRango se calcula contra rango snapshoteado) |
 | Flujo del técnico | Libre — el técnico decide qué inspeccionar; los items son metadata sugerida para reportería | Estructurado — el técnico recorre los items de la rutina elegida; sistema dispara hallazgos automáticos |
@@ -2030,23 +2030,21 @@ public enum OrigenHallazgo
     PreOperacional,
     Manual,
     Seguimiento,
-    Monitoreo        // Fase 2 — hallazgo derivado de medición fuera de rango o calificación Malo
+    Monitoreo        // MVP — hallazgo derivado de medición fuera de rango o calificación Malo (decisión 2026-05-05)
 }
 ```
 
-Invariantes derivadas para Fase 2:
+Invariantes derivadas para Monitoreo (MVP):
 - Si `Origen=Monitoreo` → `MedicionOrigenId` obligatorio e inmutable (apunta al `ItemId` del item que disparó el hallazgo).
 - Si `Origen=Monitoreo` → `AccionRequerida=RequiereSeguimiento` (no genera OT inmediata).
 - Si `Origen=Monitoreo` → `TipoInspeccion` del stream = `Monitoreo`.
 
-**9. Sync de catálogo con ERP (decisión 5 confirmada 2026-04-30, refinada 2026-05-04):**
+**9. Sync de catálogo con ERP (decisión 5 confirmada 2026-04-30, refinada 2026-05-05):**
 
-El modelo se separa en dos piezas con responsabilidades distintas:
+- **Catálogo de definiciones de rutinas (`/catalogos/rutinas-monitoreo`):** sincronizado nocturnamente con el patrón estándar de catálogos (ADR-004, stale-while-revalidate, ETag/`If-Modified-Since`). Trae **todas** las rutinas de monitoreo activas del cliente, cada una con su `GrupoMantenimientoId` + items completos. Alimenta la proyección local `RutinaMonitoreoLocal`.
+- **Asignación equipo↔rutinas (decisión 2026-05-05):** derivada client-side por grupo de mantenimiento. El equipo trae `grupoMantenimientoId` en M-3b; el cliente filtra el catálogo local de rutinas por ese id. **No hay tabla intermedia ni endpoint de asignación**. Sin redundancia: 50 BULLDOZERs comparten las mismas rutinas del grupo "BULLDOZER" sin replicar definiciones ni mantener listas per-equipo.
 
-- **Catálogo de definiciones de rutinas (`/catalogos/rutinas-monitoreo`):** sincronizado nocturnamente con el patrón estándar de catálogos (ADR-004, stale-while-revalidate, ETag/`If-Modified-Since`). Trae **todas** las rutinas de monitoreo del cliente con sus items completos. Sin filtro por grupo. Alimenta la proyección local `RutinaMonitoreoLocal` (resolver el id contra el contenido).
-- **Asignación equipo↔rutinas:** viaja en el detalle del equipo (M-3b en `06-contrato-apis-erp.md` — `GET /api/v1/equipos/{equipoCodigo}` devuelve `rutinasMonitoreoIds: ["id1", "id2", "id3"]`). Es decir, el equipo "sabe" qué rutinas le aplican; las definiciones se resuelven contra el catálogo local.
-
-El módulo NO gestiona el catálogo de definiciones localmente (lo sincroniza). La asignación se consulta vía M-3b al iniciar inspección de monitoreo.
+El módulo NO gestiona el catálogo de definiciones localmente (lo sincroniza). La asignación se resuelve client-side al iniciar inspección de monitoreo.
 
 **10. Dictamen de monitoreo (decisión 6 confirmada 2026-04-30, opción A):**
 
@@ -2070,7 +2068,7 @@ public sealed record IniciarInspeccionMonitoreo(
 
 El handler valida (además de I-I1, I-I2, I-I3 §15.7):
 - `RutinaMonitoreoId` existe en el catálogo local `RutinaMonitoreoLocal`.
-- `RutinaMonitoreoId ∈ Equipo.RutinasMonitoreoIds` — la rutina está **asignada al equipo en el ERP** (resolución contra `EquipoLocal` poblado desde M-3b). No vale "la rutina pertenece al grupo del equipo" — ahora la asignación es explícita por equipo.
+- `RutinaMonitoreo.GrupoMantenimientoId == Equipo.GrupoMantenimientoId` — la rutina pertenece al **mismo grupo de mantenimiento** que el equipo (decisión 2026-05-05). Sin tabla de asignación per-equipo en el ERP.
 - `RutinaMonitoreo` tiene ≥1 item (rutinas vacías se rechazan).
 
 Y emite `InspeccionIniciada_v1` con `Tipo=Monitoreo` + `RutinaMonitoreoSeleccionadaId` + `ItemsSnapshot`.
@@ -2106,7 +2104,7 @@ La foto **siempre es opcional**, sin importar el resultado del item (`Bueno` / `
 - El `SeguimientoHallazgo` que se abre tras `Malo` / `FueraDeRango` tiene su propio ciclo de captura de evidencia (§15.8).
 - Endurecer después es reversible y de bajo riesgo: si en producción observamos que los seguimientos llegan sin evidencia útil, se agrega una pre-condición al handler ("foto requerida cuando item dispara hallazgo automático") sin migrar el evento ni reescribir la historia.
 
-**Trade-off aceptado:** los técnicos podrían no documentar fallas críticas con foto. Mitigación posterior si se materializa: invariante condicional en el comando `FirmarInspeccion` que bloquee firma cuando un item con `Malo` / `FueraDeRango` no tenga al menos una foto. **NO se aplica en Fase 2 MVP — solo si emerge la necesidad.**
+**Trade-off aceptado:** los técnicos podrían no documentar fallas críticas con foto. Mitigación posterior si se materializa: invariante condicional en el comando `FirmarInspeccion` que bloquee firma cuando un item con `Malo` / `FueraDeRango` no tenga al menos una foto. **NO se aplica en MVP — solo si emerge la necesidad.**
 
 **12.3 Límite por item (decisión 2026-05-04, opción "heredar del MVP"):**
 
@@ -2126,7 +2124,7 @@ El handler `AdjuntarArchivo` extiende su validación de límite-5 para contar co
 **13. Otras preguntas abiertas (no bloqueantes hoy):**
 
 - Si el técnico mide fuera de rango pero la observación lo justifica (p. ej. "multímetro con pila baja" — caso real del archivo `inspeccion.xlsx` línea 8), ¿el hallazgo automático se abre igual o existe acción explícita "descartar marca" antes de firmar? Análogo al descarte de novedad preop pero sobre medición. Posiblemente un evento `MarcaMonitoreoDescartada_v1`.
-- ¿Frecuencia / programación previa de inspecciones de monitoreo? (mensual, por horómetro, etc.) — roadmap 10.2 lo difería; con monitoreo en Fase 2, ¿entra junto?
+- ¿Frecuencia / programación previa de inspecciones de monitoreo? (mensual, por horómetro, etc.) — roadmap 10.2 lo difiere; con monitoreo ahora en MVP (decisión 2026-05-05), ¿la programación entra también o queda diferida como lo está para técnica?
 - ¿Items obligatorios vs saltables? ¿Al firmar, todos los items deben tener registro o basta con observación general?
 - ¿"Observación general" como evento separado o atributo de `InspeccionFirmada_v1`?
 - ¿La rutina se elige solo al iniciar o el técnico puede cambiarla mid-inspección?
@@ -2381,7 +2379,7 @@ Mismo efecto, una vuelta menos en código.
 
 #### 12.10.11 Decisiones operativas de adjuntos (foto / PDF) (2026-04-27)
 
-> **Forward-reference:** las decisiones de esta sección aplican al MVP técnica. La extensión para Fase 2 (anclaje a `ItemId` de monitoreo, mismo tope 5/3MB por item, opcional) se documenta en §12.11.5 puntos 12.1–12.3.
+> **Forward-reference:** las decisiones de esta sección aplican al MVP técnica. La extensión para monitoreo (también MVP desde 2026-05-05 — anclaje a `ItemId` de monitoreo, mismo tope 5/3MB por item, opcional) se documenta en §12.11.5 puntos 12.1–12.3.
 
 Decisiones del usuario para el evento `AdjuntoAgregado_v1` y comando `AdjuntarArchivo`:
 
@@ -3639,7 +3637,7 @@ PDF de inspección (2):
                                        ─────────────
                           TOTAL MVP =   24 eventos
 
-Diferidos a fase 2 — Inspección de Monitoreo (no MVP, ver §12.11.5):
+Eventos del flujo Monitoreo — MVP desde 2026-05-05 (antes Fase 2, ver §12.11.5):
   - MedicionRegistrada_v1                  (item numérico — captura valor, calcula FueraDeRango)
   - EvaluacionCualitativaRegistrada_v1     (item cualitativo — Bueno/Regular/Malo)
   - ItemMonitoreoOmitido_v1                (técnico no pudo medir, motivo obligatorio)
@@ -4438,7 +4436,7 @@ La guía EDA Sinco §5 define tres mecanismos para garantizar idempotencia en co
 
 #### Excepciones (lo que NO va por outbox)
 
-- **`GET` (lectura)**: invocados sincrónicamente desde frontend o desde sync nocturno de catálogos. Patrón distinto: stale-while-revalidate (ADR-004). Si el GET falla, el cliente lo reintenta manualmente o el cron espera al siguiente ciclo.
+- **`GET` (lectura)**: invocados sincrónicamente desde frontend o desde sync on-app-open de catálogos (ADR-004 canonical 2026-05-05 — sin cron). Patrón distinto: stale-while-revalidate (ADR-004). Si el GET falla, el cliente reintenta en la próxima apertura o usa último cached.
 - **Llamadas no transaccionales**: emails, métricas, telemetría. Tienen su propio canal y no requieren outbox del aggregate.
 
 ### Atomicidad outbox + stream del aggregate

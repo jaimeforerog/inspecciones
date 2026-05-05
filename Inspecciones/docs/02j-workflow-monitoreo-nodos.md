@@ -1,10 +1,14 @@
-# Workflow de inspección de monitoreo (Fase 2) — diagrama basado en nodos
+# Workflow de inspección de monitoreo (MVP — promovido 2026-05-05) — diagrama basado en nodos
 
-**Propósito:** representación tipo workflow engine (estilo BPMN / n8n) del proceso completo de inspección de tipo **Monitoreo** (Fase 2), con nodos numerados, carriles por actor, datos explícitos en transiciones, y sub-workflows para los bucles internos. Complementa `02g-flujo-inspeccion-monitoreo.md` (flowchart narrativo).
+> ⚠️ **REVISIÓN PENDIENTE 2026-05-05.** Dos cambios de scope sobre este doc + sobre `02j-workflow-monitoreo-nodos.html` — re-render completo pendiente:
+> 1. **Asignación por grupo (decisión 2026-05-05):** equipo↔rutinas-monitoreo derivada por grupo de mantenimiento, no per-equipo. Las menciones a `rutinasMonitoreoIds` y `Equipo.RutinasMonitoreoIds` están **obsoletas**. La validación real al iniciar es `RutinaMonitoreo.GrupoMantenimientoId == Equipo.GrupoMantenimientoId`.
+> 2. **Monitoreo entra al MVP (decisión 2026-05-05):** antes era Fase 2 / roadmap 10.4. Las menciones a "Fase 2" en el cuerpo de este doc deben leerse como "MVP" (roadmap §3.B'). Detalle en `01-modelo-dominio.md` §12.11.5 + `06-contrato-apis-erp.md` M-3b/M-16.
 
-**Última revisión:** 2026-05-04.
+**Propósito:** representación tipo workflow engine (estilo BPMN / n8n) del proceso completo de inspección de tipo **Monitoreo** (MVP — promovido 2026-05-05, antes roadmap 10.4), con nodos numerados, carriles por actor, datos explícitos en transiciones, y sub-workflows para los bucles internos. Complementa `02g-flujo-inspeccion-monitoreo.md` (flowchart narrativo).
 
-**Estado:** Fase 2 — todavía no implementado en código (roadmap 10.4). Este doc se materializa cuando se priorice.
+**Última revisión:** 2026-05-04 (banner 2026-05-05).
+
+**Estado:** **MVP** — todavía no implementado en código. Promovido al MVP el 2026-05-05 (decisión Jaime — antes era Fase 2 / roadmap 10.4). Este doc se materializa en los slices de §3.B' del roadmap.
 
 **Cuándo usar este doc vs `02g`:**
 - **`02g`** — lectura narrativa del flujo (UX / PO / overview).

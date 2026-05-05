@@ -116,7 +116,7 @@ Si el slice emite eventos al frontend en tiempo real (ADR-005):
 
 Si el slice consume o publica hacia APIs Sinco (Fase 4 del roadmap — REST sobre VPN, ADR-001):
 
-- Endpoint Sinco consumido: `{GET /equipos/{id}}` (módulo: `MYE núcleo | Preop | Inventario | RRHH`).
+- Endpoint Sinco consumido: `{GET /equipos/{id}}` (módulo: `MYE núcleo | Preop | Inventario`).
 - Endpoint Sinco publicado: `{POST /mye/ot-correctivas}` (con `Idempotency-Key`).
 - Estado de disponibilidad: `🟢 disponible | 🟡 mock-only | 🚧 bloqueado por equipo Sinco`.
 

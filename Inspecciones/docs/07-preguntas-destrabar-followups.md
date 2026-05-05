@@ -222,26 +222,29 @@ Sin embargo, el mock (image10) muestra un seguimiento con badge **"Con seguimien
 
 ---
 
-### Pregunta 6 — Catálogo de rutinas de monitoreo + asignación per-equipo (decisión 2026-04-30, refinada 2026-05-04)
+### Pregunta 6 — Catálogo de rutinas de monitoreo + asignación por grupo de mantenimiento (decisión 2026-04-30, refinada 2026-05-04, revertida 2026-05-05, **promovida a MVP 2026-05-05**)
 
-**Contexto:** la Fase 2 incorpora inspección de tipo `Monitoreo` (§12.11.5 del modelo, roadmap 10.4). Cada equipo tiene **2–3 rutinas de monitoreo asignadas explícitamente desde el ERP** (corrección Jaime 2026-05-04: la asignación es per-equipo, no derivada del grupo). El técnico al iniciar elige cuál rutina inspeccionar entre las asignadas a ese equipo. Cada rutina tiene una lista de items con `EvaluacionEsperada` (numérica con rango min/max O cualitativa Bueno/Regular/Malo).
+**Contexto:** el **MVP** ahora incorpora inspección de tipo `Monitoreo` (decisión Jaime 2026-05-05 — antes era Fase 2 / roadmap 10.4 diferido). Detalle del modelo en §12.11.5; implementación en roadmap §3.B' (aggregate), §3.E (`RutinaMonitoreoLocal`), §3.F (endpoints), §4.B (M-16 🚧 obligatorio MVP), §5.B' (pantallas — wireframes en `02e-wireframes-monitoreo.html`). Cada **grupo de mantenimiento** tiene **N rutinas de monitoreo (típicamente 2–3)**; los equipos del grupo "heredan" todas las rutinas activas del grupo (decisión Jaime 2026-05-05 — revierte la asignación per-equipo planteada el 2026-05-04). El técnico al iniciar elige cuál rutina inspeccionar entre las del grupo del equipo. Cada rutina tiene una lista de items con `EvaluacionEsperada` (numérica con rango min/max O cualitativa Bueno/Regular/Malo).
 
-El modelo separa dos responsabilidades (decisión 2026-05-04):
+**Urgencia (decisión 2026-05-05):** esta pregunta ahora es **bloqueante para el MVP** (antes era diferida a Fase 2). M-16 entró a la lista de endpoints críticos cross-team con David — coordinar con la misma prioridad que M-17.
 
-- **Catálogo de definiciones** (`GET /api/v1/catalogos/rutinas-monitoreo`, M-16): trae **todas** las rutinas activas con sus items. Sin filtro por grupo. Sincronizado nocturnamente como cualquier catálogo (ADR-004). Alimenta `RutinaMonitoreoLocal`.
-- **Asignación equipo↔rutinas**: viaja en M-3b (`GET /api/v1/equipos/{equipoCodigo}` → `rutinasMonitoreoIds: [...]`). El equipo "sabe" qué rutinas le aplican; las definiciones se resuelven contra el catálogo local.
+El modelo separa dos responsabilidades (decisión 2026-05-05):
+
+- **Catálogo de definiciones** (`GET /api/v1/catalogos/rutinas-monitoreo`, M-16): trae **todas** las rutinas activas, cada una con su `grupoMantenimientoId`. Sincronizado nocturnamente (ADR-004). Alimenta `RutinaMonitoreoLocal`.
+- **Asignación equipo↔rutinas**: derivada client-side. El equipo trae `grupoMantenimientoId` en M-3b; el cliente filtra el catálogo local: `rutinasDelEquipo = catalogo.filter(r => r.grupoMantenimientoId == equipo.grupoMantenimientoId)`. **Sin tabla intermedia** equipo↔rutina-monitoreo en el ERP.
 
 **Pregunta concreta — sobre el catálogo de definiciones (M-16):**
 
 1. **¿Existe el catálogo de "rutinas de monitoreo" en MYE hoy o es a construir?** El archivo `inspeccion.xlsx` define el formato — confirmar si Sinco MYE ya tiene una entidad equivalente o solo documentación operativa en hojas Excel sueltas.
-2. Si existe, ¿cuál es el endpoint de lectura? **Propuesta del módulo**: `GET /api/v1/catalogos/rutinas-monitoreo` (sin filtro por grupo — el filtro se hace client-side resolviendo `equipo.rutinasMonitoreoIds`). Shape propuesto:
+2. Si existe, ¿cuál es el endpoint de lectura? **Propuesta del módulo**: `GET /api/v1/catalogos/rutinas-monitoreo` con `grupoMantenimientoId` por rutina (filtro client-side). Shape propuesto:
    ```json
    {
      "items": [
        {
          "rutinaMonitoreoId": 201,
          "nombre": "Sistema eléctrico",
-         "grupoMantenimiento": "Camioneta",
+         "grupoMantenimientoId": 7,
+         "grupoMantenimiento": "BULLDOZER",
          "items": [
            {
              "itemId": 6001,
@@ -269,22 +272,19 @@ El modelo separa dos responsabilidades (decisión 2026-05-04):
 4. **¿Estabilidad de los `itemId`?** El modelo snapshotea los items en `InspeccionIniciada_v1` para calcular `FueraDeRango` contra el rango vigente al iniciar. Si los `itemId` cambian entre syncs (ej. por re-cargar el catálogo), se rompe la trazabilidad. Confirmar regla operativa de inmutabilidad de IDs (análoga a ADR-004 catálogos generales).
 5. **Catálogo de calificaciones cualitativas**: ¿el ERP define localmente "Bueno/Regular/Malo" o admite valores arbitrarios por cliente? El módulo asume enum cerrado de 3 valores. Si el ERP es flexible, hay que adaptar.
 
-**Pregunta concreta — sobre la asignación equipo↔rutinas (M-3b):**
+**Pregunta concreta — sobre la asignación por grupo (M-3b + M-16):**
 
-6. ¿Cómo está modelada hoy la relación equipo↔rutinas-monitoreo en MYE? Tres opciones plausibles:
-   - **(a)** Columna/array en la entidad `Equipo` (ej. `Equipo.RutinasMonitoreoIds`).
-   - **(b)** Tabla intermedia N:M (`EquipoRutinaMonitoreo`).
-   - **(c)** Derivada (ej. todas las rutinas del grupo del equipo) — esto contradiría la corrección 2026-05-04 y haría inviable la asignación per-equipo.
-7. ¿Existe ya un endpoint que devuelva las rutinas asignadas a un equipo, o es a construir? El módulo lo necesita embebido en el detalle del equipo (M-3b) — propuesta: el response de `GET /equipos/{id}` incluye `rutinasMonitoreoIds: ["id1", "id2", "id3"]`.
-8. ¿La relación admite **discriminador por contexto** (técnica vs monitoreo) o es un solo set por equipo? Para MVP, rutina técnica MVP se sigue derivando del grupo (sin asignación explícita); el campo nuevo `rutinasMonitoreoIds` aplica solo a Fase 2.
-9. ¿La asignación se gestiona desde la web del ERP (UI administrativa) o requiere intervención técnica? Útil para entender el ciclo de vida operativo.
+6. ¿`Equipo.grupoMantenimientoId` ya existe en MYE como entidad/columna? El módulo de mantenimiento de Sinco MYE ya usa "grupos" (campo `grupo` denormalizado en M-3 vigente — ej. `"BULLDOZER"`, `"MAQ-PESADA"`); confirmar que existe la PK `int` correspondiente y que se puede exponer en M-3b junto con el descriptor.
+7. ¿Cada `RutinaMonitoreo` en el catálogo MYE ya lleva un `grupoMantenimientoId`, o solo el descriptor textual `grupoMantenimiento`? Si solo es textual, ¿se puede poblar la PK al exponer M-16?
+8. **No se necesita tabla intermedia equipo↔rutina-monitoreo**. Confirmar que el ERP no requiere modelar esa relación explícita — basta con el grupo en cada lado para derivar la asignación client-side.
+9. ¿El catálogo de grupos de mantenimiento es estable (no cambian PKs)? Importante porque equipos y rutinas se "encuentran" únicamente por ese id.
 
 **Qué desbloquea:**
-- Slice de Fase 2 para el flujo de monitoreo (roadmap 10.4).
-- Slice de extensión de sync de catálogos (paso 3.32 Fase 3 podría preparar la infra para que en Fase 2 solo se agregue el adapter).
-- Implementación de M-3b en MVP — el campo `rutinasMonitoreoIds` puede llegar vacío o ausente en MVP, populated en Fase 2.
+- Slices del MVP para el flujo de monitoreo (roadmap §3.B' + §3.F + §5.B' — decisión 2026-05-05).
+- Slice de sync de catálogos (paso 3.32 + 3.33) que ahora incluye `RutinaMonitoreoLocal` desde MVP.
+- Implementación de M-3b en MVP — `grupoMantenimientoId` se incluye desde MVP (aplica a rutina técnica para reportería + a rutina monitoreo como mecanismo de asignación).
 
-**Bloquea:** desarrollo de Fase 2 cuando se priorice. **No bloquea** ningún slice del MVP. El campo `rutinasMonitoreoIds` en M-3b puede ser opcional / vacío durante MVP sin afectar el flujo técnica.
+**Bloquea (decisión 2026-05-05):** desarrollo del flujo de monitoreo en MVP. M-16 es ahora **obligatorio MVP**, mismo nivel de criticidad que M-17. Si M-16 no está listo a tiempo, los slices de monitoreo se posponen pero el resto del MVP (técnica) puede avanzar.
 
 ---
 
@@ -392,7 +392,7 @@ GET /api/v1/insumos/{skuId}                      # lookup individual on-demand
 2. ¿El endpoint individual `GET /api/v1/insumos/{skuId}` ya existe o es trabajo nuevo? Lo necesitamos para el lookup on-demand cuando un técnico busca un SKU fuera de su prefetch (con red).
 3. ¿Soportan ETag (canonical en ADR-004 punto 4) por cliente individual del filtro `?proyecto=`? Es decir, dos técnicos del mismo proyecto comparten ETag, dos técnicos de proyectos distintos tienen ETags distintos.
 
-**Trade-off aceptado:** el endpoint filtrado por proyecto es más complejo del lado ERP que el endpoint sin filtro (ese ya está cubierto por sync nocturno tradicional). Pero la mejora bandwidth/cuota IndexedDB en piloto grande lo justifica.
+**Trade-off aceptado:** el endpoint filtrado por proyecto es más complejo del lado ERP que el endpoint sin filtro (ese ya está cubierto por sync on-app-open con `If-None-Match` — ADR-004 canonical 2026-05-05). Pero la mejora bandwidth/cuota IndexedDB en piloto grande lo justifica.
 
 **Qué desbloquea:** contrato exacto del adapter del módulo Azure que consume insumos, dimensionamiento del prefetch al login, y la UX del selector de SKU (con o sin botón "buscar online" para SKUs fuera de prefetch).
 

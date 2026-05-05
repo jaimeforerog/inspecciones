@@ -1042,9 +1042,9 @@ Esto reescribe el alcance del workstream B y obliga a coordinación cross-team.
 | `GET /api/v1/partes/{id}/actividades-tipicas` (opcional) | MYE núcleo | Equipo de MYE | A construir / nice-to-have |
 | `GET /api/v1/repuestos?parteId=&q=` | Inventario / Almacén | Equipo de inventario | A construir |
 | `POST /api/v1/mye/ot-correctivas` | MYE núcleo | Equipo de MYE | A construir |
-| `GET /api/v1/admin/usuarios?desde={lastSync}` | User master Sinco | Equipo seguridad/IT Sinco | A construir (para sync Entra, ver §9.14) |
+| ~~`GET /api/v1/admin/usuarios?desde={lastSync}`~~ | ~~User master Sinco~~ | ❌ Eliminado 2026-05-05 — identidad del host PWA |
 
-Diez a once endpoints en **cuatro módulos distintos** de Sinco, posiblemente **cuatro equipos distintos** (sumando el de identidad/usuarios por el ADR-002).
+Diez endpoints en **tres módulos distintos** de Sinco (decisión 2026-05-05 elimina el cuarto — User master/seguridad/IT — porque el módulo no maneja identidad).
 
 > **Nota (2026-04-27):** Tras la revisión de plantillas Excel del ERP, este inventario fue **revisado** en `01-modelo-dominio.md §12.8`. La versión vigente cambia: el endpoint `/equipos/{id}/partes` se reemplaza por `/equipos/{cod}` + `/rutinas?grupo=&tipo=` (las partes vienen via los items de la rutina aplicable al grupo del equipo, no asociadas al equipo individual). Se agregan catálogos cerrados de partes, actividades, ubicaciones y proyectos (que el ERP nombra "obras"). Total final: **15 endpoints**. Léase `01-modelo-dominio.md §12.8` para la lista vigente.
 
@@ -1128,7 +1128,9 @@ B-5: Integración punta a punta + ajustes          (2 sem)       ◀ todos
 
 **Estado:** Tentativamente aceptada, dependiente de confirmar el mecanismo de auth actual de Sinco.
 
-> **⚠️ Aclaración 2026-04-29 — necesita revisión:** este análisis se redactó asumiendo que el módulo cloud elegía su propio IdP de manera autónoma. La realidad operativa es distinta: **Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente** y hereda el contexto del usuario del host. La opción C ("Microsoft Entra ID") sigue siendo viable solo si el host PWA usa Entra ID (o se mueve a usarlo); de lo contrario, el módulo cloud debe validar el token que el host emita con su mecanismo actual. La decisión final depende de qué use realmente la app móvil hoy. El análisis de las 5 opciones queda como referencia válida para esa conversación; no se ejecuta nada hasta cerrar el ADR.
+> **⚠️ DECISIÓN 2026-05-05 — el módulo no maneja identidad:** análisis de opciones A/B/C/D/E queda como referencia histórica. **Decisión Jaime 2026-05-05:** el módulo Inspecciones NO maneja usuarios, NO sincroniza identidad, NO tiene app registration propio. Toda la identidad viene del host PWA Sinco MYE vía JWT. El módulo solo: (a) valida cloud-side el token recibido (issuer/JWKS configurable según el IdP del host), (b) autoriza por capability, (c) usa `tecnicoId` opaco del JWT. Endpoints `GET /api/v1/admin/usuarios?desde={lastSync}` (U-1, U-2) eliminados del contrato. Sin sync de usuarios — sin coordinación con equipo Seguridad/IT Sinco. Las 5 opciones del análisis abajo describen IdPs posibles para el host PWA, no para este módulo. Ver `06-contrato-apis-erp.md` §3.6 (NO APLICA) + `roadmap.md` Fase 2 actualizada.
+>
+> **Aclaración previa 2026-04-29 (preservada):** este análisis se redactó asumiendo que el módulo cloud elegía su propio IdP de manera autónoma. La realidad operativa es distinta: **Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente** y hereda el contexto del usuario del host. La decisión 2026-05-05 cierra esta línea — el módulo no participa en la elección de IdP, solo valida lo que reciba.
 
 ### Contexto
 
@@ -1340,29 +1342,32 @@ El módulo de inspecciones consume múltiples **catálogos de referencia** que v
 - Viajan por VPN — cada lectura en vivo tiene costo de round-trip.
 - Caen dentro del patrón EDA Sinco §7 ("data de referencia → query síncrona / read model").
 
-### Decisión
+### Decisión (canonical 2026-05-05 — confirmada por Jaime)
 
-**Estrategia híbrida de cinco componentes:**
+**Estrategia híbrida de cuatro componentes:**
 
-1. **Sync inicial** al desplegar el módulo y al provisionar nuevos ambientes (dev/staging/prod).
-2. **Cron diario nocturno** (~3 AM hora Bogotá) que invoca `GET /api/v1/catalogos/<X>` con headers `If-Modified-Since` o `ETag`. El ERP responde **`304 Not Modified`** si nada cambió desde la última sync — sin transferir body.
-3. **Stale-while-revalidate** como patrón de cache: si el cron del día falla o la VPN cae, el técnico sigue viendo la cache anterior; el refresh se completa asíncrono cuando vuelva la red.
+1. **Sync inicial** al primer login del cliente PWA (poblado completo de los 9 catálogos en IndexedDB local).
+2. **Sync delta on-app-open** — cada apertura de la app dispara `GET /api/v1/catalogos/<X>` con header `If-None-Match: "{etag-cliente}"` por catálogo, en paralelo. El ERP responde `304 Not Modified` cuando no hay cambios (cero bytes en wire); `200 OK` con body completo + nuevo `ETag` cuando sí hay cambios. **No hay cron nocturno** (decisión 2026-05-05 — antes Punto 5 refinement, ahora canonical).
+3. **Stale-while-revalidate** como patrón de cache: el UI arranca inmediatamente con la cache local sin bloquearse mientras el sync corre en background. Si la app se abre **sin red**, el técnico opera con la última versión cacheada (modo degradado, sin bloqueo). El sync se completa asíncrono cuando vuelva la red.
 4. **Reglas operativas de inmutabilidad** en el lado ERP: los IDs/códigos del catálogo **nunca cambian**; renombrar = cambiar solo descripción; descontinuar = `activa = false`, nunca delete.
-5. **Botón admin "refrescar catálogos ahora"** (`POST /api/v1/admin/catalogos/refrescar`) — **diferido a v1.1**. En v1.0 se acepta ventana de hasta 24h entre cambio y propagación.
+5. **Botón admin "refrescar catálogos ahora"** (`POST /api/v1/admin/catalogos/refrescar`) — **promovido a v1.0** (decisión 2026-05-05). Útil cuando el ERP admin sabe que acaba de cambiar algo crítico y no quiere esperar a que cada técnico abra su PWA.
 
 ### Razones
 
-- **Complejidad-vs-beneficio favorable**: para 1-2 cambios/año, sync periódico simple bate al webhook push, y bate también al sync continuo por demanda.
-- **Resilencia**: stale-while-revalidate sobrevive caídas temporales de VPN sin impacto al técnico.
-- **Costo en runtime mínimo**: cron diario con `If-Modified-Since` retornando `304` es prácticamente gratis — no transfer de body, solo headers.
+- **Aprovecha el ciclo natural del técnico**: abrir la app = momento natural de sincronizar. Sin desperdicio en días sin uso.
+- **Sin infraestructura de scheduler**: elimina cron Wolverine, backoff intra-noche, timezone hardcoded, alarma operativo dedicada al cron.
+- **Resilencia**: stale-while-revalidate sobrevive caídas temporales de VPN sin impacto al técnico (usa último cached).
+- **Resetea naturalmente el reloj ITP de iOS** (ADR-008 §6.7) en cada apertura — el heartbeat push deja de ser crítico para la persistencia de catálogos.
+- **Costo en runtime mínimo**: response típico = `304 Not Modified` (cero body). Solo descarga real cuando hay cambios efectivos.
 - **Alineado con guía EDA §7**: query síncrona + read model local es exactamente el patrón recomendado para catálogos.
 - **IDs inmutables protegen reproducibilidad histórica** sin overhead de snapshots: una inspección de hace 2 años referencia un ID estable que sigue resolviendo aunque la descripción haya evolucionado.
 
 ### Trade-offs aceptados conscientemente
 
-- **Ventana de staleness de hasta 24h**: si agregan una causa nueva al mediodía, el técnico no la ve hasta la próxima noche. Si en la práctica resulta operativamente doloroso, se promueve el botón admin de v1.1 a v1.0 (costo: media tarde de implementación).
+- **Ventana de staleness = tiempo entre aperturas**: si agregan una causa nueva al mediodía y un técnico no abre la app hasta el día siguiente, no la ve hasta entonces. Mitigación: botón admin "refrescar ahora" (promovido a v1.0).
 - **Sin push real-time** desde ERP. Aceptable dado el bajo volumen.
 - **No hay snapshot por inspección**: si una causa se renombra, las inspecciones históricas que la referencian aparecen con el nombre nuevo (no el original al momento de captura). Aceptable; si se necesita reproducibilidad estricta, se promueve a snapshot por inspección.
+- **Sin alarma proactiva de "ERP caído"** (que el cron nocturno fallido generaba): se compensa con un healthcheck Application Insights independiente (ping cada 5 min al endpoint de health del ERP). Es responsabilidad de Fase 1 (paso 1.12 Application Insights) y no parte del módulo de inspecciones.
 
 ### Aplica a los siguientes catálogos
 
@@ -1372,7 +1377,7 @@ Cobertura completa del inventario §12.9.7 del modelo de dominio:
 |---|---|---|
 | Equipos (master) | `GET /api/v1/equipos` | Mensual (altas/bajas) |
 | Rutinas técnicas (**M-17**) | `GET /api/v1/catalogos/rutinas` | Trimestral o menos. **Shape mínimo** — sin `Items[]` ni `ActividadId` (ver "Refinamientos posteriores 2026-05-05") |
-| Rutinas monitoreo (**M-16**, Fase 2) | `GET /api/v1/catalogos/rutinas-monitoreo` | Trimestral o menos. Shape completo con `Items[]` + `EvaluacionEsperada` (§12.11.5) — diferido a Fase 2 |
+| Rutinas monitoreo (**M-16**, MVP — promovido 2026-05-05) | `GET /api/v1/catalogos/rutinas-monitoreo` | Trimestral o menos. Shape completo con `Items[]` + `EvaluacionEsperada` (§12.11.5). Cada rutina trae `grupoMantenimientoId` para filtro client-side por grupo del equipo |
 | Partes | `GET /api/v1/catalogos/partes` | Una vez al arranque + raras adiciones |
 | Causas de falla | `GET /api/v1/catalogos/causas-falla` | Una vez al arranque + raras adiciones |
 | Tipos de falla | `GET /api/v1/catalogos/tipos-falla` | Una vez al arranque + raras adiciones |
@@ -1380,24 +1385,28 @@ Cobertura completa del inventario §12.9.7 del modelo de dominio:
 | Proyectos (ERP los nombra "obras") | `GET /api/v1/catalogos/obras` | Mensual |
 | Repuestos / insumos | `GET /api/v1/insumos` | Variable; adiciones frecuentes |
 
-**Nota**: Repuestos puede tener volumen de adiciones más alto. Si en operación real resulta que el cron diario es insuficiente para repuestos, se reduce su intervalo a 4-6 horas sin tocar los demás. La estrategia es por catálogo.
+**Nota**: Repuestos puede tener volumen de adiciones más alto. La frecuencia de sync = frecuencia de apertura de la app por cada técnico, lo que típicamente cubre cualquier ritmo de cambio. Si emerge un caso real con cambios mid-jornada que el técnico necesita ver, se usa el botón admin "refrescar ahora" (v1.0).
 
 ### Implementación técnica
 
 **Lado ERP (workstream B):**
-- Cada endpoint de catálogo soporta `If-Modified-Since` y `ETag`.
+- Cada endpoint de catálogo soporta `ETag` (`If-None-Match`).
 - Responde `304 Not Modified` cuando no hay cambios.
-- Header `Cache-Control: max-age=86400, stale-while-revalidate=604800`.
+- Header `Cache-Control: max-age=86400, stale-while-revalidate=604800` (sirve si el navegador hace caching adicional en algún proxy intermedio; el cliente PWA respeta ETag directamente).
+
+**Lado cliente PWA (workstream A):**
+- Bootstrap en `app.tsx` dispara sync de los 9 catálogos en paralelo (uno por catálogo, cada uno con su `If-None-Match: "{etag-cliente}"`).
+- Persistencia en IndexedDB (object store `catalogos` por nombre, con `{etag, lastSyncedAt, data}` por catálogo — ver ADR-008 §9.16 para storage cliente).
+- UI no se bloquea por el sync — arranca con la cache local; cuando el sync devuelve `200 OK` (cambios), el UI re-renderiza el selector afectado.
+- **Sin red al abrir:** UI usa último cached. Banner discreto "modo offline" en la barra superior. Sync se reintenta cuando vuelva la red (ADR-008 cola).
 
 **Lado módulo Azure (workstream C):**
-- Cliente HTTP con cache estándar (built-in en .NET) que respeta los headers.
-- Persistencia en proyecciones Marten (read-only documents) para sobrevivir reinicios del Container App.
-- Cron job en Wolverine (timer trigger) que llama cada catálogo a las 3 AM Bogotá.
-- Wrapper `IReferenceDataService` que abstrae la lectura: el dominio nunca llama HTTP directo, siempre va por la cache local.
+- Sin scheduler. El backend solo sirve los endpoints que el cliente PWA invoca.
+- Persistencia en proyecciones Marten (read-only documents) **opcional** — si el backend también necesita resolver IDs (p. ej. para el adapter del PDF), mantiene su propia cache poblada por el mismo patrón ETag, pero esa cache se hidrata bajo demanda al primer uso, no por cron.
 
 **Lado catálogo admin (Sinco):**
-- Documentar en runbook operativo: "después de agregar/modificar un código en el catálogo X, los cambios estarán disponibles en cloud al siguiente refresh nocturno (~3 AM). En v1.0 no hay botón de refresh inmediato."
 - Política de cambios: NO modificar IDs/códigos existentes. Solo descripción. Descontinuación con flag `activa`, no delete.
+- Si un cambio operativo es urgente, el admin invoca el botón "refrescar ahora" v1.0 — esto bumpa el ETag server-side y al siguiente sync de cada técnico baja el cambio.
 
 ### Reglas operativas para el admin del catálogo (vinculantes)
 
@@ -1418,7 +1427,7 @@ Si la operación demanda mejor responsividad (ej. en operaciones grandes con cam
 
 ### Refinamientos posteriores (2026-05-05)
 
-**Punto 1 — Cobertura explícita de M-17 (rutinas técnicas) y M-16 (rutinas monitoreo Fase 2).**
+**Punto 1 — Cobertura explícita de M-17 (rutinas técnicas) y M-16 (rutinas monitoreo — MVP desde 2026-05-05).**
 
 ADR-004 aplica a M-17 (`GET /api/v1/catalogos/rutinas`) con un **shape mínimo**:
 
@@ -1438,9 +1447,9 @@ public sealed record RutinaTecnica(
 
 Esta clarificación reduce el payload de M-17 de ~5 MB (con items expandidos hipotéticos) a ~500 KB para 4.5K rutinas técnicas — beneficioso para offline en iOS donde la cuota es más conservadora.
 
-**M-16 (rutinas de monitoreo, Fase 2)** cae bajo la misma estrategia ADR-004 cuando llegue Fase 2, con shape **completo**: `RutinaMonitoreo` con `IReadOnlyList<ItemRutinaMonitoreo>` y `EvaluacionEsperada` numérica/cualitativa por item (§12.11.5 del modelo). En el caso de monitoreo los items **sí** son navegables y forman el checklist que el técnico recorre.
+**M-16 (rutinas de monitoreo, MVP — promovido 2026-05-05)** cae bajo la misma estrategia ADR-004, con shape **completo**: `RutinaMonitoreo` con `IReadOnlyList<ItemRutinaMonitoreo>` y `EvaluacionEsperada` numérica/cualitativa por item + `grupoMantenimientoId` para filtro client-side por grupo del equipo (§12.11.5 del modelo). En el caso de monitoreo los items **sí** son navegables y forman el checklist que el técnico recorre.
 
-**Cross-references:** §12.10.3-§12.10.5 (Hallazgo sin `ItemRutinaId`, rutina como filtro de partes), §12.11.5 (rutinas de monitoreo Fase 2). Followup #10 abierto para limpiar residuo de `Items[]` + `ActividadId` en §12.11.1 del modelo (donde el refinamiento de mayo 2026 reintrodujo el shape viejo por error).
+**Cross-references:** §12.10.3-§12.10.5 (Hallazgo sin `ItemRutinaId`, rutina como filtro de partes), §12.11.5 (rutinas de monitoreo — MVP desde 2026-05-05). Followup #10 abierto para limpiar residuo de `Items[]` + `ActividadId` en §12.11.1 del modelo (donde el refinamiento de mayo 2026 reintrodujo el shape viejo por error).
 
 **Punto 2 — Interacción con iOS ITP 7 días (cross-ref ADR-008 §6.7).**
 
@@ -1460,36 +1469,19 @@ ADR-004 asume cache local persistente entre ciclos nocturnos. En iOS Safari, el 
 
 **No mitigado (gap aceptado):** un técnico iOS que está offline al momento de un eviction (ej. arranca PWA sin red por primera vez tras 7 días) **no puede operar**. Es el gap recurrente de iOS y se acepta hasta que el piloto evidencie pérdida real de productividad — entonces se evalúa Capacitor wrapper (camino de evolución de ADR-008).
 
-**Punto 3 — Manejo de fallo del cron nocturno y staleness aceptable.**
+**Punto 3 — Política de staleness (parcialmente superseded por Punto 5 / decisión 2026-05-05).**
 
-ADR-004 original dice "stale-while-revalidate como fallback" pero no define política operativa ante fallos persistentes del cron. Refinamientos:
+> ⚠️ La política de reintento del cron, métricas asociadas y manejo de fallos persistentes del cron **ya no aplican** — el cron fue eliminado (decisión canonical 2026-05-05, ver Punto 5 abajo). Lo que **sigue vigente** del Punto 3:
 
-**Política de reintento del cron:**
+**Política de bloqueo por staleness extrema (vigente):**
 
-- Intento principal: 3 AM hora Bogotá (hardcoded MVP, parametrizable v2).
-- Backoff intra-noche: 3:30, 4:00, 4:30. Total 4 intentos en 1.5h.
-- Tras 4 fallos: log estructurado + alarma a operativo. No reintenta hasta la próxima noche.
-- Razón: VPNs típicamente recuperan en minutos; >1.5h de caída sugiere problema serio que requiere intervención humana, no más reintentos automáticos.
-
-**Reintento oportunista al arranque del cliente:**
-
-- Cuando un cliente arranca con cache stale (>24h desde `lastSyncedAt`), el bootstrap dispara sync inmediato sin esperar al próximo nocturno. stale-while-revalidate sigue aplicando: la cache vieja se sirve al UI mientras el sync corre en background.
-
-**Métrica server-side (Application Insights):**
-
-- `dias_desde_ultimo_sync_exitoso` por catálogo y por cliente piloto.
-- Alarma operativo cuando supera 2 días en cualquier catálogo.
-- Razón: 1 día es posible (cron falló una noche, normal); 2 días = patrón anómalo que merece investigación.
-
-**Política de bloqueo por staleness extrema:**
-
-- Cuando un catálogo crítico (equipos, rutinas técnicas, partes) lleva >7 días sin sync exitoso, el cliente **bloquea escritura nueva** (no permite iniciar inspecciones nuevas) hasta que un sync online se complete.
-- Razón: a 7 días la cache puede tener IDs renombrados/descontinuados, riesgo de captura sobre datos inválidos. Coincide con la ventana ITP iOS — si llegamos a 7 días algo grave pasa que merece detener escritura.
+- Cuando un catálogo crítico (equipos, rutinas técnicas, rutinas monitoreo, partes) lleva >7 días sin sync exitoso, el cliente **bloquea escritura nueva** (no permite iniciar inspecciones nuevas) hasta que un sync online se complete.
+- Razón: a 7 días la cache puede tener IDs renombrados/descontinuados, riesgo de captura sobre datos inválidos. Coincide con la ventana ITP iOS.
 - Inspecciones ya iniciadas pueden cerrarse normalmente (la captura usó cache vigente al momento de iniciar; la firma no requiere catálogos refrescos).
 
-**Recomendación: promover botón admin "refrescar ahora" de v1.1 a v1.0.**
+**Botón admin "refrescar ahora" — promovido a v1.0 (decisión 2026-05-05).**
 
-Originalmente diferido a v1.1 en ADR-004 §9.15. Con este punto 3 cobra sentido promoverlo a v1.0: si el cron falla N noches consecutivas, el operativo no debería esperar al próximo nocturno para forzar recuperación. Costo de implementación bajo (endpoint admin `POST /api/v1/admin/catalogos/refrescar` que dispara los mismos handlers del cron de manera ad-hoc). Reabre la decisión deferida del ADR-004 original.
+Endpoint admin `POST /api/v1/admin/catalogos/refrescar` que bumpa el ETag server-side por catálogo. Útil para que el admin del ERP pueda forzar propagación de un cambio crítico al siguiente sync de cada técnico (sin esperar a que abran la app).
 
 **Punto 4 — ETag canonical, `If-Modified-Since` queda como secundario.**
 
@@ -1516,34 +1508,11 @@ ADR-004 original menciona ambos headers `If-Modified-Since` y `ETag`. En la prá
 
 **`If-Modified-Since` queda como secundario:** si el ERP ya lo expone para otros consumidores, el cliente puede enviarlo además del `If-None-Match` — pero no es contrato vinculante. ETag es el único requerido. Si el ERP solo soporta uno, debe ser ETag.
 
-**Punto 5 — Eliminación del cron nocturno en favor de sync on-login.**
+**Punto 5 — Sync on-app-open canonical (confirmado 2026-05-05 por Jaime — antes refinement, ahora integrado a la decisión principal arriba).**
 
-Tras revisar el costo-beneficio del cron nocturno frente a sync al arranque de la app, se decide **eliminar el cron** y mantener únicamente sync on-login con red disponible. ETag, snapshots, stale-while-revalidate y todo el resto del ADR-004 quedan intactos — el cambio es exclusivamente operacional.
+> ⚠️ Esta sección quedaba como refinement; **el 2026-05-05 Jaime confirmó que es la decisión vigente**. El contenido se integró directamente en la sección "Decisión" arriba. Esta sub-sección queda como audit trail histórico del proceso de decisión.
 
-**Patrón vigente (post-cambio):**
-
-- Al abrir la PWA con red disponible, el bootstrap dispara sync de los 9 catálogos en paralelo (cada uno con `If-None-Match: "{etag-cliente}"`).
-- En estado estable, todos responden `304 Not Modified` en ~450 ms total. UI arranca con cache local sin bloquearse (stale-while-revalidate sirve mientras el sync corre en background).
-- Si hay cambios, el catálogo afectado responde `200 OK` con body completo; el cliente actualiza su `etag` y `lastSyncedAt`.
-
-**Razones para el cambio:**
-
-- Sync on-login resetea naturalmente el reloj ITP de iOS (ADR-008 §6.7) cada vez que el técnico abre la app — el heartbeat push deja de ser crítico para catálogos.
-- Elimina infraestructura: scheduler Wolverine, backoff intra-noche, timezone hardcoded, alarmas dedicadas al cron.
-- Aprovecha el ciclo natural de uso: el técnico abre la app cuando va a trabajar — momento natural de sincronizar.
-- Sin desperdicio en días sin uso (vacaciones, festivos).
-
-**Lo que sobrescribe del punto 3:**
-
-- ❌ Política de reintento del cron (3 AM + backoff). Ya no aplica.
-- ❌ Métrica server-side `dias_desde_ultimo_sync_exitoso`. Pasa a ser cliente-side: el cliente envía su `lastSyncedAt` en cada sync; server agrega para reporting.
-- ✅ Reintento oportunista al arranque → se convierte en el sync principal.
-- ✅ Bloqueo por staleness extrema (>7 días) sigue aplicando.
-- ✅ Botón admin "refrescar ahora" sigue siendo v1.0.
-
-**Healthcheck del ERP separado:**
-
-La pérdida de la "alarma proactiva si ERP cae" (que el cron nocturno fallido generaba) se compensa con un **healthcheck Application Insights** independiente del sync de catálogos: ping cada 5 min desde Azure al endpoint de health del ERP. Es responsabilidad de Fase 1 (paso 1.12 Application Insights) y no parte del módulo de inspecciones.
+Métricas relacionadas: el cliente envía su `lastSyncedAt` en cada sync; server agrega para reporting via Application Insights. Bloqueo por staleness extrema (>7 días) sigue aplicando (ver Punto 3 vigente).
 
 **Trade-offs aceptados:**
 

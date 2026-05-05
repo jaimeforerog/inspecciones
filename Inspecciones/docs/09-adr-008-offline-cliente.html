@@ -519,7 +519,7 @@ sequenceDiagram
 
   <div class="tab-content" id="store-cat">
     <h3>Store: <code>catalogos</code></h3>
-    <p>Read-only desde ERP por sync nocturno (ADR-004). Stale-while-revalidate hasta 24h. <strong>No sincroniza al server.</strong></p>
+    <p>Read-only desde ERP por sync on-app-open con <code>If-None-Match</code> (ADR-004 canonical 2026-05-05 — sin cron). Stale-while-revalidate sirve si la app abre sin red. <strong>No sincroniza al server.</strong></p>
     <table>
       <thead><tr><th>Campo</th><th>Notas</th></tr></thead>
       <tbody>

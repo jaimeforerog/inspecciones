@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wireframes — Inspección de monitoreo (Fase 2)</title>
+<title>Wireframes — Inspección de monitoreo (MVP — promovido 2026-05-05)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -338,8 +338,7 @@ body {
 .dictamen-radio.puede .pill-color { background: var(--action-low); }
 .dictamen-radio.restricc .pill-color { background: var(--action-mid); }
 .dictamen-radio.nopuede .pill-color { background: var(--action-high); }
-.dictamen-radio .dict-label { font-size: 13px; font-weight: 500; }
-
+.dictamen-radio .dict-label { font-size: 13px; font-weight: 500;
 /* Firma */
 .firma-area {
   height: 120px; border: 1.5px dashed var(--divider); border-radius: 6px;
@@ -357,13 +356,14 @@ footer ul { padding-left: 20px; line-height: 1.6; font-size: 13px; color: var(--
 footer ul li { margin-bottom: 6px; }
 footer code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
 </style>
+
 </head>
 <body>
 
 <div class="page-header">
   <h1>Wireframes — Inspección de monitoreo</h1>
-  <p>Flujo del técnico para inspección de tipo <strong>Monitoreo</strong> (Fase 2 / roadmap 10.4). Recorre los items de una rutina (Sistema eléctrico, Transmisión, Sistema de frenos, …) capturando mediciones numéricas o evaluaciones cualitativas. Los items con resultado fuera de rango (numérico) o calificación <code>Malo</code> (cualitativo) generan automáticamente un hallazgo con seguimiento. Modelado en §12.11.5 de <code>01-modelo-dominio.md</code>.</p>
-  <span class="tag-proposal">Propuesta · Fase 2</span>
+  <p>Flujo del técnico para inspección de tipo <strong>Monitoreo</strong> (MVP — promovido 2026-05-05, antes Fase 2 / roadmap 10.4). Recorre los items de una rutina (Sistema eléctrico, Transmisión, Sistema de frenos, …) capturando mediciones numéricas o evaluaciones cualitativas. Los items con resultado fuera de rango (numérico) o calificación <code>Malo</code> (cualitativo) generan automáticamente un hallazgo con seguimiento. Modelado en §12.11.5 de <code>01-modelo-dominio.md</code>; implementación en roadmap §3.B' + §5.B'.</p>
+  <span class="tag-proposal">Propuesta · MVP (decisión 2026-05-05)</span>
   <div class="meta">
     <span>Stack visual: PWA React + MUI</span>
     <span>Decisiones 1–6 cerradas el 2026-04-30</span>

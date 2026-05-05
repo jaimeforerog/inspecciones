@@ -240,7 +240,7 @@ La rutina **se deriva automáticamente** del grupo del equipo al iniciar la insp
 > - ¿Tiene sentido operativo una sola rutina por grupo, o en campo esperarías subdividir por enfoque (ej. visita exclusiva al sistema hidráulico)? Si subdividirías, ¿con qué criterio?
 > - ¿Las partes inspeccionables del grupo varían entre marcas/modelos? (ej. ¿la lista de partes de un D11T Caterpillar es la misma que la de un D65PX2 Komatsu, ambos del grupo BULLDOZER?)
 > - ¿Cuántas partes/sub-sistemas cabría esperar en una rutina bien diseñada de bulldozer? ¿15? ¿40?
-> - **Heads-up Fase 2 (no MVP):** en una segunda fase agregaremos un tipo distinto de inspección llamado **monitoreo**, donde sí hay actividades pre-definidas con valores esperados (ej. *batería · medir voltaje · rango 11–15 V*). Si la medición sale del rango, el sistema crea automáticamente un hallazgo de seguimiento al equipo. ¿Qué mediciones críticas esperarías ver en monitoreo de bulldozer / retroexcavadora?
+> - **Heads-up MVP (promovido 2026-05-05 — antes Fase 2):** además de la técnica, el MVP también incluye un tipo distinto de inspección llamado **monitoreo**, donde sí hay actividades pre-definidas con valores esperados (ej. *batería · medir voltaje · rango 11–15 V*). Si la medición sale del rango, el sistema crea automáticamente un hallazgo de seguimiento al equipo. La asignación equipo↔rutinas-monitoreo es **por grupo de mantenimiento** (decisión 2026-05-05) — todos los equipos del mismo grupo comparten las mismas rutinas. ¿Qué mediciones críticas esperarías ver en monitoreo de bulldozer / retroexcavadora? ¿Tiene sentido operativo asignar las rutinas-monitoreo a nivel grupo, o esperarías que dos equipos del mismo grupo (ej. bulldozer nuevo vs viejo) tengan rutinas distintas?
 
 ---
 

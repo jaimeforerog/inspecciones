@@ -1,10 +1,14 @@
-# Flujo de inspección de monitoreo (Fase 2) — paso a paso con endpoints
+# Flujo de inspección de monitoreo (MVP — promovido 2026-05-05) — paso a paso con endpoints
 
-**Propósito:** mapa visual del ciclo completo de una inspección de tipo **Monitoreo** (Fase 2 / roadmap 10.4) mostrando en cada paso qué endpoint del ERP se invoca. Complementa `02f-flujo-inspeccion-tecnica-manual.md` (flujo técnica MVP), `02e-wireframes-monitoreo.html` (wireframes) y `01-modelo-dominio.md` §12.11.5 (modelo de monitoreo).
+> ⚠️ **REVISIÓN PENDIENTE 2026-05-05.** Dos cambios de scope sobre este doc — re-render completo pendiente:
+> 1. **Asignación por grupo (decisión 2026-05-05):** equipo↔rutinas-monitoreo derivada por grupo de mantenimiento, no per-equipo. Las menciones a `rutinasMonitoreoIds[]` están **obsoletas** — el filtrado real es client-side por `r.grupoMantenimientoId == equipo.grupoMantenimientoId`.
+> 2. **Monitoreo entra al MVP (decisión 2026-05-05):** antes era Fase 2 / roadmap 10.4. Las menciones a "Fase 2" en el cuerpo de este doc deben leerse como "MVP" (la roadmap §3.B' detalla los slices). Detalle en `01-modelo-dominio.md` §12.11.5 + `06-contrato-apis-erp.md` M-3b/M-16.
 
-**Última revisión:** 2026-05-04.
+**Propósito:** mapa visual del ciclo completo de una inspección de tipo **Monitoreo** (MVP — promovido 2026-05-05, antes roadmap 10.4) mostrando en cada paso qué endpoint del ERP se invoca. Complementa `02f-flujo-inspeccion-tecnica-manual.md` (flujo técnica MVP), `02e-wireframes-monitoreo.html` (wireframes) y `01-modelo-dominio.md` §12.11.5 (modelo de monitoreo).
 
-**Estado:** Fase 2 — todavía no implementado en código. Este flujo se materializa cuando se priorice (roadmap 10.4).
+**Última revisión:** 2026-05-04 (banner 2026-05-05).
+
+**Estado:** **MVP** — todavía no implementado en código. Promovido al MVP el 2026-05-05 (decisión Jaime — antes era Fase 2 / roadmap 10.4). Este flujo se materializa en los slices de §3.B' del roadmap.
 
 **Diferencia clave con técnica (§12.11.5 punto 4):** monitoreo es **estructurado** — el técnico recorre los items de la rutina elegida, captura mediciones contra rangos esperados, y el sistema dispara hallazgos automáticos. Técnica es **libre** — el técnico decide qué inspeccionar.
 
@@ -14,11 +18,13 @@
 
 ---
 
-## 1. Pre-condiciones — cache local poblada por sync nocturno (incluye M-16)
+## 1. Pre-condiciones — cache local poblada por sync on-app-open (incluye M-16)
+
+> Sync delta con `If-None-Match`/`ETag`. Sin cron nocturno (ADR-004 canonical 2026-05-05).
 
 ```mermaid
 flowchart LR
-    subgraph "Sync nocturno (Wolverine scheduled task)"
+    subgraph "Sync on-app-open (cliente PWA, en paralelo)"
         S1[/M-13<br>GET /catalogos/obras/] --> P1[(ProyectoLocal)]
         S2[/M-10<br>GET /catalogos/causas-falla/] --> P2[(CausaFallaLocal)]
         S3[/M-11<br>GET /catalogos/tipos-falla/] --> P3[(TipoFallaLocal)]
@@ -255,7 +261,7 @@ Ver §12.11.5 puntos 5–8 del modelo para detalle de eventos diferidos a Fase 2
 
 **Lo que NO se muestra para no saturar:**
 
-- Sync nocturno completo (ver §1).
+- Sync on-app-open completo (ver §1).
 - CRUD de items mid-inspección (editar medición previa, eliminar, etc.).
 - Cancelación de inspección (`InspeccionCancelada_v1`) — variante terminal alternativa.
 - Ciclo completo de `SeguimientoHallazgo` (resolver / escalar) — aggregate paralelo, ver §15.8.
