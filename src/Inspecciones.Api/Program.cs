@@ -96,4 +96,6 @@ app.MapGet("/", () => Results.Ok(new
 await app.RunOaktonCommands(args);
 
 // Marker class para que los tests E2E puedan usar WebApplicationFactory&lt;Program&gt;.
+
+
 public partial class Program;
