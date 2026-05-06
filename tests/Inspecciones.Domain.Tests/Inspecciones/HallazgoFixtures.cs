@@ -199,5 +199,136 @@ internal static class HallazgoFixtures
             Ubicacion: null,
             EmitidoPor: emitidoPor,
             RegistradoEn: Ahora);
+
+    // ── Fixtures slice 2 — ActualizarHallazgo ────────────────────────────
+
+    /// <summary>
+    /// Stream con inspección iniciada + un hallazgo Manual/NoRequiereIntervencion.
+    /// Base del Given para la mayoría de escenarios de ActualizarHallazgo.
+    /// </summary>
+    public static object[] StreamConUnHallazgoManual(
+        Guid? hallazgoId = null,
+        AccionRequerida accionRequerida = AccionRequerida.NoRequiereIntervencion,
+        int? tipoFallaId = null,
+        int? causaFallaId = null) =>
+        StreamConInspeccionIniciada()
+            .Append(HallazgoRegistradoEjemplo(
+                hallazgoId: hallazgoId ?? HallazgoG1,
+                parteEquipoId: 77,
+                origen: OrigenHallazgo.Manual,
+                accionRequerida: accionRequerida,
+                tipoFallaId: tipoFallaId,
+                causaFallaId: causaFallaId))
+            .ToArray();
+
+    /// <summary>
+    /// Stream con inspección iniciada + hallazgo PreOperacional.
+    /// </summary>
+    public static object[] StreamConUnHallazgoPreop(
+        Guid? hallazgoId = null,
+        AccionRequerida accionRequerida = AccionRequerida.RequiereIntervencion,
+        int? tipoFallaId = 7,
+        int? causaFallaId = 3) =>
+        StreamConInspeccionIniciada()
+            .Append(HallazgoRegistradoEjemplo(
+                hallazgoId: hallazgoId ?? HallazgoG2,
+                parteEquipoId: 88,
+                origen: OrigenHallazgo.PreOperacional,
+                novedadPreopOrigenId: 99,
+                accionRequerida: accionRequerida,
+                tipoFallaId: tipoFallaId,
+                causaFallaId: causaFallaId))
+            .ToArray();
+
+    /// <summary>
+    /// Stream con inspección firmada + un hallazgo — para test PRE-2 de ActualizarHallazgo.
+    /// </summary>
+    public static object[] StreamFirmadaConUnHallazgo(Guid? hallazgoId = null) =>
+        [
+            EventoInspeccionIniciada(),
+            HallazgoRegistradoEjemplo(hallazgoId: hallazgoId ?? HallazgoG1),
+            new InspeccionFirmada_v1(InspeccionIdNueva, Ahora, "rmartinez")
+        ];
+
+    /// <summary>
+    /// Stream con inspección iniciada + hallazgo + hallazgo eliminado — para test PRE-4.
+    /// </summary>
+    public static object[] StreamConHallazgoEliminado(Guid? hallazgoId = null) =>
+        [
+            EventoInspeccionIniciada(),
+            HallazgoRegistradoEjemplo(hallazgoId: hallazgoId ?? HallazgoG1),
+            new HallazgoEliminado_v1(InspeccionIdNueva, hallazgoId ?? HallazgoG1, Ahora, "rmartinez")
+        ];
+
+    // ── Constructores de comandos ActualizarHallazgo ──────────────────────
+
+    /// <summary>
+    /// Comando <c>ActualizarHallazgo</c> happy path: AccionRequerida=RequiereIntervencion.
+    /// Escenario 6.1 del spec.
+    /// </summary>
+    public static ActualizarHallazgo ComandoActualizarConIntervencion(
+        Guid? hallazgoId = null,
+        string novedadTecnica = "Fisura en bloque motor",
+        string accionCorrectiva = "Reemplazar bloque",
+        int tipoFallaId = 10,
+        int causaFallaId = 5,
+        string actualizadoPor = "tecnico-01") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            ActividadId: null,
+            ActividadDescripcion: null,
+            NovedadTecnica: novedadTecnica,
+            AccionRequerida: AccionRequerida.RequiereIntervencion,
+            AccionCorrectiva: accionCorrectiva,
+            TipoFallaId: tipoFallaId,
+            CausaFallaId: causaFallaId,
+            ObservacionCampo: null,
+            Ubicacion: null,
+            ActualizadoPor: actualizadoPor);
+
+    /// <summary>
+    /// Comando <c>ActualizarHallazgo</c> happy path: AccionRequerida=RequiereSeguimiento.
+    /// Escenario 6.2 del spec.
+    /// </summary>
+    public static ActualizarHallazgo ComandoActualizarConSeguimiento(
+        Guid? hallazgoId = null,
+        string novedadTecnica = "Vibración leve en eje",
+        string actualizadoPor = "tecnico-02") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG2,
+            ActividadId: null,
+            ActividadDescripcion: null,
+            NovedadTecnica: novedadTecnica,
+            AccionRequerida: AccionRequerida.RequiereSeguimiento,
+            AccionCorrectiva: null,
+            TipoFallaId: null,
+            CausaFallaId: null,
+            ObservacionCampo: null,
+            Ubicacion: null,
+            ActualizadoPor: actualizadoPor);
+
+    /// <summary>
+    /// Comando <c>ActualizarHallazgo</c> mínimo para tests de validación.
+    /// </summary>
+    public static ActualizarHallazgo ComandoActualizarMinimo(
+        Guid? hallazgoId = null,
+        string novedadTecnica = "Novedad corregida",
+        AccionRequerida accionRequerida = AccionRequerida.NoRequiereIntervencion,
+        string? accionCorrectiva = null,
+        int? tipoFallaId = null,
+        int? causaFallaId = null,
+        string actualizadoPor = "tecnico-01") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            ActividadId: null,
+            ActividadDescripcion: null,
+            NovedadTecnica: novedadTecnica,
+            AccionRequerida: accionRequerida,
+            AccionCorrectiva: accionCorrectiva,
+            TipoFallaId: tipoFallaId,
+            CausaFallaId: causaFallaId,
+            ObservacionCampo: null,
+            Ubicacion: null,
+            ActualizadoPor: actualizadoPor);
 }
 

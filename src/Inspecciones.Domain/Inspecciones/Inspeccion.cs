@@ -160,21 +160,8 @@ public sealed class Inspeccion
                 "NovedadPreopOrigenId debe ser null cuando Origen=Manual.");
         }
 
-        // PRE-7 / I-H4: RequiereIntervencion exige TipoFallaId y CausaFallaId.
-        if (cmd.AccionRequerida == AccionRequerida.RequiereIntervencion
-            && (cmd.TipoFallaId is null || cmd.CausaFallaId is null))
-        {
-            throw new TipoYCausaFallaRequeridosException(
-                "TipoFallaId y CausaFallaId son obligatorios cuando AccionRequerida=RequiereIntervencion.");
-        }
-
-        // PRE-8: RequiereIntervencion exige AccionCorrectiva no vacía.
-        if (cmd.AccionRequerida == AccionRequerida.RequiereIntervencion
-            && string.IsNullOrWhiteSpace(cmd.AccionCorrectiva))
-        {
-            throw new AccionCorrectivaRequeridaException(
-                "AccionCorrectiva es obligatoria cuando AccionRequerida=RequiereIntervencion.");
-        }
+        // PRE-7 / I-H4 + PRE-8: RequiereIntervencion exige tipo/causa y acción correctiva.
+        ValidarRequiereIntervencion(cmd.AccionRequerida, cmd.TipoFallaId, cmd.CausaFallaId, cmd.AccionCorrectiva);
 
         // PRE-9: NovedadTecnica no puede ser vacía.
         if (string.IsNullOrWhiteSpace(cmd.NovedadTecnica))
@@ -220,6 +207,12 @@ public sealed class Inspeccion
             case InspeccionCancelada_v1 e:
                 Apply(e);
                 break;
+            case HallazgoActualizado_v1 e:
+                Apply(e);
+                break;
+            case HallazgoEliminado_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -261,9 +254,15 @@ public sealed class Inspeccion
             Origen: e.Origen,
             ParteEquipoId: e.ParteEquipoId,
             NovedadPreopOrigenId: e.NovedadPreopOrigenId,
+            ActividadId: e.ActividadId,
+            ActividadDescripcion: e.ActividadDescripcion,
+            NovedadTecnica: e.NovedadTecnica,
             AccionRequerida: e.AccionRequerida,
+            AccionCorrectiva: e.AccionCorrectiva,
             TipoFallaId: e.TipoFallaId,
             CausaFallaId: e.CausaFallaId,
+            ObservacionCampo: e.ObservacionCampo,
+            Ubicacion: e.Ubicacion,
             Eliminado: false));
         _contribuyentes.Add(e.EmitidoPor);
     }
@@ -290,6 +289,145 @@ public sealed class Inspeccion
         if (e.CanceladoPor is not null)
         {
             _contribuyentes.Add(e.CanceladoPor);
+        }
+    }
+
+    // ── Slice 2 — ActualizarHallazgo ─────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 2. Valida las pre-condiciones en el orden
+    /// definido en spec §4 y emite <see cref="HallazgoActualizado_v1"/>.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> ActualizarHallazgo(ActualizarHallazgo cmd, DateTimeOffset ahora)
+    {
+        // PRE-2 (I-H7): la inspección debe estar en EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden actualizar hallazgos en estado EnEjecucion.");
+        }
+
+        // PRE-3: el hallazgo debe existir en la inspección.
+        var idxHallazgo = _hallazgos.FindIndex(h => h.HallazgoId == cmd.HallazgoId);
+        if (idxHallazgo < 0)
+        {
+            throw new HallazgoNoEncontradoException(
+                $"El hallazgo {cmd.HallazgoId} no existe en la inspección {InspeccionId}.");
+        }
+
+        var hallazgo = _hallazgos[idxHallazgo];
+
+        // PRE-4: el hallazgo no debe estar eliminado.
+        if (hallazgo.Eliminado)
+        {
+            throw new HallazgoEliminadoException(
+                $"El hallazgo {cmd.HallazgoId} fue eliminado y no puede actualizarse.");
+        }
+
+        // PRE-7: NovedadTecnica no puede ser vacía.
+        if (string.IsNullOrWhiteSpace(cmd.NovedadTecnica))
+        {
+            throw new NovedadTecnicaVaciaException(
+                "NovedadTecnica es obligatoria y no puede estar vacía.");
+        }
+
+        // PRE-5 / I-H4 + PRE-6: RequiereIntervencion exige tipo/causa y acción correctiva.
+        ValidarRequiereIntervencion(cmd.AccionRequerida, cmd.TipoFallaId, cmd.CausaFallaId, cmd.AccionCorrectiva);
+
+        var evento = new HallazgoActualizado_v1(
+            InspeccionId: InspeccionId,
+            HallazgoId: cmd.HallazgoId,
+            ActividadId: cmd.ActividadId,
+            ActividadDescripcion: cmd.ActividadDescripcion,
+            NovedadTecnica: cmd.NovedadTecnica,
+            AccionRequerida: cmd.AccionRequerida,
+            AccionCorrectiva: cmd.AccionCorrectiva,
+            TipoFallaId: cmd.TipoFallaId,
+            CausaFallaId: cmd.CausaFallaId,
+            ObservacionCampo: cmd.ObservacionCampo,
+            Ubicacion: cmd.Ubicacion,
+            ActualizadoPor: cmd.ActualizadoPor,
+            ActualizadoEn: ahora);
+
+        return new object[] { evento };
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="HallazgoActualizado_v1"/>: reemplaza
+    /// el hallazgo mutando sus campos editables. Los campos de origen no cambian (I-H8).
+    /// Sin validaciones — solo mutación de estado.
+    /// </summary>
+    public void Apply(HallazgoActualizado_v1 e)
+    {
+        var idx = _hallazgos.FindIndex(h => h.HallazgoId == e.HallazgoId);
+        if (idx < 0)
+        {
+            return; // no debería ocurrir si los eventos son causalmente ordenados
+        }
+
+        var anterior = _hallazgos[idx];
+        _hallazgos[idx] = anterior with
+        {
+            ActividadId          = e.ActividadId,
+            ActividadDescripcion = e.ActividadDescripcion,
+            NovedadTecnica       = e.NovedadTecnica,
+            AccionRequerida      = e.AccionRequerida,
+            AccionCorrectiva     = e.AccionCorrectiva,
+            TipoFallaId          = e.TipoFallaId,
+            CausaFallaId         = e.CausaFallaId,
+            ObservacionCampo     = e.ObservacionCampo,
+            Ubicacion            = e.Ubicacion
+        };
+        _contribuyentes.Add(e.ActualizadoPor);
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="HallazgoEliminado_v1"/>: marca el
+    /// hallazgo como eliminado (soft delete). Stub para soporte de tests PRE-4
+    /// del slice 2. La lógica completa (comando <c>EliminarHallazgo</c>) se
+    /// implementa en slice 3.
+    /// </summary>
+    public void Apply(HallazgoEliminado_v1 e)
+    {
+        var idx = _hallazgos.FindIndex(h => h.HallazgoId == e.HallazgoId);
+        if (idx < 0)
+        {
+            return;
+        }
+
+        _hallazgos[idx] = _hallazgos[idx] with { Eliminado = true };
+        _contribuyentes.Add(e.EliminadoPor);
+    }
+
+    // ── Helpers privados ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Valida las invariantes I-H4 y PRE-8/PRE-6 comunes a <c>RegistrarHallazgo</c>
+    /// y <c>ActualizarHallazgo</c>: cuando <c>AccionRequerida=RequiereIntervencion</c>,
+    /// <c>TipoFallaId</c>, <c>CausaFallaId</c> y <c>AccionCorrectiva</c> son obligatorios.
+    /// </summary>
+    private static void ValidarRequiereIntervencion(
+        AccionRequerida accionRequerida,
+        int? tipoFallaId,
+        int? causaFallaId,
+        string? accionCorrectiva)
+    {
+        if (accionRequerida != AccionRequerida.RequiereIntervencion)
+        {
+            return;
+        }
+
+        if (tipoFallaId is null || causaFallaId is null)
+        {
+            throw new TipoYCausaFallaRequeridosException(
+                "TipoFallaId y CausaFallaId son obligatorios cuando AccionRequerida=RequiereIntervencion.");
+        }
+
+        if (string.IsNullOrWhiteSpace(accionCorrectiva))
+        {
+            throw new AccionCorrectivaRequeridaException(
+                "AccionCorrectiva es obligatoria cuando AccionRequerida=RequiereIntervencion.");
         }
     }
 }

@@ -2,6 +2,7 @@ using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Inspecciones;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Inspecciones.Api.Inspecciones;
 
@@ -168,6 +169,83 @@ public static class InspeccionesEndpoints
                 }
             })
            .WithName("RegistrarHallazgo");
+
+        // ── Slice 2 — ActualizarHallazgo ────────────────────────────────────
+        app.MapPatch("/api/v1/inspecciones/{id:guid}/hallazgos/{hid:guid}", async (
+                Guid id,
+                Guid hid,
+                ActualizarHallazgoRequest request,
+                HttpContext ctx,
+                IServiceProvider sp,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+
+                var cmd = new ActualizarHallazgo(
+                    InspeccionId: id,
+                    HallazgoId: hid,
+                    ActividadId: request.ActividadId,
+                    ActividadDescripcion: request.ActividadDescripcion,
+                    NovedadTecnica: request.NovedadTecnica,
+                    AccionRequerida: request.AccionRequerida,
+                    AccionCorrectiva: request.AccionCorrectiva,
+                    TipoFallaId: request.TipoFallaId,
+                    CausaFallaId: request.CausaFallaId,
+                    ObservacionCampo: request.ObservacionCampo,
+                    Ubicacion: request.Ubicacion,
+                    ActualizadoPor: tecnicoId);
+
+                var handler = sp.GetRequiredService<ActualizarHallazgoHandler>();
+
+                try
+                {
+                    var resultado = await handler.ManejarAsync(cmd, ct);
+
+                    return Results.Ok(new ActualizarHallazgoResponse(
+                        HallazgoId: resultado.HallazgoId,
+                        ActualizadoEn: resultado.ActualizadoEn));
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-1", mensaje = ex.Message });
+                }
+                catch (HallazgoNoEncontradoException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-3", mensaje = ex.Message });
+                }
+                catch (InspeccionNoEnEjecucionException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I-H7", mensaje = ex.Message });
+                }
+                catch (HallazgoEliminadoException ex)
+                {
+                    return Results.Conflict(new { codigoError = "PRE-4", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        TipoYCausaFallaRequeridosException  => "I-H4",
+                        AccionCorrectivaRequeridaException  => "PRE-6",
+                        NovedadTecnicaVaciaException        => "PRE-7",
+                        _                                   => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("ActualizarHallazgo");
 
         return app;
     }

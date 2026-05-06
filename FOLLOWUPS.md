@@ -98,6 +98,24 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** primer slice que modifique `ParteEquipoLocal` o que añada lógica al record.
 **Notas:** no bloqueante. El record es un DTO sin lógica; cobertura 0 no implica bug.
 
+### #20 — Handler + endpoint + test integración HTTP→Postgres pendientes para ActualizarHallazgo 🟢
+
+**Origen:** review slice 2 hallazgo #1
+**Fecha:** 2026-05-06
+**Tipo:** infra-wire
+**Descripción:** El slice 2 cierra la fase domain (spec, red, green, refactor, review) pero no incluye aún `ActualizarHallazgoHandler`, el endpoint `PATCH /api/v1/inspecciones/{id}/hallazgos/{hid}`, ni el test de integración HTTP→Postgres (`WebApplicationFactory<Program>` + Marten). El handler debe: (1) cargar el aggregate desde el stream Marten; (2) devolver 404 si no existe; (3) delegar a `inspeccion.ActualizarHallazgo(cmd, ahora)`; (4) hacer un único `SaveChangesAsync`. El endpoint debe mapear `InspeccionNoEnEjecucionException` → 409 Conflict, `HallazgoNoEncontradoException` → 404, `HallazgoEliminadoException` → 409, errores de invariante → 422. Header `X-Client-Command-Id` requerido (ADR-008).
+**Disparador para abrir slice:** fase infra-wire del orquestador al cerrar este slice 2.
+**Notas:** el orquestador completa infra-wire antes del commit del slice.
+
+### #21 — Cobertura de stubs de eventos futuros crecerá orgánicamente con slices 3 y FirmarInspeccion 🟢
+
+**Origen:** review slice 2 hallazgo #2
+**Fecha:** 2026-05-06
+**Tipo:** cobertura · deuda técnica · stubs
+**Descripción:** `HallazgoEliminado_v1` (60% línea), `InspeccionFirmada_v1` (50%), `InspeccionCancelada_v1` (60%) tienen cobertura de línea baja porque son stubs cuya lógica completa llega en slices 3 (EliminarHallazgo) y FirmarInspeccion/CancelarInspeccion respectivamente. La cobertura subirá orgánicamente al cerrar esos slices.
+**Disparador para cerrar:** cierre de slices 3, FirmarInspeccion, CancelarInspeccion.
+**Notas:** no bloqueante.
+
 ### #19 — Test `RegistrarHallazgo_con_parte_valida_del_equipo_no_lanza_INV_PartePerteneceAlEquipo` aserta excepción del stub en lugar del happy path del handler 🟢
 
 **Origen:** slice 1c review §2 FU-19

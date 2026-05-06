@@ -44,4 +44,17 @@ internal static class CasoDeUso
         var aggregate = Inspeccion.Reconstruir(dados);
         return aggregate.RegistrarHallazgo(cmd, ahora);
     }
+
+    /// <summary>
+    /// Decisión <c>ActualizarHallazgo</c>. Reconstruye el aggregate desde el stream
+    /// previo y delega al método de decisión del aggregate.
+    /// </summary>
+    public static IReadOnlyList<object> ActualizarHallazgo(
+        IReadOnlyList<object> dados,
+        ActualizarHallazgo cmd,
+        DateTimeOffset ahora)
+    {
+        var aggregate = Inspeccion.Reconstruir(dados);
+        return aggregate.ActualizarHallazgo(cmd, ahora);
+    }
 }

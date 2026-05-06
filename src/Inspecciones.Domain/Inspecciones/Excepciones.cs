@@ -56,3 +56,13 @@ public sealed class NovedadTecnicaVaciaException(string mensaje)
 /// <summary>PRE-10 (aggregate) — <c>Origen</c> no soportado en este slice (Seguimiento, Monitoreo).</summary>
 public sealed class OrigenNoSoportadoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 2 — ActualizarHallazgo ─────────────────────────────────────────────
+
+/// <summary>PRE-3 (aggregate) — el <c>HallazgoId</c> no existe en la lista de hallazgos de la inspección.</summary>
+public sealed class HallazgoNoEncontradoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-4 (aggregate) — el hallazgo referenciado tiene <c>Eliminado=true</c>.</summary>
+public sealed class HallazgoEliminadoException(string mensaje)
+    : InspeccionDomainException(mensaje);
