@@ -1,30 +1,106 @@
+using Inspecciones.Domain.Catalogos;
 using Inspecciones.Domain.Inspecciones;
 using Marten;
+using Marten.Exceptions;
+using Npgsql;
 
 namespace Inspecciones.Application.Inspecciones;
 
 /// <summary>
 /// Handler del comando <c>IniciarInspeccion</c>. Orquesta:
 /// <list type="number">
-///   <item>I-I1 validación blanda contra <c>InspeccionAbiertaPorEquipoView</c>; corto-circuito si activa.</item>
-///   <item>Resolución de <c>EquipoLocal</c> y <c>RutinaTecnicaLocal</c> desde Marten.</item>
-///   <item>Invocación de <see cref="Inspeccion.Iniciar"/> para validar pre-condiciones y producir eventos.</item>
-///   <item>Append al stream + commit atómico (Marten + Wolverine envelope dedup).</item>
+///   <item>I-I1 validación blanda — lee <c>InspeccionAbiertaPorEquipoView</c>; corto-circuito si activa.</item>
+///   <item>PRE-3 — resuelve <c>EquipoLocal</c>; lanza <see cref="EquipoNoEncontradoException"/> si falta.</item>
+///   <item>PRE-handler-1 — resuelve <c>RutinaTecnicaLocal</c>; lanza <see cref="RutinaTecnicaNoSincronizadaException"/> si falta.</item>
+///   <item>Delega validaciones PRE-4..PRE-7 + I-I2..I-I3 al método <see cref="Inspeccion.Iniciar"/>.</item>
+///   <item>Append al stream + Insert del read model + commit atómico (un único <c>SaveChangesAsync</c>).</item>
+///   <item>Race condition (I-I1 dura): atrapa <c>MartenCommandException(23505)</c>, relee proyección, retorna <c>RedirigeAExistente=true</c>.</item>
 /// </list>
-/// Defensa dura I-I1 vive en el índice único parcial Postgres de la proyección.
 /// </summary>
 public sealed class IniciarInspeccionHandler(IDocumentSession session, TimeProvider time)
 {
     private readonly IDocumentSession _session = session;
     private readonly TimeProvider _time = time;
 
+    private const string MensajeActiva = "Ya hay inspección activa, abriendo la existente";
+
     /// <summary>Ejecuta el comando y devuelve el resultado.</summary>
-    public Task<IniciarInspeccionResult> ManejarAsync(
+    public async Task<IniciarInspeccionResult> ManejarAsync(
         IniciarInspeccion cmd,
         ClaimsTecnico claims,
         CancellationToken ct = default)
     {
-        // STUB — fase red. Implementación en fase green.
-        throw new NotImplementedException();
+        // I-I1 — validación blanda: corto-circuito si el equipo ya tiene inspección activa.
+        var activa = await _session.LoadAsync<InspeccionAbiertaPorEquipoView>(cmd.EquipoId, ct);
+        if (activa is not null)
+        {
+            return new IniciarInspeccionResult(
+                InspeccionId: activa.InspeccionId,
+                RedirigeAExistente: true,
+                Version: 1,
+                Mensaje: MensajeActiva);
+        }
+
+        // PRE-3 — el equipo debe existir en el catálogo local.
+        var equipo = await _session.LoadAsync<EquipoLocal>(cmd.EquipoId, ct);
+        if (equipo is null)
+        {
+            throw new EquipoNoEncontradoException(
+                $"Equipo {cmd.EquipoId} no encontrado en catálogo local. Refresca catálogos.");
+        }
+
+        // PRE-handler-1 — la rutina referenciada por el equipo debe estar sincronizada.
+        RutinaTecnicaLocal? rutina = null;
+        if (equipo.RutinaTecnicaId is not null)
+        {
+            rutina = await _session.LoadAsync<RutinaTecnicaLocal>(equipo.RutinaTecnicaId.Value, ct);
+        }
+
+        if (rutina is null)
+        {
+            throw new RutinaTecnicaNoSincronizadaException(
+                "Rutina técnica referenciada por el equipo no está sincronizada — refresca catálogos.");
+        }
+
+        // Delegar PRE-2, PRE-4..PRE-7, I-I2, I-I3 al método de decisión del aggregate.
+        var ahora = _time.GetUtcNow();
+        var eventos = Inspeccion.Iniciar(cmd, claims, equipo, rutina, ahora);
+
+        // Append al stream y view en un único SaveChangesAsync (regla CLAUDE.md atomicidad).
+        _session.Events.StartStream<Inspeccion>(cmd.InspeccionId, eventos);
+
+        var view = new InspeccionAbiertaPorEquipoView(
+            Id: cmd.EquipoId,
+            InspeccionId: cmd.InspeccionId,
+            TecnicoIniciador: claims.TecnicoIniciador,
+            IniciadaEn: ahora,
+            ProyectoId: cmd.ProyectoId);
+
+        // Insert puro (sin ON CONFLICT): si hay race condition, Postgres lanza 23505.
+        _session.Insert(view);
+
+        try
+        {
+            await _session.SaveChangesAsync(ct);
+        }
+        catch (MartenCommandException ex)
+            when (ex.InnerException is PostgresException pg && pg.SqlState == "23505")
+        {
+            // I-I1 defensa dura: el equipo ya tenía inspección activa (race ganada por otro handler).
+            // Relee la proyección para obtener el InspeccionId del ganador.
+            await using var lecturaRace = _session.DocumentStore.QuerySession();
+            var activaRace = await lecturaRace.LoadAsync<InspeccionAbiertaPorEquipoView>(cmd.EquipoId, ct);
+            return new IniciarInspeccionResult(
+                InspeccionId: activaRace?.InspeccionId ?? cmd.InspeccionId,
+                RedirigeAExistente: true,
+                Version: 1,
+                Mensaje: MensajeActiva);
+        }
+
+        return new IniciarInspeccionResult(
+            InspeccionId: cmd.InspeccionId,
+            RedirigeAExistente: false,
+            Version: 1,
+            Mensaje: null);
     }
 }

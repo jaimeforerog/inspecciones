@@ -1,3 +1,5 @@
+using Inspecciones.Api.Inspecciones;
+using Inspecciones.Application.Inspecciones;
 using Marten;
 using Oakton;
 using Wolverine;
@@ -75,6 +77,11 @@ if (builder.Environment.IsDevelopment())
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(TimeProvider.System);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Handlers de comandos — registrados como Scoped para recibir IDocumentSession.
+// ─────────────────────────────────────────────────────────────────────────────
+builder.Services.AddScoped<IniciarInspeccionHandler>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -84,6 +91,9 @@ if (app.Environment.IsDevelopment())
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
+
+// Endpoints de slices — registrados por feature folder.
+app.MapInspeccionesEndpoints();
 
 // Endpoint informativo en root — útil para diagnóstico rápido.
 app.MapGet("/", () => Results.Ok(new

@@ -53,6 +53,51 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** el primer slice que agregue un segundo `case` en `AplicarEvento` (ej. `RegistrarHallazgo`, `FirmarInspeccion`). El `red` de ese slice lo resuelve.
 **Notas:** ningún cambio en 1a. La rama defensiva opera correctamente; solo falta el test que la documente.
 
+### #13 — Migrar `InspeccionAbiertaPorEquipoView` a `MultiStreamProjection` inline 🟢
+
+**Origen:** slice 1b refactorer — candidato §4.1 green-notes
+**Fecha:** 2026-05-06
+**Tipo:** deuda técnica · Marten
+**Descripción:** El handler escribe la view con `session.Insert(view)` directamente en lugar de usar `MultiStreamProjection<InspeccionAbiertaPorEquipoView, int>` registrada `Inline` como describe la spec §8.1. La causa es que el `PostgresFixture` de `Application.Tests` no registra proyecciones en su `StoreOptions`. El refactor requiere: (1) registrar la proyección en `StoreOptions` del fixture, (2) registrar la proyección en `Program.cs`, (3) quitar el `_session.Insert(view)` del handler. El beneficio principal es que los eventos terminales (`InspeccionFirmada_v1`, `InspeccionCancelada_v1`) podrán hacer `DeleteEvent<T>` centralizado en la proyección sin que cada handler recuerde borrar la fila.
+**Disparador para abrir slice:** el primer slice que maneje `InspeccionFirmada_v1` o `InspeccionCancelada_v1` — ese slice necesita eliminar la fila de `InspeccionAbiertaPorEquipoView` y es el momento natural de migrar a `MultiStreamProjection`.
+**Notas:** hasta entonces, `session.Insert(view)` en el handler es correcto y atómico. No es deuda bloqueante.
+
+### #14 — Claims reales desde JWT cuando ADR-002 se resuelva 🟢
+
+**Origen:** slice 1b refactorer — candidato §4.2 green-notes
+**Fecha:** 2026-05-06
+**Tipo:** deuda técnica · seguridad · ADR-002
+**Descripción:** El endpoint `POST /api/v1/inspecciones` construye un `ClaimsTecnico` mock fijo (`TecnicoIniciador="rmartinez"`, `ProyectosAsignados={request.ProyectoId}`, `TieneCapabilityEjecutarInspeccion=true`). Cuando ADR-002 se resuelva (mecanismo de inyección de claims del host PWA), reemplazar por extracción desde `HttpContext.User` o claims del middleware del host.
+**Disparador para abrir slice:** decisión sobre ADR-002 (mecanismo concreto de identidad del host PWA confirmado con Jaime/IT Seguridad) + slice de integración del módulo al host.
+**Notas:** el mock es correcto para el MVP en aislamiento; no bloquea ningún slice hasta integración al host.
+
+### #15 — Wolverine envelope dedup real para `X-Client-Command-Id` (ADR-008) 🟢
+
+**Origen:** slice 1b refactorer — candidato §4.4 green-notes
+**Fecha:** 2026-05-06
+**Tipo:** deuda técnica · ADR-008 · Wolverine
+**Descripción:** El endpoint valida que el header `X-Client-Command-Id` esté presente pero no lo propaga como `MessageId` Wolverine. La idempotencia real de ADR-008 §9.16 requiere que el endpoint use `IMessageBus.InvokeAsync` con el header mapeado al `MessageId` del envelope, para que Wolverine detecte replays y devuelva la respuesta cacheada. Actualmente la idempotencia funciona por I-I1 (equipo ya tiene activa → `RedirigeAExistente=true`) pero no por dedup de envelope, por lo que el test §6.4 pasa por un mecanismo diferente al descrito en la spec §7.
+**Disparador para abrir slice:** emerge un test o requerimiento que distinga entre "replay idempotente de envelope" y "I-I1 shortcut" en la respuesta (p. ej. el cliente necesita saber si la inspección `W` es nueva o es la activa del equipo para distinguir UX).
+**Notas:** vinculado a ADR-008. Requiere que el pipeline HTTP esté configurado para Wolverine como mediator (no solo como outbox).
+
+### #17 — Docstring del test §6.4 afirma mecanismo Wolverine dedup no implementado 🟢
+
+**Origen:** slice 1b review hallazgo #3
+**Fecha:** 2026-05-06
+**Tipo:** deuda técnica · test · ADR-008
+**Descripción:** El test `POST_inspecciones_replay_con_mismo_ClientCommandId_no_duplica_evento_idempotencia_ADR_008` documenta en su body que verifica "ADR-008 §9.16 — Wolverine replay devuelve 200 con la respuesta cacheada del envelope". El mecanismo real es I-I1: el segundo request ve la fila en `InspeccionAbiertaPorEquipoView` y devuelve `RedirigeAExistente=true` + `200 OK`. El resultado observable es correcto (no hay duplicación de evento, el cliente recibe `200 OK` con el `InspeccionId` original), pero el docstring documenta un mecanismo que no existe en el código. Cuando se implemente el dedup real de Wolverine (followup #15), el green de ese slice debe: (a) corregir el docstring del test para reflejar el mecanismo real, (b) asegurarse de que el test siga pasando por el mecanismo correcto y no por I-I1 como colateral.
+**Disparador para abrir slice:** cierre de followup #15 (implementación de Wolverine envelope dedup real).
+**Notas:** el test está en `tests/Inspecciones.Api.Tests/IniciarInspeccionEndpointTests.cs:122-165`.
+
+### #16 — `Version` real en `IniciarInspeccionResult` para el caso `RedirigeAExistente=true` 🟢
+
+**Origen:** slice 1b refactorer — candidato §4.6 green-notes
+**Fecha:** 2026-05-06
+**Tipo:** deuda técnica · correctitud
+**Descripción:** `IniciarInspeccionResult.Version` retorna siempre `1`, incluso en el path `RedirigeAExistente=true` donde la versión real del stream existente puede ser mayor. La versión real requeriría consultar `session.Events.FetchStreamStateAsync(existente.InspeccionId)` tras el shortcut de I-I1. Ningún test actual verifica `Version > 1` en el path de redirige — corregirlo ahora añadiría consulta extra sin cobertura.
+**Disparador para abrir slice:** emerge un test o cliente que necesite conocer la versión actual del stream para optimistic concurrency en el path `RedirigeAExistente=true`.
+**Notas:** valor `1` en ese path es técnicamente incorrecto pero inofensivo para los consumidores actuales (el frontend abre la inspección existente por `InspeccionId`, no necesita la versión para ese flujo).
+
 ### #9 — Prefetch-by-proyecto vs sync completo de catálogos grandes 🟡 disparador alcanzado (piloto grande)
 
 **Origen:** conversación de diseño 2026-05-05 sobre eficiencia de la sincronización de catálogos. Inicialmente sobre reemplazar el sync nocturno por cache on-demand puro. **Resuelto parcialmente 2026-05-05 (ADR-004 canonical):** el cron nocturno se eliminó en favor de sync on-app-open con `If-None-Match`. Este followup queda activo solo para evaluar el patrón **prefetch-by-proyecto + lookup on-demand** para catálogos grandes (insumos ~190K) — el sync on-app-open delta sigue trayendo el catálogo completo en la primera carga post-eviction iOS.
