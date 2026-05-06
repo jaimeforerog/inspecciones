@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="WolverineFx.Http" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
