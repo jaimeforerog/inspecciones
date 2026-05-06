@@ -47,7 +47,7 @@ public sealed class ActualizarHallazgoTests
         evt.TipoFallaId.Should().Be(3);
         evt.CausaFallaId.Should().Be(12);
         evt.ActualizadoEn.Should().Be(Ahora);
-        evt.TecnicoId.Should().Be("ana.gomez");
+        evt.EmitidoPor.Should().Be("ana.gomez");
     }
 
     // ── §6.2 — Happy path: downgrade a RequiereSeguimiento ────────────────
@@ -102,7 +102,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: null,
             ObservacionCampo: null,
             UbicacionGps: nuevaUbicacion,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         var resultado = CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 
@@ -208,7 +208,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: null,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         // Nota al equipo green: para validar PRE-B2 el stream necesita un evento
         // que marque el hallazgo como eliminado (HallazgoEliminado_v1 del slice
@@ -240,7 +240,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: null,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         var act = () => CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 
@@ -266,7 +266,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: 12,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         var act = () => CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 
@@ -292,7 +292,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: null,        // falta CausaFallaId
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         var act = () => CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 
@@ -318,7 +318,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: 12,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         var act = () => CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 
@@ -344,7 +344,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: null,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         var act = () => CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 
@@ -370,7 +370,7 @@ public sealed class ActualizarHallazgoTests
             CausaFallaId: null,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: "ana.gomez");
+            EmitidoPor: "ana.gomez");
 
         var act = () => CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 

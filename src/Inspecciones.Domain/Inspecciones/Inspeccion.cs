@@ -372,7 +372,7 @@ public sealed class Inspeccion
             ObservacionCampo: cmd.ObservacionCampo,
             UbicacionGps: cmd.UbicacionGps,
             ActualizadoEn: ahora,
-            TecnicoId: cmd.TecnicoId);
+            EmitidoPor: cmd.EmitidoPor);
 
         return new object[] { evento };
     }
@@ -399,6 +399,6 @@ public sealed class Inspeccion
             CausaFallaId = e.CausaFallaId,
             UbicacionGps = e.UbicacionGps,
         };
-        _contribuyentes.Add(e.TecnicoId);
+        _contribuyentes.Add(e.EmitidoPor);
     }
 }

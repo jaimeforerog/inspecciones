@@ -36,7 +36,7 @@ public sealed record ActualizarHallazgo(
     int?             CausaFallaId,            // obligatorio si AccionRequerida = RequiereIntervencion — PRE-D (I-H4)
     string?          ObservacionCampo,         // texto libre opcional — siempre aceptado
     UbicacionGps?    UbicacionGps,            // opcional — técnico puede recapturar GPS
-    string           TecnicoId               // extraído del JWT por la capa API; el dominio lo recibe como parámetro
+    string           EmitidoPor              // extraído del JWT por la capa API; nombre canonical del modelo §I2b — agrega a _contribuyentes
 ) : ICommand;
 ```
 
@@ -67,7 +67,7 @@ public sealed record HallazgoActualizado_v1(
     string?          ObservacionCampo,
     UbicacionGps?    UbicacionGps,
     DateTimeOffset   ActualizadoEn,           // TimeProvider.GetUtcNow() en el handler — no editable por el cliente
-    string           TecnicoId               // claim inyectado por el host PWA
+    string           EmitidoPor              // claim opaco del JWT (host PWA) — alineado con §I2b: Apply lo agrega a _contribuyentes
 );
 ```
 
@@ -115,7 +115,7 @@ Las precondiciones PRE-A y PRE-B viven en el **método de decisión del aggregat
 - `Estado=EnEjecucion`, `_hallazgos[G1].Eliminado=false`.
 
 **When**
-- Comando `ActualizarHallazgo(InspeccionId=X, HallazgoId=G1, NovedadTecnica="Fuga confirmada en sello hidráulico — revisión detallada", AccionRequerida=RequiereIntervencion, AccionCorrectiva="Reemplazar sello hidráulico", TipoFallaId=3, CausaFallaId=12, ObservacionCampo="Fuga visible con luz UV", UbicacionGps=UbicacionGps(4.711,-74.072,8.5,now), TecnicoId="rmartinez")`.
+- Comando `ActualizarHallazgo(InspeccionId=X, HallazgoId=G1, NovedadTecnica="Fuga confirmada en sello hidráulico — revisión detallada", AccionRequerida=RequiereIntervencion, AccionCorrectiva="Reemplazar sello hidráulico", TipoFallaId=3, CausaFallaId=12, ObservacionCampo="Fuga visible con luz UV", UbicacionGps=UbicacionGps(4.711,-74.072,8.5,now), EmitidoPor="rmartinez")`.
 
 **Then**
 - Se emite exactamente un `HallazgoActualizado_v1` con `HallazgoId=G1`, `NovedadTecnica` y `AccionCorrectiva` como en el comando, `TipoFallaId=3`, `CausaFallaId=12`, `ActualizadoEn=DateTimeOffset.UtcNow(TimeProvider)`.
@@ -129,7 +129,7 @@ Las precondiciones PRE-A y PRE-B viven en el **método de decisión del aggregat
 - `Estado=EnEjecucion`, `_hallazgos[G2].Eliminado=false`.
 
 **When**
-- Comando `ActualizarHallazgo(InspeccionId=X, HallazgoId=G2, NovedadTecnica="Desgaste menor, solo seguimiento", AccionRequerida=RequiereSeguimiento, AccionCorrectiva=null, TipoFallaId=null, CausaFallaId=null, ObservacionCampo=null, UbicacionGps=null, TecnicoId="rmartinez")`.
+- Comando `ActualizarHallazgo(InspeccionId=X, HallazgoId=G2, NovedadTecnica="Desgaste menor, solo seguimiento", AccionRequerida=RequiereSeguimiento, AccionCorrectiva=null, TipoFallaId=null, CausaFallaId=null, ObservacionCampo=null, UbicacionGps=null, EmitidoPor="rmartinez")`.
 
 **Then**
 - Se emite `HallazgoActualizado_v1` con `AccionRequerida=RequiereSeguimiento`, `AccionCorrectiva=null`, `TipoFallaId=null`, `CausaFallaId=null`.
@@ -143,7 +143,7 @@ Las precondiciones PRE-A y PRE-B viven en el **método de decisión del aggregat
 - `Estado=EnEjecucion`.
 
 **When**
-- Comando `ActualizarHallazgo(InspeccionId=X, HallazgoId=G3, NovedadTecnica="Desgaste superficial en manguera", AccionRequerida=NoRequiereIntervencion, AccionCorrectiva=null, TipoFallaId=null, CausaFallaId=null, ObservacionCampo=null, UbicacionGps=UbicacionGps(4.712,-74.071,5.0,now), TecnicoId="rmartinez")`.
+- Comando `ActualizarHallazgo(InspeccionId=X, HallazgoId=G3, NovedadTecnica="Desgaste superficial en manguera", AccionRequerida=NoRequiereIntervencion, AccionCorrectiva=null, TipoFallaId=null, CausaFallaId=null, ObservacionCampo=null, UbicacionGps=UbicacionGps(4.712,-74.071,5.0,now), EmitidoPor="rmartinez")`.
 
 **Then**
 - Se emite `HallazgoActualizado_v1` con `UbicacionGps` poblado.
@@ -299,7 +299,7 @@ Las precondiciones PRE-A y PRE-B viven en el **método de decisión del aggregat
 - Lista de eventos en orden causal:
   1. `InspeccionIniciada_v1(InspeccionId=X, EquipoId=4521, Estado→EnEjecucion)`
   2. `HallazgoRegistrado_v1(HallazgoId=G1, Origen=Manual, ParteEquipoId=77, AccionRequerida=NoRequiereIntervencion, TipoFallaId=null, CausaFallaId=null)`
-  3. `HallazgoActualizado_v1(HallazgoId=G1, NovedadTecnica="Descripción corregida", AccionRequerida=RequiereIntervencion, AccionCorrectiva="Reemplazar sello", TipoFallaId=3, CausaFallaId=12, ActualizadoEn=T1, TecnicoId="rmartinez")`
+  3. `HallazgoActualizado_v1(HallazgoId=G1, NovedadTecnica="Descripción corregida", AccionRequerida=RequiereIntervencion, AccionCorrectiva="Reemplazar sello", TipoFallaId=3, CausaFallaId=12, ActualizadoEn=T1, EmitidoPor="rmartinez")`
 
 **When**
 - Se reproyectan los tres eventos en orden sobre `Inspeccion.Reconstruir(events)`.
@@ -339,7 +339,7 @@ Si el técnico hace dos ediciones distintas sobre el mismo `HallazgoId` con dos 
 ### 8.1 `DetalleInspeccionView` (§15.12.1) — actualización del hallazgo editado
 
 `DetalleInspeccionView` consume `HallazgoActualizado_v1`. Al recibir el evento, la proyección reemplaza los campos editables del hallazgo con `HallazgoId` correspondiente:
-- `NovedadTecnica`, `AccionRequerida`, `AccionCorrectiva`, `TipoFallaId`, `CausaFallaId`, `ObservacionCampo`, `UbicacionGps`, `ActualizadoEn`, `TecnicoId`.
+- `NovedadTecnica`, `AccionRequerida`, `AccionCorrectiva`, `TipoFallaId`, `CausaFallaId`, `ObservacionCampo`, `UbicacionGps`, `ActualizadoEn`, `EmitidoPor`.
 - Los campos inmutables (`Origen`, `ParteEquipoId`, `NovedadPreopOrigenId`, `SeguimientoOrigenId`) no se tocan en el handler de proyección.
 
 La proyección `DetalleInspeccionView` no está implementada aún — el slice documenta qué campos actualiza cuando se implemente (roadmap paso 3.45).
@@ -391,7 +391,7 @@ El verbo `PUT` es coherente con la semántica de actualización completa de los 
 }
 ```
 
-> `InspeccionId` y `HallazgoId` viajan en el path. `TecnicoId` se extrae del JWT en la capa API (ADR-002 tentativo — mock `const string tecnicoId = "rmartinez"` consistente con slices 1b y 1c hasta que ADR-002 esté resuelto — followup #14).
+> `InspeccionId` y `HallazgoId` viajan en el path. `EmitidoPor` se extrae del JWT en la capa API (ADR-002 tentativo — mock `const string tecnicoId = "rmartinez"` consistente con slices 1b y 1c hasta que ADR-002 esté resuelto — followup #14). El claim local en el endpoint mantiene el nombre `tecnicoId` (es el `tecnicoId` opaco del JWT); al construir el comando se mapea al campo canonical `EmitidoPor` (§I2b del modelo).
 
 **Response `200 OK` (happy path):**
 

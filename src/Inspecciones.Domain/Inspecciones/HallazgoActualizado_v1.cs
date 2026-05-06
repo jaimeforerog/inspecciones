@@ -19,4 +19,4 @@ public sealed record HallazgoActualizado_v1(
     string?          ObservacionCampo,
     UbicacionGps?    UbicacionGps,
     DateTimeOffset   ActualizadoEn,
-    string           TecnicoId);
+    string           EmitidoPor);

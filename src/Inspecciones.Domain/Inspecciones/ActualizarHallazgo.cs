@@ -18,4 +18,4 @@ public sealed record ActualizarHallazgo(
     int?             CausaFallaId,
     string?          ObservacionCampo,
     UbicacionGps?    UbicacionGps,
-    string           TecnicoId);
+    string           EmitidoPor);

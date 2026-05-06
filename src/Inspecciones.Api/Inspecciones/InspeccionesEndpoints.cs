@@ -202,7 +202,7 @@ public static class InspeccionesEndpoints
                     CausaFallaId: request.CausaFallaId,
                     ObservacionCampo: request.ObservacionCampo,
                     UbicacionGps: request.UbicacionGps,
-                    TecnicoId: tecnicoId);
+                    EmitidoPor: tecnicoId);
 
                 try
                 {
