@@ -56,3 +56,18 @@ public sealed class NovedadTecnicaVaciaException(string mensaje)
 /// <summary>PRE-10 (aggregate) — <c>Origen</c> no soportado en este slice (Seguimiento, Monitoreo).</summary>
 public sealed class OrigenNoSoportadoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1d — ActualizarHallazgo ────────────────────────────────────────────
+
+/// <summary>PRE-B1 (aggregate) — el <c>HallazgoId</c> no existe en el stream.</summary>
+public sealed class HallazgoNoEncontradoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-B2 (aggregate) — el hallazgo existe pero fue eliminado (soft delete).</summary>
+public sealed class HallazgoEliminadoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-E (aggregate) — campos de intervención (TipoFallaId, CausaFallaId, AccionCorrectiva)
+/// poblados cuando <c>AccionRequerida != RequiereIntervencion</c>.</summary>
+public sealed class CamposIntervencionNoPermitidosException(string mensaje)
+    : InspeccionDomainException(mensaje);

@@ -220,6 +220,9 @@ public sealed class Inspeccion
             case InspeccionCancelada_v1 e:
                 Apply(e);
                 break;
+            case HallazgoActualizado_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -261,9 +264,12 @@ public sealed class Inspeccion
             Origen: e.Origen,
             ParteEquipoId: e.ParteEquipoId,
             NovedadPreopOrigenId: e.NovedadPreopOrigenId,
+            NovedadTecnica: e.NovedadTecnica,
             AccionRequerida: e.AccionRequerida,
+            AccionCorrectiva: e.AccionCorrectiva,
             TipoFallaId: e.TipoFallaId,
             CausaFallaId: e.CausaFallaId,
+            UbicacionGps: e.Ubicacion,
             Eliminado: false));
         _contribuyentes.Add(e.EmitidoPor);
     }
@@ -291,5 +297,108 @@ public sealed class Inspeccion
         {
             _contribuyentes.Add(e.CanceladoPor);
         }
+    }
+
+    // ── Slice 1d — ActualizarHallazgo ────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1d. Valida las pre-condiciones en el orden
+    /// definido en spec §4 y emite <see cref="HallazgoActualizado_v1"/>.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> ActualizarHallazgo(ActualizarHallazgo cmd, DateTimeOffset ahora)
+    {
+        // PRE-A: estado debe ser EnEjecucion (I-H7).
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden actualizar hallazgos en estado EnEjecucion.");
+        }
+
+        // PRE-B1: el hallazgo debe existir en el stream.
+        var hallazgo = _hallazgos.Find(h => h.HallazgoId == cmd.HallazgoId);
+        if (hallazgo is null)
+        {
+            throw new HallazgoNoEncontradoException(
+                $"El hallazgo {cmd.HallazgoId} no existe en la inspección {InspeccionId}.");
+        }
+
+        // PRE-B2: el hallazgo no debe estar eliminado.
+        if (hallazgo.Eliminado)
+        {
+            throw new HallazgoEliminadoException(
+                $"El hallazgo {cmd.HallazgoId} está eliminado y no puede actualizarse.");
+        }
+
+        // PRE-C: NovedadTecnica no puede ser vacía.
+        if (string.IsNullOrWhiteSpace(cmd.NovedadTecnica))
+        {
+            throw new NovedadTecnicaVaciaException(
+                "NovedadTecnica es obligatoria y no puede estar vacía.");
+        }
+
+        // PRE-E: campos de intervención no permitidos cuando AccionRequerida != RequiereIntervencion.
+        if (cmd.AccionRequerida != AccionRequerida.RequiereIntervencion
+            && (cmd.AccionCorrectiva is not null || cmd.TipoFallaId is not null || cmd.CausaFallaId is not null))
+        {
+            throw new CamposIntervencionNoPermitidosException(
+                $"AccionCorrectiva, TipoFallaId y CausaFallaId solo se permiten cuando AccionRequerida=RequiereIntervencion.");
+        }
+
+        // PRE-D1: RequiereIntervencion exige TipoFallaId y CausaFallaId.
+        if (cmd.AccionRequerida == AccionRequerida.RequiereIntervencion
+            && (cmd.TipoFallaId is null || cmd.CausaFallaId is null))
+        {
+            throw new TipoYCausaFallaRequeridosException(
+                "TipoFallaId y CausaFallaId son obligatorios cuando AccionRequerida=RequiereIntervencion.");
+        }
+
+        // PRE-D2: RequiereIntervencion exige AccionCorrectiva no vacía.
+        if (cmd.AccionRequerida == AccionRequerida.RequiereIntervencion
+            && string.IsNullOrWhiteSpace(cmd.AccionCorrectiva))
+        {
+            throw new AccionCorrectivaRequeridaException(
+                "AccionCorrectiva es obligatoria cuando AccionRequerida=RequiereIntervencion.");
+        }
+
+        var evento = new HallazgoActualizado_v1(
+            InspeccionId: InspeccionId,
+            HallazgoId: cmd.HallazgoId,
+            NovedadTecnica: cmd.NovedadTecnica,
+            AccionRequerida: cmd.AccionRequerida,
+            AccionCorrectiva: cmd.AccionCorrectiva,
+            TipoFallaId: cmd.TipoFallaId,
+            CausaFallaId: cmd.CausaFallaId,
+            ObservacionCampo: cmd.ObservacionCampo,
+            UbicacionGps: cmd.UbicacionGps,
+            ActualizadoEn: ahora,
+            TecnicoId: cmd.TecnicoId);
+
+        return new object[] { evento };
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="HallazgoActualizado_v1"/>: actualiza
+    /// los campos mutables del hallazgo en la lista. Sin validaciones — solo
+    /// mutación de estado. Las pre-condiciones viven en <see cref="ActualizarHallazgo"/>.
+    /// </summary>
+    public void Apply(HallazgoActualizado_v1 e)
+    {
+        var idx = _hallazgos.FindIndex(h => h.HallazgoId == e.HallazgoId);
+        if (idx < 0)
+        {
+            return; // rebuild con gaps — puro, no lanza.
+        }
+
+        _hallazgos[idx] = _hallazgos[idx] with
+        {
+            NovedadTecnica = e.NovedadTecnica,
+            AccionRequerida = e.AccionRequerida,
+            AccionCorrectiva = e.AccionCorrectiva,
+            TipoFallaId = e.TipoFallaId,
+            CausaFallaId = e.CausaFallaId,
+            UbicacionGps = e.UbicacionGps,
+        };
+        _contribuyentes.Add(e.TecnicoId);
     }
 }

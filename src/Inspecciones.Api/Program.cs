@@ -82,6 +82,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<IniciarInspeccionHandler>();
 builder.Services.AddScoped<RegistrarHallazgoHandler>();
+builder.Services.AddScoped<ActualizarHallazgoHandler>();
 
 var app = builder.Build();
 

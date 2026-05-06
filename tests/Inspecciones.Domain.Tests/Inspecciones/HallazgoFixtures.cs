@@ -13,6 +13,10 @@ internal static class HallazgoFixtures
 {
     public static readonly Guid HallazgoG1 = new("0193b4f7-1234-7abc-8def-000000000011");
     public static readonly Guid HallazgoG2 = new("0193b4f7-1234-7abc-8def-000000000022");
+    public static readonly Guid HallazgoG3 = new("0193b4f7-1234-7abc-8def-000000000033");
+    public static readonly Guid HallazgoG4 = new("0193b4f7-1234-7abc-8def-000000000044");
+    public static readonly Guid HallazgoG5 = new("0193b4f7-1234-7abc-8def-000000000055");
+    public static readonly Guid HallazgoG6 = new("0193b4f7-1234-7abc-8def-000000000066");
 
     // ── Streams de Given ──────────────────────────────────────────────────
 
@@ -169,6 +173,86 @@ internal static class HallazgoFixtures
             ObservacionCampo: null,
             Ubicacion: null,
             EmitidoPor: "ana.gomez");
+
+    // ── Slice 1d — Fixtures de ActualizarHallazgo ────────────────────────
+
+    /// <summary>
+    /// Stream con inspección iniciada y un hallazgo <see cref="HallazgoG1"/> registrado
+    /// con AccionRequerida=NoRequiereIntervencion. Estado de partida para los tests
+    /// de happy path del slice 1d.
+    /// </summary>
+    public static object[] StreamConHallazgoRegistrado(
+        Guid? hallazgoId = null,
+        AccionRequerida accionRequerida = AccionRequerida.NoRequiereIntervencion,
+        int? tipoFallaId = null,
+        int? causaFallaId = null,
+        string? accionCorrectiva = null) =>
+        [EventoInspeccionIniciada(),
+         HallazgoRegistradoEjemplo(
+             hallazgoId: hallazgoId ?? HallazgoG1,
+             accionRequerida: accionRequerida,
+             tipoFallaId: tipoFallaId,
+             causaFallaId: causaFallaId)];
+
+    /// <summary>
+    /// Stream con inspección iniciada y hallazgo <see cref="HallazgoG1"/> eliminado
+    /// (soft delete). Para test PRE-B2.
+    /// </summary>
+    public static object[] StreamConHallazgoEliminado() =>
+        throw new NotImplementedException("Stub — se implementa cuando exista EliminarHallazgo_v1");
+
+    /// <summary>Comando happy path de actualización — upgrade a RequiereIntervencion.</summary>
+    public static ActualizarHallazgo ComandoActualizarConIntervencion(
+        Guid? hallazgoId = null,
+        string novedadTecnica = "Fuga confirmada en sello hidráulico — requiere intervención",
+        string? accionCorrectiva = "Reemplazar sello hidráulico y rellenar aceite",
+        int? tipoFallaId = 3,
+        int? causaFallaId = 12,
+        string? observacionCampo = null,
+        UbicacionGps? ubicacionGps = null,
+        string tecnicoId = "ana.gomez") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            NovedadTecnica: novedadTecnica,
+            AccionRequerida: AccionRequerida.RequiereIntervencion,
+            AccionCorrectiva: accionCorrectiva,
+            TipoFallaId: tipoFallaId,
+            CausaFallaId: causaFallaId,
+            ObservacionCampo: observacionCampo,
+            UbicacionGps: ubicacionGps,
+            TecnicoId: tecnicoId);
+
+    /// <summary>Comando de actualización — downgrade a RequiereSeguimiento (limpia campos intervención).</summary>
+    public static ActualizarHallazgo ComandoActualizarConSeguimiento(
+        Guid? hallazgoId = null,
+        string novedadTecnica = "Desgaste progresivo, requiere monitoreo continuo",
+        string tecnicoId = "ana.gomez") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            NovedadTecnica: novedadTecnica,
+            AccionRequerida: AccionRequerida.RequiereSeguimiento,
+            AccionCorrectiva: null,
+            TipoFallaId: null,
+            CausaFallaId: null,
+            ObservacionCampo: null,
+            UbicacionGps: null,
+            TecnicoId: tecnicoId);
+
+    /// <summary>Comando de actualización — solo texto, mantiene AccionRequerida=NoRequiereIntervencion.</summary>
+    public static ActualizarHallazgo ComandoActualizarSoloTexto(
+        Guid? hallazgoId = null,
+        string novedadTecnica = "Manguera con desgaste leve — actualización de descripción",
+        string tecnicoId = "ana.gomez") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            NovedadTecnica: novedadTecnica,
+            AccionRequerida: AccionRequerida.NoRequiereIntervencion,
+            AccionCorrectiva: null,
+            TipoFallaId: null,
+            CausaFallaId: null,
+            ObservacionCampo: null,
+            UbicacionGps: null,
+            TecnicoId: tecnicoId);
 
     // ── Eventos de ejemplo para Given ────────────────────────────────────
 

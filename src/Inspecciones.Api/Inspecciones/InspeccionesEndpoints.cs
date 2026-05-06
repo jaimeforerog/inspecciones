@@ -169,6 +169,78 @@ public static class InspeccionesEndpoints
             })
            .WithName("RegistrarHallazgo");
 
+        // ── Slice 1d — ActualizarHallazgo ───────────────────────────────────
+        app.MapPut("/api/v1/inspecciones/{inspeccionId:guid}/hallazgos/{hallazgoId:guid}", async (
+                Guid inspeccionId,
+                Guid hallazgoId,
+                ActualizarHallazgoRequest request,
+                ActualizarHallazgoHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+
+                var cmd = new ActualizarHallazgo(
+                    InspeccionId: inspeccionId,
+                    HallazgoId: hallazgoId,
+                    NovedadTecnica: request.NovedadTecnica,
+                    AccionRequerida: request.AccionRequerida,
+                    AccionCorrectiva: request.AccionCorrectiva,
+                    TipoFallaId: request.TipoFallaId,
+                    CausaFallaId: request.CausaFallaId,
+                    ObservacionCampo: request.ObservacionCampo,
+                    UbicacionGps: request.UbicacionGps,
+                    TecnicoId: tecnicoId);
+
+                try
+                {
+                    var resultado = await handler.ManejarAsync(cmd, ct);
+
+                    var response = new ActualizarHallazgoResponse(
+                        HallazgoId: resultado.HallazgoId,
+                        InspeccionId: resultado.InspeccionId,
+                        AccionRequerida: resultado.AccionRequerida,
+                        ActualizadoEn: resultado.ActualizadoEn);
+
+                    return Results.Ok(response);
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-F", mensaje = ex.Message });
+                }
+                catch (HallazgoNoEncontradoException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-B1", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoEnEjecucionException           => "PRE-A",
+                        HallazgoEliminadoException                 => "PRE-B2",
+                        NovedadTecnicaVaciaException               => "PRE-C",
+                        CamposIntervencionNoPermitidosException    => "PRE-E",
+                        TipoYCausaFallaRequeridosException         => "PRE-D1",
+                        AccionCorrectivaRequeridaException         => "PRE-D2",
+                        _                                          => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("ActualizarHallazgo");
+
         return app;
     }
 }
