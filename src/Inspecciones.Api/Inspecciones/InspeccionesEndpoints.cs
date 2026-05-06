@@ -241,6 +241,63 @@ public static class InspeccionesEndpoints
             })
            .WithName("ActualizarHallazgo");
 
+        // ── Slice 1e — EliminarHallazgo ─────────────────────────────────────
+        app.MapDelete("/api/v1/inspecciones/{inspeccionId:guid}/hallazgos/{hallazgoId:guid}", async (
+                Guid inspeccionId,
+                Guid hallazgoId,
+                EliminarHallazgoRequest request,
+                EliminarHallazgoHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+
+                var cmd = new EliminarHallazgo(
+                    InspeccionId: inspeccionId,
+                    HallazgoId: hallazgoId,
+                    Motivo: request.Motivo,
+                    TecnicoId: tecnicoId);
+
+                try
+                {
+                    await handler.ManejarAsync(cmd, ct);
+                    return Results.NoContent();
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-F", mensaje = ex.Message });
+                }
+                catch (HallazgoNoEncontradoException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-B1", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoEnEjecucionException       => "I-H7",
+                        HallazgoEliminadoException             => "PRE-B2-ELIMINADO",
+                        MotivoEliminacionVacioException        => "PRE-C",
+                        HallazgoTieneHijosActivosException     => "I-H9",
+                        _                                      => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("EliminarHallazgo");
+
         return app;
     }
 }

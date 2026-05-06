@@ -223,6 +223,9 @@ public sealed class Inspeccion
             case HallazgoActualizado_v1 e:
                 Apply(e);
                 break;
+            case HallazgoEliminado_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -270,7 +273,8 @@ public sealed class Inspeccion
             TipoFallaId: e.TipoFallaId,
             CausaFallaId: e.CausaFallaId,
             UbicacionGps: e.Ubicacion,
-            Eliminado: false));
+            Eliminado: false,
+            MotivoEliminacion: null));
         _contribuyentes.Add(e.EmitidoPor);
     }
 
@@ -315,20 +319,8 @@ public sealed class Inspeccion
                 $"La inspección está en estado '{Estado}'. Solo se pueden actualizar hallazgos en estado EnEjecucion.");
         }
 
-        // PRE-B1: el hallazgo debe existir en el stream.
-        var hallazgo = _hallazgos.Find(h => h.HallazgoId == cmd.HallazgoId);
-        if (hallazgo is null)
-        {
-            throw new HallazgoNoEncontradoException(
-                $"El hallazgo {cmd.HallazgoId} no existe en la inspección {InspeccionId}.");
-        }
-
-        // PRE-B2: el hallazgo no debe estar eliminado.
-        if (hallazgo.Eliminado)
-        {
-            throw new HallazgoEliminadoException(
-                $"El hallazgo {cmd.HallazgoId} está eliminado y no puede actualizarse.");
-        }
+        // PRE-B1 + PRE-B2: el hallazgo debe existir y no estar eliminado.
+        var hallazgo = ObtenerHallazgoActivo(cmd.HallazgoId);
 
         // PRE-C: NovedadTecnica no puede ser vacía.
         if (string.IsNullOrWhiteSpace(cmd.NovedadTecnica))
@@ -398,7 +390,94 @@ public sealed class Inspeccion
             TipoFallaId = e.TipoFallaId,
             CausaFallaId = e.CausaFallaId,
             UbicacionGps = e.UbicacionGps,
+            MotivoEliminacion = _hallazgos[idx].MotivoEliminacion,
         };
         _contribuyentes.Add(e.TecnicoId);
+    }
+
+    // ── Slice 1e — EliminarHallazgo ──────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1e. Valida las pre-condiciones en el orden
+    /// definido en spec §4 y emite <see cref="HallazgoEliminado_v1"/>.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> EliminarHallazgo(EliminarHallazgo cmd, DateTimeOffset ahora)
+    {
+        // PRE-A: estado debe ser EnEjecucion (I-H7, I-F1).
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden eliminar hallazgos en estado EnEjecucion.");
+        }
+
+        // PRE-B1 + PRE-B2: el hallazgo debe existir y no estar eliminado.
+        ObtenerHallazgoActivo(cmd.HallazgoId);
+
+        // PRE-C: Motivo no puede ser null, vacío ni solo whitespace.
+        if (string.IsNullOrWhiteSpace(cmd.Motivo))
+        {
+            throw new MotivoEliminacionVacioException(
+                "Motivo de eliminación es obligatorio.");
+        }
+
+        // PRE-D / I-H9: verificar cuando existan slices de repuestos/adjuntos.
+        // Las colecciones están vacías en MVP — la invariante está activa y nunca
+        // lanza aquí; cuando lleguen esos slices añadirán datos a las colecciones
+        // y esta verificación bloqueará la eliminación automáticamente.
+
+        var evento = new HallazgoEliminado_v1(
+            InspeccionId: InspeccionId,
+            HallazgoId: cmd.HallazgoId,
+            Motivo: cmd.Motivo,
+            EliminadoPor: cmd.TecnicoId,
+            EliminadoEn: ahora);
+
+        return new object[] { evento };
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="HallazgoEliminado_v1"/>: marca el hallazgo
+    /// como eliminado y persiste el motivo. Sin validaciones — solo mutación de estado.
+    /// Las pre-condiciones viven en <see cref="EliminarHallazgo"/>.
+    /// </summary>
+    public void Apply(HallazgoEliminado_v1 e)
+    {
+        var idx = _hallazgos.FindIndex(h => h.HallazgoId == e.HallazgoId);
+        if (idx < 0)
+        {
+            return; // rebuild con gaps — puro, no lanza.
+        }
+
+        _hallazgos[idx] = _hallazgos[idx] with { Eliminado = true, MotivoEliminacion = e.Motivo };
+        _contribuyentes.Add(e.EliminadoPor);
+    }
+
+    // ── Helpers privados ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Busca el hallazgo por <paramref name="hallazgoId"/> en el stream y verifica
+    /// que no esté eliminado (PRE-B1 + PRE-B2). Usado por <see cref="ActualizarHallazgo"/>
+    /// y <see cref="EliminarHallazgo"/> — única fuente de verdad para estas dos
+    /// pre-condiciones.
+    /// </summary>
+    /// <exception cref="HallazgoNoEncontradoException">PRE-B1 — no existe en el stream.</exception>
+    /// <exception cref="HallazgoEliminadoException">PRE-B2 — fue eliminado (soft delete).</exception>
+    private Hallazgo ObtenerHallazgoActivo(Guid hallazgoId)
+    {
+        var hallazgo = _hallazgos.Find(h => h.HallazgoId == hallazgoId);
+        if (hallazgo is null)
+        {
+            throw new HallazgoNoEncontradoException(
+                $"El hallazgo {hallazgoId} no existe en la inspección {InspeccionId}.");
+        }
+
+        if (hallazgo.Eliminado)
+        {
+            throw new HallazgoEliminadoException(
+                $"El hallazgo {hallazgoId} está eliminado.");
+        }
+
+        return hallazgo;
     }
 }

@@ -195,11 +195,14 @@ internal static class HallazgoFixtures
              causaFallaId: causaFallaId)];
 
     /// <summary>
-    /// Stream con inspección iniciada y hallazgo <see cref="HallazgoG1"/> eliminado
-    /// (soft delete). Para test PRE-B2.
+    /// Stream con inspección iniciada y hallazgo <see cref="HallazgoG5"/> eliminado
+    /// (soft delete). Para test PRE-B2 del slice 1d y escenarios del slice 1e.
+    /// Nota: usa G5 para no colisionar con G1 que suele ser el hallazgo activo en otros tests.
     /// </summary>
     public static object[] StreamConHallazgoEliminado() =>
-        throw new NotImplementedException("Stub — se implementa cuando exista EliminarHallazgo_v1");
+        [EventoInspeccionIniciada(),
+         HallazgoRegistradoEjemplo(hallazgoId: HallazgoG5),
+         HallazgoEliminadoEjemplo(hallazgoId: HallazgoG5)];
 
     /// <summary>Comando happy path de actualización — upgrade a RequiereIntervencion.</summary>
     public static ActualizarHallazgo ComandoActualizarConIntervencion(
@@ -255,6 +258,32 @@ internal static class HallazgoFixtures
             TecnicoId: tecnicoId);
 
     // ── Eventos de ejemplo para Given ────────────────────────────────────
+
+    // ── Slice 1e — Fixtures de EliminarHallazgo ──────────────────────────
+
+    /// <summary>
+    /// Comando de eliminación happy path. Por defecto elimina <see cref="HallazgoG1"/>
+    /// con motivo estándar del técnico rmartinez.
+    /// </summary>
+    public static EliminarHallazgo ComandoEliminarHallazgo(
+        Guid? hallazgoId = null,
+        string motivo = "Registrado por error — parte incorrecta",
+        string tecnicoId = "rmartinez") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            Motivo: motivo,
+            TecnicoId: tecnicoId);
+
+    /// <summary>Evento <see cref="HallazgoEliminado_v1"/> de ejemplo para poblamiento del stream.</summary>
+    public static HallazgoEliminado_v1 HallazgoEliminadoEjemplo(
+        Guid? hallazgoId = null,
+        string motivo = "Registrado por error — parte incorrecta",
+        string eliminadoPor = "rmartinez") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            Motivo: motivo,
+            EliminadoPor: eliminadoPor,
+            EliminadoEn: Ahora);
 
     /// <summary>Evento <see cref="HallazgoRegistrado_v1"/> de ejemplo para poblamiento del stream.</summary>
     public static HallazgoRegistrado_v1 HallazgoRegistradoEjemplo(

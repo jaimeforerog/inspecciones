@@ -2,6 +2,7 @@ using Inspecciones.Api.Inspecciones;
 using Inspecciones.Application.Inspecciones;
 using Marten;
 using Oakton;
+using Scalar.AspNetCore;
 using Wolverine;
 using Wolverine.Marten;
 
@@ -83,12 +84,14 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IniciarInspeccionHandler>();
 builder.Services.AddScoped<RegistrarHallazgoHandler>();
 builder.Services.AddScoped<ActualizarHallazgoHandler>();
+builder.Services.AddScoped<EliminarHallazgoHandler>();
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.MapHealthChecks("/health/live");

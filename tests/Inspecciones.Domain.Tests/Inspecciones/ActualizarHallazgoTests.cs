@@ -181,26 +181,16 @@ public sealed class ActualizarHallazgoTests
 
     // ── §6.7 — PRE-B2: HallazgoId existe pero está eliminado ──────────────
 
-    [Fact(Skip = "Requiere HallazgoEliminado_v1 del slice EliminarHallazgo — reactivar con StreamConHallazgoEliminado()")]
+    [Fact]
     public void ActualizarHallazgo_con_HallazgoId_eliminado_lanza_HallazgoEliminadoException()
     {
-        // Given: stream con inspección iniciada y hallazgo G1 marcado Eliminado=true.
-        // No existe HallazgoEliminado_v1 aún — construimos el estado inyectando
-        // directamente un HallazgoRegistrado_v1 y luego forzamos Eliminado=true
-        // a través de un helper de test que expone el estado interno del agregado.
-        // En este slice rojo no tenemos ese helper; en su lugar construimos el
-        // stream con un evento HallazgoActualizado_v1 ficticio que —cuando green
-        // implemente Apply— marcará el hallazgo como eliminado.
-        // Por ahora el test simplemente verifica que el método de decisión lanza
-        // HallazgoEliminadoException cuando el hallazgo está marcado como eliminado.
-        // El stream se construye con Eliminado forzado vía un subtipo de fixture
-        // que green añadirá. En rojo el test falla porque NotImplementedException
-        // no es HallazgoEliminadoException.
-        var dados = StreamConHallazgoRegistrado(hallazgoId: HallazgoG1);
+        // Given: stream con inspección iniciada y hallazgo G5 marcado Eliminado=true
+        // (via HallazgoEliminado_v1 implementado en slice 1e — followup #21).
+        var dados = StreamConHallazgoEliminado();
 
         var cmd = new ActualizarHallazgo(
             InspeccionId: InspeccionIdNueva,
-            HallazgoId: HallazgoG1,
+            HallazgoId: HallazgoG5,
             NovedadTecnica: "intento de actualizar hallazgo eliminado",
             AccionRequerida: AccionRequerida.NoRequiereIntervencion,
             AccionCorrectiva: null,
@@ -210,15 +200,9 @@ public sealed class ActualizarHallazgoTests
             UbicacionGps: null,
             TecnicoId: "ana.gomez");
 
-        // Nota al equipo green: para validar PRE-B2 el stream necesita un evento
-        // que marque el hallazgo como eliminado (HallazgoEliminado_v1 del slice
-        // EliminarHallazgo). Reemplazar `dados` por StreamConHallazgoEliminado()
-        // cuando ese slice esté implementado. El test rojo falla con
-        // NotImplementedException (stub del método de decisión). La aserción
-        // es intencionalmente HallazgoEliminadoException para que falle en rojo.
         var act = () => CasoDeUso.ActualizarHallazgo(dados, cmd, Ahora);
 
-        // Then: PRE-B2 — en rojo falla porque el stub lanza NotImplementedException
+        // Then: PRE-B2 — el hallazgo G5 está Eliminado=true, lanza HallazgoEliminadoException
         act.Should().Throw<HallazgoEliminadoException>();
     }
 

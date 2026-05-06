@@ -71,3 +71,13 @@ public sealed class HallazgoEliminadoException(string mensaje)
 /// poblados cuando <c>AccionRequerida != RequiereIntervencion</c>.</summary>
 public sealed class CamposIntervencionNoPermitidosException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1e — EliminarHallazgo ──────────────────────────────────────────────
+
+/// <summary>PRE-C (aggregate) — <c>Motivo</c> de eliminación es null, vacío o solo whitespace.</summary>
+public sealed class MotivoEliminacionVacioException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-D / I-H9 (aggregate) — el hallazgo tiene repuestos o adjuntos activos.</summary>
+public sealed class HallazgoTieneHijosActivosException(string mensaje)
+    : InspeccionDomainException(mensaje);

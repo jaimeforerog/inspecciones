@@ -107,15 +107,6 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** slice que implemente `DetalleInspeccionView` o cualquier proyección que proyecte `ObservacionCampo` del hallazgo. En ese slice: añadir `ObservacionCampo: string?` al record `Hallazgo`, incluirlo en el `with { ... }` de `Apply(HallazgoActualizado_v1)`, y añadir test que verifique el campo en el state del aggregate.
 **Notas:** el compilador forzará la actualización del `with` automáticamente una vez se añada el campo al record `Hallazgo`.
 
-### #21 — Test §6.7 (`PRE-B2 — HallazgoId eliminado`) en skip hasta slice `EliminarHallazgo` 🟢
-
-**Origen:** slice 1d review hallazgo #2
-**Fecha:** 2026-05-06
-**Tipo:** deuda técnica · test
-**Descripción:** El test `ActualizarHallazgo_con_HallazgoId_eliminado_lanza_HallazgoEliminadoException` (§6.7) está marcado `[Fact(Skip="...")]` porque `HallazgoEliminado_v1` no existe aún y el fixture `StreamConHallazgoEliminado()` lanza `NotImplementedException`. La lógica de PRE-B2 está correctamente implementada en el dominio. El test debe activarse como parte del DoD del slice `EliminarHallazgo`.
-**Disparador para abrir slice:** DoD del slice `EliminarHallazgo`. Al implementar ese slice: (1) completar `StreamConHallazgoEliminado()` en `HallazgoFixtures.cs` usando `HallazgoEliminado_v1`; (2) reemplazar el fixture de §6.7 (`StreamConHallazgoRegistrado` → `StreamConHallazgoEliminado`); (3) quitar el `[Fact(Skip=...)]`. El test debe pasar en verde antes de cerrar ese slice.
-**Notas:** vinculado al DoD del slice `EliminarHallazgo` (slice 1e o posterior según priorización).
-
 ### #19 — Test `RegistrarHallazgo_con_parte_valida_del_equipo_no_lanza_INV_PartePerteneceAlEquipo` aserta excepción del stub en lugar del happy path del handler 🟢
 
 **Origen:** slice 1c review §2 FU-19
@@ -163,6 +154,14 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 
 
 ## Cerrados
+
+### #21 — Test §6.7 (`PRE-B2 — HallazgoId eliminado`) en skip hasta slice `EliminarHallazgo` ✅
+
+**Origen:** slice 1d review hallazgo #2
+**Fecha apertura / cierre:** 2026-05-06 / 2026-05-06
+**Tipo:** deuda técnica · test
+**Descripción:** El test `ActualizarHallazgo_con_HallazgoId_eliminado_lanza_HallazgoEliminadoException` (§6.7) estaba marcado `[Fact(Skip="...")]` porque `HallazgoEliminado_v1` no existía aún.
+**Resolución:** slice 1e (`EliminarHallazgo`) implementó `HallazgoEliminado_v1` y `Apply(HallazgoEliminado_v1)`. `StreamConHallazgoEliminado()` en `HallazgoFixtures.cs` fue completado con el evento real; el `[Fact(Skip=...)]` fue eliminado de `ActualizarHallazgoTests.cs`; el test pasa en verde (62 pass totales en el suite de dominio). DoD del slice 1e cumplido.
 
 ### #12 — Test de evento desconocido en `AplicarEvento` ✅
 

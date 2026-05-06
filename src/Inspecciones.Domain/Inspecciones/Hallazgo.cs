@@ -7,6 +7,7 @@ namespace Inspecciones.Domain.Inspecciones;
 /// Materializado en el agregado a partir de <see cref="HallazgoRegistrado_v1"/>.
 /// Shape mínimo según §15.2 del modelo. Campos mutables añadidos en slice 1d:
 /// <see cref="NovedadTecnica"/>, <see cref="AccionCorrectiva"/>, <see cref="UbicacionGps"/>.
+/// Campo añadido en slice 1e: <see cref="MotivoEliminacion"/>.
 /// </summary>
 public sealed record Hallazgo(
     Guid            HallazgoId,
@@ -19,4 +20,5 @@ public sealed record Hallazgo(
     int?            TipoFallaId,
     int?            CausaFallaId,
     UbicacionGps?   UbicacionGps,
-    bool            Eliminado);
+    bool            Eliminado,
+    string?         MotivoEliminacion);
