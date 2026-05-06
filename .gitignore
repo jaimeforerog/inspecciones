@@ -1,5 +1,5 @@
-# Claude Code local settings (per-user)
-.claude/settings.local.json
+# Claude Code local settings (per-user) — agent-memory, harness state, settings
+.claude/
 
 # Office lock files
 ~$*
@@ -28,6 +28,7 @@ TestResults/
 coverage*.json
 coverage*.xml
 coverage*.info
+coverage-out/
 *.user
 *.userprefs
 .dotnet/
