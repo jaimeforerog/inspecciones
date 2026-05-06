@@ -1,6 +1,7 @@
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Inspecciones;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 
 namespace Inspecciones.Api.Inspecciones;
 
@@ -91,6 +92,82 @@ public static class InspeccionesEndpoints
                 }
             })
            .WithName("IniciarInspeccion");
+
+        // ── Slice 1c — RegistrarHallazgo ────────────────────────────────────
+        app.MapPost("/api/v1/inspecciones/{id:guid}/hallazgos", async (
+                Guid id,
+                RegistrarHallazgoRequest request,
+                RegistrarHallazgoHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+
+                var cmd = new RegistrarHallazgo(
+                    InspeccionId: id,
+                    HallazgoId: request.HallazgoId,
+                    Origen: request.Origen,
+                    ParteEquipoId: request.ParteEquipoId,
+                    NovedadPreopOrigenId: request.NovedadPreopOrigenId,
+                    ActividadId: request.ActividadId,
+                    ActividadDescripcion: request.ActividadDescripcion,
+                    NovedadTecnica: request.NovedadTecnica,
+                    AccionRequerida: request.AccionRequerida,
+                    AccionCorrectiva: request.AccionCorrectiva,
+                    TipoFallaId: request.TipoFallaId,
+                    CausaFallaId: request.CausaFallaId,
+                    ObservacionCampo: request.ObservacionCampo,
+                    Ubicacion: request.Ubicacion,
+                    EmitidoPor: tecnicoId);
+
+                try
+                {
+                    var resultado = await handler.ManejarAsync(cmd, ct);
+
+                    var response = new RegistrarHallazgoResponse(
+                        HallazgoId: resultado.HallazgoId,
+                        InspeccionId: resultado.InspeccionId,
+                        AccionRequerida: resultado.AccionRequerida,
+                        RegistradoEn: resultado.RegistradoEn);
+
+                    return Results.Created(
+                        uri: $"/api/v1/inspecciones/{id}/hallazgos/{resultado.HallazgoId}",
+                        value: response);
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-2", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        ParteNoCorrespondeAlEquipoException    => "INV-PartePerteneceAlEquipo",
+                        InspeccionNoEnEjecucionException       => "I2",
+                        NovedadPreopOrigenIdRequeridoException => "I-H2",
+                        NovedadPreopOrigenIdNoPermitidoException => "I-H3",
+                        TipoYCausaFallaRequeridosException     => "I-H4",
+                        AccionCorrectivaRequeridaException     => "PRE-8",
+                        NovedadTecnicaVaciaException           => "PRE-9",
+                        OrigenNoSoportadoException             => "PRE-10",
+                        _                                      => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("RegistrarHallazgo");
 
         return app;
     }

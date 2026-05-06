@@ -26,3 +26,33 @@ public sealed class RutinaTecnicaNoSincronizadaException(string mensaje)
 /// <summary>PRE-7 — <c>FechaReportada</c> fuera del rango válido (I-I3).</summary>
 public sealed class FechaReportadaFueraDeRangoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1c — RegistrarHallazgo ──────────────────────────────────────────────
+
+/// <summary>PRE-3 (aggregate) — la inspección no está en estado <c>EnEjecucion</c>.</summary>
+public sealed class InspeccionNoEnEjecucionException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-5 / I-H2 (aggregate) — Origen=PreOperacional pero <c>NovedadPreopOrigenId</c> es null.</summary>
+public sealed class NovedadPreopOrigenIdRequeridoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-6 / I-H3 (aggregate) — Origen=Manual pero <c>NovedadPreopOrigenId</c> no es null.</summary>
+public sealed class NovedadPreopOrigenIdNoPermitidoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-7 / I-H4 (aggregate) — AccionRequerida=RequiereIntervencion sin <c>TipoFallaId</c> o <c>CausaFallaId</c>.</summary>
+public sealed class TipoYCausaFallaRequeridosException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-8 (aggregate) — AccionRequerida=RequiereIntervencion sin <c>AccionCorrectiva</c>.</summary>
+public sealed class AccionCorrectivaRequeridaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-9 (aggregate) — <c>NovedadTecnica</c> es null o vacía.</summary>
+public sealed class NovedadTecnicaVaciaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-10 (aggregate) — <c>Origen</c> no soportado en este slice (Seguimiento, Monitoreo).</summary>
+public sealed class OrigenNoSoportadoException(string mensaje)
+    : InspeccionDomainException(mensaje);

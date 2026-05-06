@@ -10,3 +10,17 @@ namespace Inspecciones.Application.Inspecciones;
 /// </summary>
 public sealed class EquipoNoEncontradoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+/// <summary>
+/// PRE-2 (handler slice 1c) — el comando referencia un <c>InspeccionId</c> que no
+/// existe como stream en Marten. Mapea a <c>404 Not Found</c>.
+/// </summary>
+public sealed class InspeccionNoEncontradaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>
+/// PRE-4 / INV-PartePerteneceAlEquipo (handler slice 1c) — el <c>ParteEquipoId</c>
+/// no pertenece al equipo de la inspección según el catálogo local. Mapea a <c>422</c>.
+/// </summary>
+public sealed class ParteNoCorrespondeAlEquipoException(string mensaje)
+    : InspeccionDomainException(mensaje);

@@ -44,15 +44,6 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** cierre de slice 1b (handler HTTP). El handler es quien valida PRE-1; en ese momento quedará claro si la excepción pertenece al dominio o a la capa de aplicación.
 **Notas:** sin cambio de código hasta slice 1b. Si el handler decide lanzarla desde el dominio delegando la verificación al agregado, covertura sube sola. Si la sigue lanzando la capa HTTP, mover la definición.
 
-### #12 — Test de evento desconocido en `AplicarEvento` 🟢
-
-**Origen:** slice 1a review hallazgo #3
-**Fecha:** 2026-05-05
-**Tipo:** deuda técnica · test
-**Descripción:** La rama `default: throw new InvalidOperationException(...)` en `Inspeccion.AplicarEvento` no tiene test directo porque en slice 1a el único evento válido es `InspeccionIniciada_v1`. Fabricar un test en 1a sería plomería sin valor de documentación. Cuando llegue el primer evento nuevo al agregado (slice 2+), el `red` de ese slice debe añadir un test negativo: pasar un tipo de evento anónimo/falso a `Inspeccion.Reconstruir` y verificar que lanza `InvalidOperationException`. Ese momento es el natural para cubrir la rama defensiva.
-**Disparador para abrir slice:** el primer slice que agregue un segundo `case` en `AplicarEvento` (ej. `RegistrarHallazgo`, `FirmarInspeccion`). El `red` de ese slice lo resuelve.
-**Notas:** ningún cambio en 1a. La rama defensiva opera correctamente; solo falta el test que la documente.
-
 ### #13 — Migrar `InspeccionAbiertaPorEquipoView` a `MultiStreamProjection` inline 🟢
 
 **Origen:** slice 1b refactorer — candidato §4.1 green-notes
@@ -98,6 +89,24 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** emerge un test o cliente que necesite conocer la versión actual del stream para optimistic concurrency en el path `RedirigeAExistente=true`.
 **Notas:** valor `1` en ese path es técnicamente incorrecto pero inofensivo para los consumidores actuales (el frontend abre la inspección existente por `InspeccionId`, no necesita la versión para ese flujo).
 
+### #18 — `ParteEquipoLocal` sin cobertura en tests de dominio 🟢
+
+**Origen:** slice 1c review §2 FU-18
+**Fecha:** 2026-05-06
+**Tipo:** deuda técnica · cobertura
+**Descripción:** `ParteEquipoLocal` tiene `line-rate=0` en `Inspecciones.Domain.Tests`. Su instanciación solo ocurre en los fixtures de tests de integración (Docker). Añadir una instanciación del record en los fixtures de dominio puro (p. ej. `HallazgoFixtures.cs`) para que la cobertura local lo cubra. Alternativa: documentar explícitamente en una próxima `refactor-notes.md` que la cobertura de este record está delegada a los tests de integración.
+**Disparador para abrir slice:** primer slice que modifique `ParteEquipoLocal` o que añada lógica al record.
+**Notas:** no bloqueante. El record es un DTO sin lógica; cobertura 0 no implica bug.
+
+### #19 — Test `RegistrarHallazgo_con_parte_valida_del_equipo_no_lanza_INV_PartePerteneceAlEquipo` aserta excepción del stub en lugar del happy path del handler 🟢
+
+**Origen:** slice 1c review §2 FU-19
+**Fecha:** 2026-05-06
+**Tipo:** deuda técnica · test
+**Descripción:** el test en `RegistrarHallazgoHandlerTests.cs` fue escrito en fase `red` asertando `ThrowAsync<NotImplementedException>` como evidencia de que la validación INV pasa antes que el stub explota. En fase `green` el handler fue implementado completamente; la aserción correcta ahora es `NotThrowAsync()` o verificar el resultado exitoso (`HallazgoId`, `AccionRequerida`, etc.). El test debe corregirse para documentar el happy path de la validación INV, no el comportamiento de un stub que ya no existe.
+**Disparador para abrir slice:** primer corrida de tests de integración con Docker disponible. Si el test falla en ese contexto (handler retorna resultado exitoso sin excepción), corregir la aserción antes de marcar el slice como completo en CI.
+**Notas:** en entornos sin Docker el test se omite; el riesgo es latente hasta que CI tenga Docker. Vinculado a la deuda de Docker documentada desde slice 1b.
+
 ### #9 — Prefetch-by-proyecto vs sync completo de catálogos grandes 🟡 disparador alcanzado (piloto grande)
 
 **Origen:** conversación de diseño 2026-05-05 sobre eficiencia de la sincronización de catálogos. Inicialmente sobre reemplazar el sync nocturno por cache on-demand puro. **Resuelto parcialmente 2026-05-05 (ADR-004 canonical):** el cron nocturno se eliminó en favor de sync on-app-open con `If-None-Match`. Este followup queda activo solo para evaluar el patrón **prefetch-by-proyecto + lookup on-demand** para catálogos grandes (insumos ~190K) — el sync on-app-open delta sigue trayendo el catálogo completo en la primera carga post-eviction iOS.
@@ -136,6 +145,14 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 
 
 ## Cerrados
+
+### #12 — Test de evento desconocido en `AplicarEvento` ✅
+
+**Origen:** slice 1a review hallazgo #3
+**Fecha apertura / cierre:** 2026-05-05 / 2026-05-06
+**Tipo:** deuda técnica · test
+**Descripción:** La rama `default: throw new InvalidOperationException(...)` en `Inspeccion.AplicarEvento` no tenía test directo en slice 1a porque el único evento válido era `InspeccionIniciada_v1`.
+**Resolución:** slice 1c (`RegistrarHallazgo`) añadió `case HallazgoRegistrado_v1` como segundo case en `AplicarEvento` y el test `Reconstruir_con_evento_desconocido_lanza_InvalidOperationException_followup_12` cubre la rama `default`. Test verde desde fase red del slice 1c. Cobertura de ramas del dominio 100 % (52/52).
 
 ### #10 — Limpiar residuo de `Items[]` + `ActividadId` en definición §12.11.1 de Rutina técnica ✅
 

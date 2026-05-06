@@ -81,6 +81,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 // Handlers de comandos — registrados como Scoped para recibir IDocumentSession.
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<IniciarInspeccionHandler>();
+builder.Services.AddScoped<RegistrarHallazgoHandler>();
 
 var app = builder.Build();
 

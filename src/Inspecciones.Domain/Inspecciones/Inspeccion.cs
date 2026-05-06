@@ -25,6 +25,14 @@ public sealed class Inspeccion
     public LecturaMedidor? LecturaMedidorPrimario { get; private set; }
     public LecturaMedidor? LecturaMedidorSecundario { get; private set; }
 
+    /// <summary>Hallazgos registrados en esta inspección (I-H6: multiplicidad permitida).</summary>
+    public IReadOnlyList<Hallazgo> Hallazgos => _hallazgos.AsReadOnly();
+    private readonly List<Hallazgo> _hallazgos = [];
+
+    /// <summary>Técnicos que han contribuido eventos al stream (I2b — derivado, sin evento propio).</summary>
+    public IReadOnlySet<string> Contribuyentes => _contribuyentes;
+    private readonly HashSet<string> _contribuyentes = [];
+
     private Inspeccion() { }
 
     /// <summary>
@@ -117,11 +125,99 @@ public sealed class Inspeccion
         return aggregate;
     }
 
+    /// <summary>
+    /// Método de decisión del slice 1c. Valida las pre-condiciones en el orden
+    /// definido en spec §4 y emite <see cref="HallazgoRegistrado_v1"/>.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> RegistrarHallazgo(RegistrarHallazgo cmd, DateTimeOffset ahora)
+    {
+        // PRE-3: estado debe ser EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden registrar hallazgos en estado EnEjecucion.");
+        }
+
+        // PRE-10: Origen debe ser Manual o PreOperacional.
+        if (cmd.Origen != OrigenHallazgo.Manual && cmd.Origen != OrigenHallazgo.PreOperacional)
+        {
+            throw new OrigenNoSoportadoException(
+                $"Origen '{cmd.Origen}' aún no soportado. Se implementa en slice posterior.");
+        }
+
+        // PRE-5 / I-H2: PreOperacional requiere NovedadPreopOrigenId.
+        if (cmd.Origen == OrigenHallazgo.PreOperacional && cmd.NovedadPreopOrigenId is null)
+        {
+            throw new NovedadPreopOrigenIdRequeridoException(
+                "NovedadPreopOrigenId es obligatorio cuando Origen=PreOperacional.");
+        }
+
+        // PRE-6 / I-H3: Manual prohíbe NovedadPreopOrigenId.
+        if (cmd.Origen == OrigenHallazgo.Manual && cmd.NovedadPreopOrigenId is not null)
+        {
+            throw new NovedadPreopOrigenIdNoPermitidoException(
+                "NovedadPreopOrigenId debe ser null cuando Origen=Manual.");
+        }
+
+        // PRE-7 / I-H4: RequiereIntervencion exige TipoFallaId y CausaFallaId.
+        if (cmd.AccionRequerida == AccionRequerida.RequiereIntervencion
+            && (cmd.TipoFallaId is null || cmd.CausaFallaId is null))
+        {
+            throw new TipoYCausaFallaRequeridosException(
+                "TipoFallaId y CausaFallaId son obligatorios cuando AccionRequerida=RequiereIntervencion.");
+        }
+
+        // PRE-8: RequiereIntervencion exige AccionCorrectiva no vacía.
+        if (cmd.AccionRequerida == AccionRequerida.RequiereIntervencion
+            && string.IsNullOrWhiteSpace(cmd.AccionCorrectiva))
+        {
+            throw new AccionCorrectivaRequeridaException(
+                "AccionCorrectiva es obligatoria cuando AccionRequerida=RequiereIntervencion.");
+        }
+
+        // PRE-9: NovedadTecnica no puede ser vacía.
+        if (string.IsNullOrWhiteSpace(cmd.NovedadTecnica))
+        {
+            throw new NovedadTecnicaVaciaException(
+                "NovedadTecnica es obligatoria y no puede estar vacía.");
+        }
+
+        var evento = new HallazgoRegistrado_v1(
+            InspeccionId: InspeccionId,
+            HallazgoId: cmd.HallazgoId,
+            Origen: cmd.Origen,
+            NovedadPreopOrigenId: cmd.NovedadPreopOrigenId,
+            ParteEquipoId: cmd.ParteEquipoId,
+            ActividadId: cmd.ActividadId,
+            ActividadDescripcion: cmd.ActividadDescripcion,
+            NovedadTecnica: cmd.NovedadTecnica,
+            AccionRequerida: cmd.AccionRequerida,
+            AccionCorrectiva: cmd.AccionCorrectiva,
+            TipoFallaId: cmd.TipoFallaId,
+            CausaFallaId: cmd.CausaFallaId,
+            ObservacionCampo: cmd.ObservacionCampo,
+            Ubicacion: cmd.Ubicacion,
+            EmitidoPor: cmd.EmitidoPor,
+            RegistradoEn: ahora);
+
+        return new object[] { evento };
+    }
+
     private void AplicarEvento(object evento)
     {
         switch (evento)
         {
             case InspeccionIniciada_v1 e:
+                Apply(e);
+                break;
+            case HallazgoRegistrado_v1 e:
+                Apply(e);
+                break;
+            case InspeccionFirmada_v1 e:
+                Apply(e);
+                break;
+            case InspeccionCancelada_v1 e:
                 Apply(e);
                 break;
             default:
@@ -150,5 +246,50 @@ public sealed class Inspeccion
         FechaReportada = e.FechaReportada;
         LecturaMedidorPrimario = e.LecturaMedidorPrimario;
         LecturaMedidorSecundario = e.LecturaMedidorSecundario;
+        _contribuyentes.Add(e.TecnicoIniciador);
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="HallazgoRegistrado_v1"/>: añade el
+    /// hallazgo a la lista y actualiza contribuyentes. Sin validaciones — solo
+    /// mutación de estado. Las pre-condiciones viven en <see cref="RegistrarHallazgo"/>.
+    /// </summary>
+    public void Apply(HallazgoRegistrado_v1 e)
+    {
+        _hallazgos.Add(new Hallazgo(
+            HallazgoId: e.HallazgoId,
+            Origen: e.Origen,
+            ParteEquipoId: e.ParteEquipoId,
+            NovedadPreopOrigenId: e.NovedadPreopOrigenId,
+            AccionRequerida: e.AccionRequerida,
+            TipoFallaId: e.TipoFallaId,
+            CausaFallaId: e.CausaFallaId,
+            Eliminado: false));
+        _contribuyentes.Add(e.EmitidoPor);
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="InspeccionFirmada_v1"/>: transiciona
+    /// el estado a <see cref="EstadoInspeccion.Firmada"/>. Stub para soporte de
+    /// tests PRE-3 del slice 1c. La lógica completa llega con el slice FirmarInspeccion.
+    /// </summary>
+    public void Apply(InspeccionFirmada_v1 e)
+    {
+        Estado = EstadoInspeccion.Firmada;
+        _contribuyentes.Add(e.FirmadoPor);
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="InspeccionCancelada_v1"/>: transiciona
+    /// el estado a <see cref="EstadoInspeccion.Cancelada"/>. Stub para soporte de
+    /// tests PRE-3 del slice 1c.
+    /// </summary>
+    public void Apply(InspeccionCancelada_v1 e)
+    {
+        Estado = EstadoInspeccion.Cancelada;
+        if (e.CanceladoPor is not null)
+        {
+            _contribuyentes.Add(e.CanceladoPor);
+        }
     }
 }
