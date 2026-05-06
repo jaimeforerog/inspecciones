@@ -4,8 +4,29 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 
 ## Estado del proyecto
 
-- **Fase actual:** Fase 0 (diseño) al 98 %. Sin código aún. Solo docs y plantillas Excel.
-- **Próximo trabajo:** primer slice de Fase 3 (backend core) cuando el usuario lo apruebe.
+- **Fase actual:** Fase 0 (diseño) al 98 %. Bootstrap + slice-1a en red phase. El resto sin código aún.
+- **Próximo trabajo:** cerrar slice-1a (`IniciarInspeccion` técnica) end-to-end con el squad TDD.
+
+### ⚠️ Embargo de docs (decisión Jaime 2026-05-05)
+
+**Vigente hasta:** 3-4 slices cerrados con `feat(slice-{N}): X` y DoD completo (estimado: slice-1a + slice-1b + slice-2 + slice-3).
+
+**Razón:** la doc:código ratio actual es alta y los conceptos se replican en múltiples docs. Cerrar slices reales va a evidenciar qué partes del modelo/ADRs son load-bearing y cuáles eran sobre-diseño. Editar docs ahora amplifica el costo de cualquier cambio (esta sesión 2026-05-05 = 5 cambios mayores tocaron ~25 archivos).
+
+**Qué se embarga:**
+- Edits NO-triviales a `Inspecciones/docs/*` (modelo, ADRs nuevos refinements, wireframes, workflows, brief, SOW, contrato APIs).
+- Reescritura de secciones del modelo §15.
+- Nuevos diagramas / HTMLs interactivos.
+
+**Qué SÍ se permite:**
+- Artefactos de slice (`slices/{N}-*/spec.md`, red-notes, green-notes, refactor-notes, review-notes).
+- Código de producción y tests.
+- `FOLLOWUPS.md` — registrar deuda detectada durante slices.
+- ADR **nuevo** si el slice produce decisión arquitectónica genuina (no refinement de uno existente).
+- Fix de inconsistencia que bloquee al squad (p. ej. CLAUDE.md decía "sin código aún" — fix permitido).
+- `CLAUDE.md`, `METHODOLOGY.md`, `templates/agent-personas/*` cuando sea relevante para el squad.
+
+**Cómo levantar el embargo:** el usuario lo dice explícito ("levantamos embargo de docs") o se cumple el disparador (4 slices cerrados — el orquestador lo nota al cerrar el cuarto y pregunta).
 - **Roadmap:** `Inspecciones/docs/roadmap.md` (fases 0..10).
 - **Modelo de dominio:** `Inspecciones/docs/01-modelo-dominio.md` §15 (fuente de verdad).
 - **Contrato de APIs ERP:** `Inspecciones/docs/06-contrato-apis-erp.md` (16 obligatorios MVP + 1 condicional + 8 diferidos — M-16 promovido a MVP el 2026-05-05 por inclusión de monitoreo; U-1/U-2 eliminados el 2026-05-05 — identidad 100% del host PWA).
