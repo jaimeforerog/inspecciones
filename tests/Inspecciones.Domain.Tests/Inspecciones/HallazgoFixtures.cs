@@ -312,5 +312,92 @@ internal static class HallazgoFixtures
             Ubicacion: null,
             EmitidoPor: emitidoPor,
             RegistradoEn: Ahora);
+
+    // ── Slice 1f — Fixtures de AsignarRepuesto ───────────────────────────────
+
+    /// <summary>ID interno del primer repuesto de ejemplo (slice 1f).</summary>
+    public static readonly Guid RepuestoR1 = new("01950000-0000-7000-0000-000000000001");
+
+    /// <summary>ID interno del segundo repuesto de ejemplo — para test PRE-G (mismo SKU, distinto ID).</summary>
+    public static readonly Guid RepuestoR2 = new("01950000-0000-7000-0000-000000000002");
+
+    /// <summary>
+    /// Stream base para tests de AsignarRepuesto happy path.
+    /// Contiene <see cref="InspeccionIniciada_v1"/> + <see cref="HallazgoRegistrado_v1"/>
+    /// con G1, <c>AccionRequerida=RequiereIntervencion</c>, parte 77.
+    /// </summary>
+    public static object[] StreamConHallazgoParaRepuesto(
+        Guid? hallazgoId = null,
+        int parteEquipoId = 77) =>
+        [EventoInspeccionIniciada(),
+         HallazgoRegistradoEjemplo(
+             hallazgoId: hallazgoId ?? HallazgoG1,
+             parteEquipoId: parteEquipoId,
+             accionRequerida: AccionRequerida.RequiereIntervencion,
+             tipoFallaId: 3,
+             causaFallaId: 12)];
+
+    /// <summary>
+    /// Stream con hallazgo G5 activo (<c>RequiereIntervencion</c>) y un repuesto R1
+    /// ya estimado. Usado por:
+    /// <list type="bullet">
+    /// <item>Test PRE-G del slice 1f (SKU duplicado en hallazgo).</item>
+    /// <item>Test I-H9 del slice 1e (levantar skip §6.7 de EliminarHallazgoTests).</item>
+    /// </list>
+    /// </summary>
+    public static object[] StreamConHallazgoConRepuestoActivo() =>
+        [EventoInspeccionIniciada(),
+         HallazgoRegistradoEjemplo(
+             hallazgoId: HallazgoG5,
+             parteEquipoId: 77,
+             accionRequerida: AccionRequerida.RequiereIntervencion,
+             tipoFallaId: 3,
+             causaFallaId: 12),
+         RepuestoEstimadoEjemplo(
+             hallazgoId: HallazgoG5,
+             repuestoId: RepuestoR1,
+             skuId: 501)];
+
+    /// <summary>
+    /// Evento <see cref="RepuestoEstimado_v1"/> de ejemplo para poblar streams.
+    /// Defaults alineados con el escenario happy path del slice 1f (§6.1).
+    /// </summary>
+    public static RepuestoEstimado_v1 RepuestoEstimadoEjemplo(
+        Guid? hallazgoId = null,
+        Guid? repuestoId = null,
+        int skuId = 501,
+        string skuCodigo = "INS-501",
+        decimal cantidad = 2m,
+        string? justificacion = null,
+        string unidad = "unidad",
+        string asignadoPor = "rmartinez") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            RepuestoId: repuestoId ?? RepuestoR1,
+            SkuId: skuId,
+            SkuCodigo: skuCodigo,
+            Cantidad: cantidad,
+            Justificacion: justificacion,
+            Unidad: unidad,
+            AsignadoPor: asignadoPor,
+            AsignadoEn: Ahora);
+
+    /// <summary>
+    /// Comando happy path de AsignarRepuesto con defaults del escenario §6.1.
+    /// </summary>
+    public static AsignarRepuesto ComandoAsignarRepuesto(
+        Guid? hallazgoId = null,
+        Guid? repuestoId = null,
+        int skuId = 501,
+        decimal cantidad = 2m,
+        string? justificacion = "Sello desgastado — requiere 2 unidades",
+        string tecnicoId = "rmartinez") =>
+        new(InspeccionId: InspeccionIdNueva,
+            HallazgoId: hallazgoId ?? HallazgoG1,
+            RepuestoId: repuestoId ?? RepuestoR1,
+            SkuId: skuId,
+            Cantidad: cantidad,
+            Justificacion: justificacion,
+            TecnicoId: tecnicoId);
 }
 

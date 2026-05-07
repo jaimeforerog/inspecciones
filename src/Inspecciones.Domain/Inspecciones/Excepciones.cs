@@ -81,3 +81,17 @@ public sealed class MotivoEliminacionVacioException(string mensaje)
 /// <summary>PRE-D / I-H9 (aggregate) — el hallazgo tiene repuestos o adjuntos activos.</summary>
 public sealed class HallazgoTieneHijosActivosException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1f — AsignarRepuesto ───────────────────────────────────────────────
+
+/// <summary>PRE-C / I-H12 (aggregate) — el hallazgo no tiene <c>AccionRequerida=RequiereIntervencion</c>.</summary>
+public sealed class HallazgoNoRequiereIntervencionException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-E (aggregate) — <c>Cantidad</c> debe ser mayor que cero.</summary>
+public sealed class CantidadInvalidaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-G (aggregate) — el <c>SkuId</c> ya fue estimado en el hallazgo con distinto <c>RepuestoId</c>.</summary>
+public sealed class SkuDuplicadoEnHallazgoException(string mensaje)
+    : InspeccionDomainException(mensaje);

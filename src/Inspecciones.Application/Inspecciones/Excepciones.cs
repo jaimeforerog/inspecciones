@@ -24,3 +24,19 @@ public sealed class InspeccionNoEncontradaException(string mensaje)
 /// </summary>
 public sealed class ParteNoCorrespondeAlEquipoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+/// <summary>
+/// PRE-H1 (handler slice 1f) — el <c>SkuId</c> del comando no existe en el catálogo
+/// local <c>RepuestoLocal</c>. Sucede cuando el sync ADR-004 no se ejecutó o el SKU
+/// fue eliminado del ERP. Mapea a <c>422 Unprocessable Entity</c>.
+/// </summary>
+public sealed class RepuestoNoEncontradoEnCatalogoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>
+/// PRE-H2 (handler slice 1f) — el SKU referenciado no está catalogado como compatible
+/// con la parte del hallazgo destino (<c>RepuestoLocal.ParteIdsCompatibles</c>).
+/// Hard error per decisión §12.10.12. Mapea a <c>422 Unprocessable Entity</c>.
+/// </summary>
+public sealed class SkuIncompatibleConParteException(string mensaje)
+    : InspeccionDomainException(mensaje);

@@ -241,6 +241,81 @@ public static class InspeccionesEndpoints
             })
            .WithName("ActualizarHallazgo");
 
+        // ── Slice 1f — AsignarRepuesto ──────────────────────────────────────
+        app.MapPost("/api/v1/inspecciones/{inspeccionId:guid}/hallazgos/{hallazgoId:guid}/repuestos", async (
+                Guid inspeccionId,
+                Guid hallazgoId,
+                AsignarRepuestoRequest request,
+                AsignarRepuestoHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+
+                var cmd = new AsignarRepuesto(
+                    InspeccionId: inspeccionId,
+                    HallazgoId: hallazgoId,
+                    RepuestoId: request.RepuestoId,
+                    SkuId: request.SkuId,
+                    Cantidad: request.Cantidad,
+                    Justificacion: request.Justificacion,
+                    TecnicoId: tecnicoId);
+
+                try
+                {
+                    var resultado = await handler.ManejarAsync(cmd, ct);
+
+                    return Results.Created(
+                        uri: $"/api/v1/inspecciones/{inspeccionId}/hallazgos/{hallazgoId}/repuestos/{resultado.RepuestoId}",
+                        value: new
+                        {
+                            repuestoId = resultado.RepuestoId,
+                            skuId = resultado.SkuId,
+                            skuCodigo = resultado.SkuCodigo,
+                            cantidad = resultado.Cantidad,
+                            unidad = resultado.Unidad,
+                            justificacion = resultado.Justificacion,
+                            asignadoEn = resultado.AsignadoEn
+                        });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-F", mensaje = ex.Message });
+                }
+                catch (HallazgoNoEncontradoException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-B1", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoEnEjecucionException           => "I-H7",
+                        HallazgoEliminadoException                 => "PRE-B2-ELIMINADO",
+                        HallazgoNoRequiereIntervencionException    => "I-H12",
+                        CantidadInvalidaException                  => "PRE-E",
+                        SkuDuplicadoEnHallazgoException            => "PRE-G",
+                        RepuestoNoEncontradoEnCatalogoException    => "PRE-H1",
+                        SkuIncompatibleConParteException           => "PRE-H2",
+                        _                                          => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("AsignarRepuesto");
+
         // ── Slice 1e — EliminarHallazgo ─────────────────────────────────────
         app.MapDelete("/api/v1/inspecciones/{inspeccionId:guid}/hallazgos/{hallazgoId:guid}", async (
                 Guid inspeccionId,

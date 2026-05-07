@@ -85,6 +85,7 @@ builder.Services.AddScoped<IniciarInspeccionHandler>();
 builder.Services.AddScoped<RegistrarHallazgoHandler>();
 builder.Services.AddScoped<ActualizarHallazgoHandler>();
 builder.Services.AddScoped<EliminarHallazgoHandler>();
+builder.Services.AddScoped<AsignarRepuestoHandler>();
 
 var app = builder.Build();
 

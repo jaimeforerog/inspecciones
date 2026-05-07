@@ -29,6 +29,10 @@ public sealed class Inspeccion
     public IReadOnlyList<Hallazgo> Hallazgos => _hallazgos.AsReadOnly();
     private readonly List<Hallazgo> _hallazgos = [];
 
+    /// <summary>Repuestos estimados en esta inspección (slice 1f — AsignarRepuesto).</summary>
+    public IReadOnlyList<Repuesto> Repuestos => _repuestos.AsReadOnly();
+    private readonly List<Repuesto> _repuestos = [];
+
     /// <summary>Técnicos que han contribuido eventos al stream (I2b — derivado, sin evento propio).</summary>
     public IReadOnlySet<string> Contribuyentes => _contribuyentes;
     private readonly HashSet<string> _contribuyentes = [];
@@ -226,6 +230,9 @@ public sealed class Inspeccion
             case HallazgoEliminado_v1 e:
                 Apply(e);
                 break;
+            case RepuestoEstimado_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -421,10 +428,12 @@ public sealed class Inspeccion
                 "Motivo de eliminación es obligatorio.");
         }
 
-        // PRE-D / I-H9: verificar cuando existan slices de repuestos/adjuntos.
-        // Las colecciones están vacías en MVP — la invariante está activa y nunca
-        // lanza aquí; cuando lleguen esos slices añadirán datos a las colecciones
-        // y esta verificación bloqueará la eliminación automáticamente.
+        // PRE-D / I-H9: el hallazgo no puede tener repuestos activos (slice 1f).
+        if (_repuestos.Any(r => r.HallazgoId == cmd.HallazgoId))
+        {
+            throw new HallazgoTieneHijosActivosException(
+                $"El hallazgo {cmd.HallazgoId} tiene repuestos o adjuntos activos. Elimínalos antes de eliminar el hallazgo.");
+        }
 
         var evento = new HallazgoEliminado_v1(
             InspeccionId: InspeccionId,
@@ -453,13 +462,100 @@ public sealed class Inspeccion
         _contribuyentes.Add(e.EliminadoPor);
     }
 
+    // ── Slice 1f — AsignarRepuesto ───────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1f. Valida las pre-condiciones en el orden
+    /// definido en spec §4 y emite <see cref="RepuestoEstimado_v1"/>.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> AsignarRepuesto(
+        AsignarRepuesto cmd,
+        string skuCodigo,
+        string unidad,
+        DateTimeOffset ahora)
+    {
+        // PRE-D (idempotencia): si el RepuestoId ya existe, retorno silencioso.
+        // Se evalúa antes de PRE-A para que los retries no fallen por estado cambiado.
+        if (_repuestos.Any(r => r.RepuestoId == cmd.RepuestoId))
+        {
+            return Array.Empty<object>();
+        }
+
+        // PRE-A: estado debe ser EnEjecucion (I-H7).
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden asignar repuestos en estado EnEjecucion.");
+        }
+
+        // PRE-B1 + PRE-B2: el hallazgo debe existir y no estar eliminado.
+        var hallazgo = ObtenerHallazgoActivo(cmd.HallazgoId);
+
+        // PRE-C: el hallazgo debe tener AccionRequerida=RequiereIntervencion (I-H12).
+        if (hallazgo.AccionRequerida != AccionRequerida.RequiereIntervencion)
+        {
+            throw new HallazgoNoRequiereIntervencionException(
+                $"Solo se pueden asignar repuestos a hallazgos con AccionRequerida=RequiereIntervencion. " +
+                $"El hallazgo {cmd.HallazgoId} tiene AccionRequerida={hallazgo.AccionRequerida}.");
+        }
+
+        // PRE-E: Cantidad debe ser mayor que cero.
+        if (cmd.Cantidad <= 0)
+        {
+            throw new CantidadInvalidaException(
+                "Cantidad debe ser mayor que cero.");
+        }
+
+        // PRE-G: el mismo SkuId no puede estar ya asignado al mismo hallazgo con distinto RepuestoId.
+        if (_repuestos.Any(r => r.HallazgoId == cmd.HallazgoId && r.SkuId == cmd.SkuId && r.RepuestoId != cmd.RepuestoId))
+        {
+            throw new SkuDuplicadoEnHallazgoException(
+                $"El SKU {cmd.SkuId} ya fue estimado en el hallazgo {cmd.HallazgoId}. " +
+                "Edita o elimina el repuesto existente antes de volver a agregar.");
+        }
+
+        var evento = new RepuestoEstimado_v1(
+            InspeccionId: InspeccionId,
+            HallazgoId: cmd.HallazgoId,
+            RepuestoId: cmd.RepuestoId,
+            SkuId: cmd.SkuId,
+            SkuCodigo: skuCodigo,
+            Cantidad: cmd.Cantidad,
+            Justificacion: cmd.Justificacion,
+            Unidad: unidad,
+            AsignadoPor: cmd.TecnicoId,
+            AsignadoEn: ahora);
+
+        return new object[] { evento };
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="RepuestoEstimado_v1"/>: añade el
+    /// repuesto a la colección <see cref="_repuestos"/> y registra el contribuyente.
+    /// Sin validaciones — solo mutación de estado.
+    /// Las pre-condiciones viven en <see cref="AsignarRepuesto"/>.
+    /// </summary>
+    public void Apply(RepuestoEstimado_v1 e)
+    {
+        _repuestos.Add(new Repuesto(
+            RepuestoId: e.RepuestoId,
+            HallazgoId: e.HallazgoId,
+            SkuId: e.SkuId,
+            SkuCodigo: e.SkuCodigo,
+            Cantidad: e.Cantidad,
+            Justificacion: e.Justificacion,
+            Unidad: e.Unidad));
+        _contribuyentes.Add(e.AsignadoPor);
+    }
+
     // ── Helpers privados ─────────────────────────────────────────────────────
 
     /// <summary>
     /// Busca el hallazgo por <paramref name="hallazgoId"/> en el stream y verifica
-    /// que no esté eliminado (PRE-B1 + PRE-B2). Usado por <see cref="ActualizarHallazgo"/>
-    /// y <see cref="EliminarHallazgo"/> — única fuente de verdad para estas dos
-    /// pre-condiciones.
+    /// que no esté eliminado (PRE-B1 + PRE-B2). Usado por <see cref="ActualizarHallazgo"/>,
+    /// <see cref="EliminarHallazgo"/> y <see cref="AsignarRepuesto"/> — única fuente de verdad
+    /// para estas dos pre-condiciones.
     /// </summary>
     /// <exception cref="HallazgoNoEncontradoException">PRE-B1 — no existe en el stream.</exception>
     /// <exception cref="HallazgoEliminadoException">PRE-B2 — fue eliminado (soft delete).</exception>

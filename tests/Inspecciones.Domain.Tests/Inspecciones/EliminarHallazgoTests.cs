@@ -163,28 +163,26 @@ public sealed class EliminarHallazgoTests
             .WithMessage("*obligatorio*");
     }
 
-    // ── §6.7 — PRE-D / I-H9: hallazgo con hijos activos [Skip] ──────────────
+    // ── §6.7 — PRE-D / I-H9: hallazgo con hijos activos ────────────────────
+    // Skip levantado en slice 1f (AsignarRepuesto) — followup #21.
+    // StreamConHallazgoConRepuestoActivo() introduce RepuestoEstimado_v1 en el stream.
 
-    [Fact(Skip = "I-H9: requiere slices de repuestos/adjuntos")]
+    [Fact]
     public void EliminarHallazgo_con_hijos_activos_lanza_HallazgoTieneHijosActivosException_I_H9()
     {
-        // Given: inspección en ejecución con hallazgo G1 que tiene ≥1 repuesto activo.
-        // No existen eventos de repuestos/adjuntos aún — no hay forma de construir
-        // el stream con hijos activos sin violar la regla de cero mocks de dominio.
-        // El código de PRE-D SÍ se implementa en el método de decisión (colecciones
-        // vacías en MVP — invariante activa automáticamente cuando lleguen esos slices).
-        // Skip levantado con el DoD del primer slice de AsignarRepuesto o AdjuntarArchivo.
-        var dados = StreamConHallazgoRegistrado(hallazgoId: HallazgoG1);
+        // Given: inspección en ejecución con hallazgo G5 que tiene ≥1 repuesto activo.
+        // El stream incluye RepuestoEstimado_v1 — _repuestos tendrá un elemento al reconstruir.
+        var dados = StreamConHallazgoConRepuestoActivo();
 
         var cmd = ComandoEliminarHallazgo(
-            hallazgoId: HallazgoG1,
+            hallazgoId: HallazgoG5,
             motivo: "Ya no aplica");
 
         var act = () => CasoDeUso.EliminarHallazgo(dados, cmd, Ahora);
 
         // Then: PRE-D / I-H9
         act.Should().Throw<HallazgoTieneHijosActivosException>()
-            .WithMessage($"*{HallazgoG1}*");
+            .WithMessage($"*{HallazgoG5}*");
     }
 
     // ── §6.8 — PRE-F: InspeccionId no existe (integración, omitido aquí) ────

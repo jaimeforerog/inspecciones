@@ -70,4 +70,21 @@ internal static class CasoDeUso
         var aggregate = Inspeccion.Reconstruir(dados);
         return aggregate.EliminarHallazgo(cmd, ahora);
     }
+
+    /// <summary>
+    /// Decisión <c>AsignarRepuesto</c>. Reconstruye el aggregate desde el stream
+    /// previo y delega al método de decisión del aggregate. Los parámetros
+    /// <paramref name="skuCodigo"/> y <paramref name="unidad"/> son derivados del
+    /// catálogo local por el handler (o el test en fase roja).
+    /// </summary>
+    public static IReadOnlyList<object> AsignarRepuesto(
+        IReadOnlyList<object> dados,
+        AsignarRepuesto cmd,
+        string skuCodigo,
+        string unidad,
+        DateTimeOffset ahora)
+    {
+        var aggregate = Inspeccion.Reconstruir(dados);
+        return aggregate.AsignarRepuesto(cmd, skuCodigo, unidad, ahora);
+    }
 }
