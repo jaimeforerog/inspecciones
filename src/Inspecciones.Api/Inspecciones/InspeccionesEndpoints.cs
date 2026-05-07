@@ -1,6 +1,7 @@
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Inspecciones;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
 namespace Inspecciones.Api.Inspecciones;
@@ -320,7 +321,7 @@ public static class InspeccionesEndpoints
         app.MapDelete("/api/v1/inspecciones/{inspeccionId:guid}/hallazgos/{hallazgoId:guid}", async (
                 Guid inspeccionId,
                 Guid hallazgoId,
-                EliminarHallazgoRequest request,
+                [FromBody] EliminarHallazgoRequest request,
                 EliminarHallazgoHandler handler,
                 HttpContext ctx,
                 CancellationToken ct) =>
