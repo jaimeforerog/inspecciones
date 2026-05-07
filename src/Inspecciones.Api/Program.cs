@@ -42,6 +42,11 @@ builder.Services.AddMarten((StoreOptions options) =>
 
         // Proyecciones inline corren sincrónicamente por default y registran read models
         // en la misma transacción del Append. Cada slice agrega las suyas al definirlas.
+
+        // FU-13 — InspeccionAbiertaPorEquipoView: migrada de session.Insert directo (slice 1b)
+        // a EventProjection inline (slice 1g). Maneja InspeccionIniciada_v1 (upsert),
+        // InspeccionFirmada_v1 (delete) e InspeccionCancelada_v1 (delete).
+        options.Projections.Add<InspeccionAbiertaPorEquipoProjection>(Marten.Events.Projections.ProjectionLifecycle.Inline);
     })
     // Wolverine outbox transaccional integrado con Marten — persistencia atómica
     // de eventos + mensajes a despachar (regla CLAUDE.md, ADR-006).
@@ -92,6 +97,7 @@ builder.Services.AddScoped<RegistrarHallazgoHandler>();
 builder.Services.AddScoped<ActualizarHallazgoHandler>();
 builder.Services.AddScoped<EliminarHallazgoHandler>();
 builder.Services.AddScoped<AsignarRepuestoHandler>();
+builder.Services.AddScoped<FirmarInspeccionHandler>();
 
 var app = builder.Build();
 

@@ -95,3 +95,34 @@ public sealed class CantidadInvalidaException(string mensaje)
 /// <summary>PRE-G (aggregate) — el <c>SkuId</c> ya fue estimado en el hallazgo con distinto <c>RepuestoId</c>.</summary>
 public sealed class SkuDuplicadoEnHallazgoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1g — FirmarInspeccion ──────────────────────────────────────────────
+
+/// <summary>PRE-4 (handler) — el campo <c>Diagnostico</c> del comando es null, vacío
+/// o solo whitespace. Validado en el handler antes de cargar el aggregate. Mapea a <c>422</c>.</summary>
+public sealed class DiagnosticoRequeridoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-3 / V-F1 (aggregate) — no existe ningún hallazgo vigente (no eliminado) en la inspección.</summary>
+public sealed class SinHallazgosException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-5 / V-F8 (aggregate) — el dictamen elegido es PuedeOperar pero existen hallazgos que requieren seguimiento o intervención.</summary>
+public sealed class DictamenIncoherenteException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-6 / V-F3 (aggregate) — un hallazgo con RequiereIntervencion le falta TipoFallaId, CausaFallaId o al menos un adjunto activo.</summary>
+public sealed class HallazgoIntervencionIncompletoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-7 / V-F5 (aggregate) — <c>FirmaUri</c> es null, vacío o solo whitespace.</summary>
+public sealed class FirmaRequeridaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-8 / V-F6 (aggregate) — <c>UbicacionFirma</c> es null.</summary>
+public sealed class GpsRequeridoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-9 / I-F (aggregate) — el técnico que intenta firmar no es un contribuyente registrado en el stream.</summary>
+public sealed class TecnicoNoContribuyenteException(string mensaje)
+    : InspeccionDomainException(mensaje);

@@ -87,4 +87,17 @@ internal static class CasoDeUso
         var aggregate = Inspeccion.Reconstruir(dados);
         return aggregate.AsignarRepuesto(cmd, skuCodigo, unidad, ahora);
     }
+
+    /// <summary>
+    /// Decisión <c>Firmar</c>. Reconstruye el aggregate desde el stream previo
+    /// y delega al método de decisión del aggregate. Slice 1g — FirmarInspeccion.
+    /// </summary>
+    public static IReadOnlyList<object> Firmar(
+        IReadOnlyList<object> dados,
+        FirmarInspeccion cmd,
+        DateTimeOffset ahora)
+    {
+        var aggregate = Inspeccion.Reconstruir(dados);
+        return aggregate.Firmar(cmd, ahora);
+    }
 }

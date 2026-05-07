@@ -127,7 +127,12 @@ public sealed class AsignarRepuestoTests
                 accionRequerida: AccionRequerida.RequiereIntervencion,
                 tipoFallaId: 3,
                 causaFallaId: 12),
-            new InspeccionFirmada_v1(InspeccionIdNueva, Ahora, "rmartinez"),
+            new InspeccionFirmada_v1(
+                InspeccionId: InspeccionIdNueva,
+                FirmadoPor: "rmartinez",
+                FirmaUri: "https://blobs/firma-fixture.png",
+                UbicacionFirma: UbicacionTipo(),
+                FirmadaEn: Ahora),
         };
 
         // When: intentar asignar repuesto con inspección firmada

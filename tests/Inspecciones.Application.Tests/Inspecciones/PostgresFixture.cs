@@ -1,5 +1,7 @@
+using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
 using Marten;
+using Marten.Events.Projections;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
@@ -38,6 +40,9 @@ public sealed class PostgresFixture : IAsyncLifetime
             opts.Schema.For<EquipoLocal>().Identity(x => x.EquipoId);
             opts.Schema.For<RutinaTecnicaLocal>().Identity(x => x.RutinaId);
             opts.Schema.For<RepuestoLocal>().Identity(x => x.SkuId);
+
+            // FU-13 — proyección inline para InspeccionAbiertaPorEquipoView.
+            opts.Projections.Add<InspeccionAbiertaPorEquipoProjection>(ProjectionLifecycle.Inline);
         });
         _services = collection.BuildServiceProvider();
     }

@@ -66,18 +66,11 @@ public sealed class IniciarInspeccionHandler(IDocumentSession session, TimeProvi
         var ahora = _time.GetUtcNow();
         var eventos = Inspeccion.Iniciar(cmd, claims, equipo, rutina, ahora);
 
-        // Append al stream y view en un único SaveChangesAsync (regla CLAUDE.md atomicidad).
+        // Append al stream en un único SaveChangesAsync (regla CLAUDE.md atomicidad).
+        // FU-13: el view InspeccionAbiertaPorEquipoView ya no se inserta aquí manualmente —
+        // lo hace la proyección InspeccionAbiertaPorEquipoProjection (EventProjection inline)
+        // en la misma transacción al recibir InspeccionIniciada_v1.
         _session.Events.StartStream<Inspeccion>(cmd.InspeccionId, eventos);
-
-        var view = new InspeccionAbiertaPorEquipoView(
-            Id: cmd.EquipoId,
-            InspeccionId: cmd.InspeccionId,
-            TecnicoIniciador: claims.TecnicoIniciador,
-            IniciadaEn: ahora,
-            ProyectoId: cmd.ProyectoId);
-
-        // Insert puro (sin ON CONFLICT): si hay race condition, Postgres lanza 23505.
-        _session.Insert(view);
 
         try
         {

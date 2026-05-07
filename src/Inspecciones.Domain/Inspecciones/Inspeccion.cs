@@ -25,6 +25,13 @@ public sealed class Inspeccion
     public LecturaMedidor? LecturaMedidorPrimario { get; private set; }
     public LecturaMedidor? LecturaMedidorSecundario { get; private set; }
 
+    // ── Slice 1g — FirmarInspeccion ──────────────────────────────────────────
+    public string? DiagnosticoFinal { get; private set; }
+    public DictamenOperacion? Dictamen { get; private set; }
+    public string? FirmaUri { get; private set; }
+    public UbicacionGps? UbicacionFirma { get; private set; }
+    public DateTimeOffset? FirmadaEn { get; private set; }
+
     /// <summary>Hallazgos registrados en esta inspección (I-H6: multiplicidad permitida).</summary>
     public IReadOnlyList<Hallazgo> Hallazgos => _hallazgos.AsReadOnly();
     private readonly List<Hallazgo> _hallazgos = [];
@@ -32,6 +39,13 @@ public sealed class Inspeccion
     /// <summary>Repuestos estimados en esta inspección (slice 1f — AsignarRepuesto).</summary>
     public IReadOnlyList<Repuesto> Repuestos => _repuestos.AsReadOnly();
     private readonly List<Repuesto> _repuestos = [];
+
+    /// <summary>
+    /// Adjuntos activos (no eliminados) por hallazgo. Clave = HallazgoId.
+    /// Necesario para PRE-6 del slice 1g (FirmarInspeccion): la firma exige
+    /// ≥1 adjunto activo por hallazgo con RequiereIntervencion.
+    /// </summary>
+    private readonly Dictionary<Guid, HashSet<Guid>> _adjuntosPorHallazgo = [];
 
     /// <summary>Técnicos que han contribuido eventos al stream (I2b — derivado, sin evento propio).</summary>
     public IReadOnlySet<string> Contribuyentes => _contribuyentes;
@@ -233,6 +247,18 @@ public sealed class Inspeccion
             case RepuestoEstimado_v1 e:
                 Apply(e);
                 break;
+            case DiagnosticoEmitido_v1 e:
+                Apply(e);
+                break;
+            case DictamenEstablecido_v1 e:
+                Apply(e);
+                break;
+            case AdjuntoSubido_v1 e:
+                Apply(e);
+                break;
+            case AdjuntoEliminado_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -287,12 +313,16 @@ public sealed class Inspeccion
 
     /// <summary>
     /// Aplicación pura del evento <see cref="InspeccionFirmada_v1"/>: transiciona
-    /// el estado a <see cref="EstadoInspeccion.Firmada"/>. Stub para soporte de
-    /// tests PRE-3 del slice 1c. La lógica completa llega con el slice FirmarInspeccion.
+    /// el estado a <see cref="EstadoInspeccion.Firmada"/> y persiste los campos de
+    /// firma. Apply es puro — sin validaciones. Las pre-condiciones viven en
+    /// <see cref="Firmar"/>. Slice 1g — FirmarInspeccion.
     /// </summary>
     public void Apply(InspeccionFirmada_v1 e)
     {
         Estado = EstadoInspeccion.Firmada;
+        FirmaUri = e.FirmaUri;
+        UbicacionFirma = e.UbicacionFirma;
+        FirmadaEn = e.FirmadaEn;
         _contribuyentes.Add(e.FirmadoPor);
     }
 
@@ -547,6 +577,154 @@ public sealed class Inspeccion
             Justificacion: e.Justificacion,
             Unidad: e.Unidad));
         _contribuyentes.Add(e.AsignadoPor);
+    }
+
+    // ── Slice 1g — FirmarInspeccion ──────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1g. Valida las pre-condiciones PRE-2..PRE-9
+    /// (en ese orden) y emite los tres eventos en orden causal:
+    /// <see cref="DiagnosticoEmitido_v1"/> → <see cref="DictamenEstablecido_v1"/> →
+    /// <see cref="InspeccionFirmada_v1"/>. Apply es puro — las validaciones viven aquí.
+    /// PRE-1 (capability) y PRE-4 (diagnóstico no vacío) los verifica la capa de handler.
+    /// </summary>
+    public IReadOnlyList<object> Firmar(FirmarInspeccion cmd, DateTimeOffset ahora)
+    {
+        // PRE-2 — estado debe ser EnEjecucion (V-F7).
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se puede firmar en estado EnEjecucion.");
+        }
+
+        // PRE-3 — al menos un hallazgo vigente (no eliminado) (V-F1).
+        var hallazgosVigentes = _hallazgos.Where(h => !h.Eliminado).ToList();
+        if (hallazgosVigentes.Count == 0)
+        {
+            throw new SinHallazgosException(
+                "La inspección no tiene hallazgos vigentes. Registra al menos un hallazgo antes de firmar.");
+        }
+
+        // PRE-7 — FirmaUri no vacío (V-F5).
+        if (string.IsNullOrWhiteSpace(cmd.FirmaUri))
+        {
+            throw new FirmaRequeridaException(
+                "FirmaUri es obligatorio. El cliente debe subir la imagen de firma antes de invocar este comando.");
+        }
+
+        // PRE-8 — UbicacionFirma no nula (V-F6).
+        if (cmd.UbicacionFirma is null)
+        {
+            throw new GpsRequeridoException(
+                "UbicacionFirma es obligatoria. El GPS debe recapturarse al momento de firmar.");
+        }
+
+        // PRE-9 — el firmante debe ser contribuyente del stream (P-2 confirmado).
+        if (!_contribuyentes.Contains(cmd.TecnicoId))
+        {
+            throw new TecnicoNoContribuyenteException(
+                $"El técnico '{cmd.TecnicoId}' no es contribuyente de esta inspección. Solo los contribuyentes pueden firmar.");
+        }
+
+        // PRE-5 — coherencia dictamen ↔ hallazgos (V-F8).
+        // PuedeOperar solo es válido cuando ningún hallazgo vigente requiere seguimiento o intervención.
+        if (cmd.Dictamen == DictamenOperacion.PuedeOperar)
+        {
+            var conSeguimientoOIntervencion = hallazgosVigentes
+                .Where(h => h.AccionRequerida == AccionRequerida.RequiereSeguimiento
+                         || h.AccionRequerida == AccionRequerida.RequiereIntervencion)
+                .ToList();
+
+            if (conSeguimientoOIntervencion.Count > 0)
+            {
+                var tieneSeguimiento = conSeguimientoOIntervencion.Any(h => h.AccionRequerida == AccionRequerida.RequiereSeguimiento);
+                var tieneIntervencion = conSeguimientoOIntervencion.Any(h => h.AccionRequerida == AccionRequerida.RequiereIntervencion);
+                var motivo = (tieneSeguimiento, tieneIntervencion) switch
+                {
+                    (true, true)  => "seguimiento e intervención",
+                    (true, false) => "seguimiento",
+                    _             => "intervención"
+                };
+                throw new DictamenIncoherenteException(
+                    $"No puedes firmar con dictamen 'Apto'. Hay hallazgos que requieren {motivo}. " +
+                    "Selecciona 'Con restricciones' o 'No apto'.");
+            }
+        }
+
+        // PRE-6 — hallazgos con RequiereIntervencion deben tener TipoFallaId, CausaFallaId y ≥1 adjunto activo (V-F3).
+        foreach (var hallazgo in hallazgosVigentes.Where(h => h.AccionRequerida == AccionRequerida.RequiereIntervencion))
+        {
+            if (hallazgo.TipoFallaId is null)
+            {
+                throw new HallazgoIntervencionIncompletoException(
+                    $"El hallazgo {hallazgo.HallazgoId} requiere intervención pero le falta TipoFallaId.");
+            }
+
+            if (hallazgo.CausaFallaId is null)
+            {
+                throw new HallazgoIntervencionIncompletoException(
+                    $"El hallazgo {hallazgo.HallazgoId} requiere intervención pero le falta CausaFallaId.");
+            }
+
+            if (!_adjuntosPorHallazgo.TryGetValue(hallazgo.HallazgoId, out var adjuntos) || adjuntos.Count == 0)
+            {
+                throw new HallazgoIntervencionIncompletoException(
+                    $"El hallazgo {hallazgo.HallazgoId} requiere intervención pero no tiene al menos un adjunto de evidencia.");
+            }
+        }
+
+        return new object[]
+        {
+            new DiagnosticoEmitido_v1(InspeccionId, cmd.Diagnostico, cmd.TecnicoId, ahora),
+            new DictamenEstablecido_v1(InspeccionId, cmd.Dictamen, cmd.JustificacionDictamen, cmd.TecnicoId, ahora),
+            new InspeccionFirmada_v1(InspeccionId, cmd.TecnicoId, cmd.FirmaUri, cmd.UbicacionFirma, ahora)
+        };
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="DiagnosticoEmitido_v1"/>: persiste el texto
+    /// de diagnóstico. Sin validaciones — solo mutación de estado. Slice 1g.
+    /// </summary>
+    public void Apply(DiagnosticoEmitido_v1 e)
+    {
+        DiagnosticoFinal = e.DiagnosticoFinal;
+        _contribuyentes.Add(e.EmitidoPor);
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="DictamenEstablecido_v1"/>: persiste el dictamen
+    /// y su justificación. Sin validaciones — solo mutación de estado. Slice 1g.
+    /// </summary>
+    public void Apply(DictamenEstablecido_v1 e)
+    {
+        Dictamen = e.Dictamen;
+        _contribuyentes.Add(e.EmitidoPor);
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="AdjuntoSubido_v1"/>: registra el adjunto como
+    /// activo en el índice por hallazgo. Sin validaciones. Slice 1g (stub para PRE-6).
+    /// </summary>
+    public void Apply(AdjuntoSubido_v1 e)
+    {
+        if (!_adjuntosPorHallazgo.TryGetValue(e.HallazgoId, out var set))
+        {
+            set = [];
+            _adjuntosPorHallazgo[e.HallazgoId] = set;
+        }
+        set.Add(e.AdjuntoId);
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="AdjuntoEliminado_v1"/>: quita el adjunto del
+    /// índice activo para su hallazgo. Sin validaciones. Slice 1g (stub para PRE-6 §6.13).
+    /// </summary>
+    public void Apply(AdjuntoEliminado_v1 e)
+    {
+        if (_adjuntosPorHallazgo.TryGetValue(e.HallazgoId, out var set))
+        {
+            set.Remove(e.AdjuntoId);
+        }
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────

@@ -86,7 +86,12 @@ public sealed class EliminarHallazgoTests
         {
             EventoInspeccionIniciada(),
             HallazgoRegistradoEjemplo(hallazgoId: HallazgoG1),
-            new InspeccionFirmada_v1(InspeccionIdNueva, Ahora, "rmartinez"),
+            new InspeccionFirmada_v1(
+                InspeccionId: InspeccionIdNueva,
+                FirmadoPor: "rmartinez",
+                FirmaUri: "https://blobs/firma-fixture.png",
+                UbicacionFirma: UbicacionTipo(),
+                FirmadaEn: Ahora),
         };
 
         // When: intentar eliminar hallazgo con inspección firmada

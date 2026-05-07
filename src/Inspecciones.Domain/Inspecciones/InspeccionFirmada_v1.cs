@@ -1,12 +1,15 @@
+using Inspecciones.Domain.Comun;
+
 namespace Inspecciones.Domain.Inspecciones;
 
 /// <summary>
-/// Evento que marca la inspección como firmada por el técnico.
-/// Stub mínimo para que el slice 1c pueda reconstruir el estado
-/// <see cref="EstadoInspeccion.Firmada"/> en los tests de PRE-3.
-/// La lógica completa se implementa en el slice de FirmarInspeccion.
+/// Evento que sella la inspección como firmada por el técnico.
+/// Tercer evento del acto atómico de firma (orden 3/3). Slice 1g — FirmarInspeccion.
+/// Payload completo según spec §3.
 /// </summary>
 public sealed record InspeccionFirmada_v1(
-    Guid InspeccionId,
-    DateTimeOffset FirmadaEn,
-    string FirmadoPor);
+    Guid           InspeccionId,
+    string         FirmadoPor,
+    string         FirmaUri,
+    UbicacionGps   UbicacionFirma,
+    DateTimeOffset FirmadaEn);

@@ -317,6 +317,86 @@ public static class InspeccionesEndpoints
             })
            .WithName("AsignarRepuesto");
 
+        // ── Slice 1g — FirmarInspeccion ─────────────────────────────────────
+        app.MapPost("/api/v1/inspecciones/{id:guid}/firmar", async (
+                Guid id,
+                FirmarInspeccionRequest request,
+                FirmarInspeccionHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+                var claims = new ClaimsTecnico(
+                    TecnicoIniciador: tecnicoId,
+                    ProyectosAsignados: new HashSet<int>(),
+                    TieneCapabilityEjecutarInspeccion: true);
+
+                var cmd = new FirmarInspeccion(
+                    InspeccionId: id,
+                    Diagnostico: request.Diagnostico,
+                    Dictamen: request.Dictamen,
+                    JustificacionDictamen: request.JustificacionDictamen,
+                    FirmaUri: request.FirmaUri,
+                    UbicacionFirma: request.UbicacionFirma,
+                    TecnicoId: tecnicoId);
+
+                try
+                {
+                    var resultado = await handler.ManejarAsync(cmd, claims, ct);
+
+                    var response = new FirmarInspeccionResponse(
+                        InspeccionId: resultado.InspeccionId,
+                        Estado: resultado.Estado,
+                        FirmadaEn: resultado.FirmadaEn,
+                        Dictamen: resultado.Dictamen);
+
+                    return Results.Ok(response);
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-F", mensaje = ex.Message });
+                }
+                catch (CapabilityRequeridaException)
+                {
+                    return Results.Forbid();
+                }
+                catch (TecnicoNoContribuyenteException)
+                {
+                    return Results.Forbid();
+                }
+                catch (InspeccionNoEnEjecucionException ex)
+                {
+                    return Results.Conflict(new { codigoError = "PRE-2", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        SinHallazgosException                     => "V-F1",
+                        DiagnosticoRequeridoException             => "PRE-4",
+                        DictamenIncoherenteException              => "V-F8",
+                        HallazgoIntervencionIncompletoException   => "V-F3",
+                        FirmaRequeridaException                   => "V-F5",
+                        GpsRequeridoException                     => "V-F6",
+                        _                                         => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("FirmarInspeccion");
+
         // ── Slice 1e — EliminarHallazgo ─────────────────────────────────────
         app.MapDelete("/api/v1/inspecciones/{inspeccionId:guid}/hallazgos/{hallazgoId:guid}", async (
                 Guid inspeccionId,

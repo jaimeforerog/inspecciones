@@ -44,12 +44,20 @@ internal static class HallazgoFixtures
 
     /// <summary>
     /// Stream que simula una inspección en estado Firmada.
-    /// Usa <see cref="InspeccionFirmada_v1"/> (stub del dominio añadido en slice 1c
-    /// para soportar el test PRE-3 antes de que exista el slice FirmarInspeccion).
+    /// Usa la firma completa de <see cref="InspeccionFirmada_v1"/> tal como la define
+    /// el slice 1g. Actualizado al levantar el payload completo del evento en 1g.
     /// </summary>
     public static object[] StreamConInspeccionFirmada() =>
         [EventoInspeccionIniciada(),
-         new InspeccionFirmada_v1(InspeccionIdNueva, Ahora, "rmartinez")];
+         HallazgoRegistradoEjemplo(hallazgoId: HallazgoG1),
+         new DiagnosticoEmitido_v1(InspeccionIdNueva, "Inspección sin hallazgos críticos", "rmartinez", Ahora),
+         new DictamenEstablecido_v1(InspeccionIdNueva, DictamenOperacion.PuedeOperar, "Equipo en buen estado", "rmartinez", Ahora),
+         new InspeccionFirmada_v1(
+             InspeccionId: InspeccionIdNueva,
+             FirmadoPor: "rmartinez",
+             FirmaUri: "https://blobs/firma-fixture.png",
+             UbicacionFirma: UbicacionTipo(),
+             FirmadaEn: Ahora)];
 
     /// <summary>
     /// Stream que simula una inspección en estado Cancelada.

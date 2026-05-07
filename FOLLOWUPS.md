@@ -47,11 +47,13 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 ### #13 — Migrar `InspeccionAbiertaPorEquipoView` a `MultiStreamProjection` inline 🟢
 
 **Origen:** slice 1b refactorer — candidato §4.1 green-notes
-**Fecha:** 2026-05-06
+**Fecha:** 2026-05-06 · **Actualizado:** 2026-05-07 (slice 1g refactorer)
 **Tipo:** deuda técnica · Marten
 **Descripción:** El handler escribe la view con `session.Insert(view)` directamente en lugar de usar `MultiStreamProjection<InspeccionAbiertaPorEquipoView, int>` registrada `Inline` como describe la spec §8.1. La causa es que el `PostgresFixture` de `Application.Tests` no registra proyecciones en su `StoreOptions`. El refactor requiere: (1) registrar la proyección en `StoreOptions` del fixture, (2) registrar la proyección en `Program.cs`, (3) quitar el `_session.Insert(view)` del handler. El beneficio principal es que los eventos terminales (`InspeccionFirmada_v1`, `InspeccionCancelada_v1`) podrán hacer `DeleteEvent<T>` centralizado en la proyección sin que cada handler recuerde borrar la fila.
 **Disparador para abrir slice:** el primer slice que maneje `InspeccionFirmada_v1` o `InspeccionCancelada_v1` — ese slice necesita eliminar la fila de `InspeccionAbiertaPorEquipoView` y es el momento natural de migrar a `MultiStreamProjection`.
-**Notas:** hasta entonces, `session.Insert(view)` en el handler es correcto y atómico. No es deuda bloqueante.
+**Estado en slice 1g (2026-05-07):** el disparador se alcanzó. Green migró la proyección de `session.Insert(view)` en el handler a `EventProjection` registrada inline (`InspeccionAbiertaPorEquipoProjection`). Se optó por `EventProjection` (no `MultiStreamProjection`) porque `InspeccionFirmada_v1` e `InspeccionCancelada_v1` no contienen `EquipoId` — la proyección necesita cargar la fila existente por `InspeccionId` para obtener la PK del documento a eliminar. Para poder usar `MultiStreamProjection` puro con `DeleteEvent<T>` keyed por `EquipoId`, habría que agregar `EquipoId: int` a esos dos eventos. Eso es un cambio de contrato de evento que requiere decisión del dominio.
+**Bloqueo pendiente:** confirmar con el orquestador si agregar `EquipoId` a `InspeccionFirmada_v1` e `InspeccionCancelada_v1` es aceptable (el campo es parte del aggregate state, su inclusión en el evento no cambia lógica de negocio — solo enriquece el payload para proyecciones). Si se aprueba, el refactor es: (1) agregar `EquipoId: int` a los dos eventos, (2) actualizar los `Apply` correspondientes del aggregate, (3) reemplazar `EventProjection` por `MultiStreamProjection` en `InspeccionAbiertaPorEquipoProjection`, (4) actualizar los fixtures de test que construyen esos eventos.
+**Notas:** la `EventProjection` actual es funcionalmente correcta; no es deuda bloqueante. La migración a `MultiStreamProjection` mejora rendimiento (elimina la query de lookup al delete) pero no es urgente.
 
 ### #14 — Claims reales desde JWT cuando ADR-002 se resuelva 🟢
 
