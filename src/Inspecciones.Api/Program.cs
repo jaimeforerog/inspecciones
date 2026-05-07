@@ -1,5 +1,6 @@
 using Inspecciones.Api.Inspecciones;
 using Inspecciones.Application.Inspecciones;
+using Inspecciones.Domain.Catalogos;
 using Marten;
 using Oakton;
 using Scalar.AspNetCore;
@@ -7,8 +8,6 @@ using Wolverine;
 using Wolverine.Marten;
 
 var builder = WebApplication.CreateBuilder(args);
-
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Marten — event store + read models + projections (sobre PostgreSQL).
@@ -29,6 +28,11 @@ builder.Services.AddMarten((StoreOptions options) =>
         // JSON serializer — usa el default de Marten (Newtonsoft.Json). El detalle de
         // configuración del serializer (System.Text.Json + casing + enum como string) se
         // cierra en un slice posterior cuando emerja necesidad concreta.
+
+        // PKs de catálogos ERP usan nombre de campo semántico (no "Id") — registrar identidad explícita.
+        options.Schema.For<EquipoLocal>().Identity(x => x.EquipoId);
+        options.Schema.For<RutinaTecnicaLocal>().Identity(x => x.RutinaId);
+        options.Schema.For<RepuestoLocal>().Identity(x => x.SkuId);
 
         // Solo crear/migrar el schema en Development. En prod los DDL se aplican via pipeline.
         if (isDevelopment)

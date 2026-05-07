@@ -1408,19 +1408,21 @@ Esto **reduce dos endpoints y agrega tres** respecto al inventario anterior. Hay
 
 ### 12.7 Modelo final ajustado tras la reconciliación (*Hallazgo superseded por §12.9*)
 
-#### `EquipoLocal` (final — extendido 2026-04-30 con dos medidores)
+#### `EquipoLocal` (final — extendido 2026-04-30 con dos medidores; refinado 2026-05-05 con asignación de rutinas)
 
 ```csharp
 public sealed record EquipoLocal(
-    int EquipoId,                      // Id técnico interno
+    int EquipoId,                       // Id técnico interno (PK ERP)
     string CodigoSinco,                 // "1" — clave natural
     string? Placa,                      // "xemp899" — opcional
     string Descripcion,
-    string GrupoMantenimiento,          // "BULLDOZER" — clave para rutina
-    int UbicacionId,                   // referencia a UbicacionLocal
-    int? ProyectoActualId,                 // referencia a ProyectoLocal (asignación dinámica)
+    int GrupoMantenimientoId,           // PK ERP del grupo — clave para derivar rutinas de monitoreo (decisión 2026-05-05; ver §12.11.5)
+    int UbicacionId,                    // referencia a UbicacionLocal
+    int? ProyectoActualId,              // referencia a ProyectoLocal (asignación dinámica)
+    int? RutinaTecnicaId,               // asignación per-equipo para rutina técnica (decisión 2026-05-04; ver §12.11.1)
     LecturaMedidor? MedidorPrimario,    // p. ej. odómetro (Km) — extendido 2026-04-30
     LecturaMedidor? MedidorSecundario,  // p. ej. horómetro (Hr) — extendido 2026-04-30
+    IReadOnlyList<ParteEquipoLocal>? Partes,  // partes asignadas al equipo — usado por INV-PartePerteneceAlEquipo (slice 1c)
     Dictionary<string, string> AtributosExtra,
     DateTime SincronizadoEn);
 
@@ -1428,11 +1430,25 @@ public sealed record LecturaMedidor(
     string Magnitud,                    // "Km", "Hr", etc. (string del catálogo del ERP)
     decimal Valor,                      // 123456.78
     DateTime CapturadaEn);              // última actualización del lado ERP
+
+public sealed record ParteEquipoLocal(
+    int ParteEquipoId,                  // PK ERP de la asignación parte↔equipo
+    string ParteCodigo,
+    string ParteNombre);
 ```
 
 > **Decisión 2026-04-30 (cierre followup #3):** el mock del diseño (image4 de `Plantillas Excel/mock del diseño.docx` — pantalla "Previsualización equipo") muestra explícitamente "Medidor 1: Km 123.456,78" y "Medidor 2: Hr 12.43" como caso normal en la pantalla de selección de equipo. Por tanto, **dos medidores son la norma** (no caso atípico). La forma elegida usa dos campos posicionales (`MedidorPrimario` / `MedidorSecundario`) en lugar de `Dictionary<string,decimal>` por simplicidad — el ERP define la semántica de cuál es primario para cada grupo de mantenimiento. Si en el futuro emerge un caso con N medidores (>2), se evalúa migrar a `IReadOnlyList<LecturaMedidor>` como cambio aditivo. **Pregunta abierta para David** (paso 3.32 sync de catálogos): ¿el ERP define el orden primario/secundario por grupo, o lo decide el técnico al iniciar inspección? El módulo asume **el ERP** — si es decisión del técnico, se ajusta el contrato del endpoint.
 
-Sin campo `Modelo`. La rutina aplicable se determina por `GrupoMantenimiento`.
+> **Decisión 2026-05-05 (asignación de rutinas):** el record exige **dos campos** distintos según el tipo de rutina (asimetría documentada en §12.11.1 vs §12.11.5):
+>
+> - **`RutinaTecnicaId: int?`** — asignación **explícita per-equipo** (1 rutina técnica por equipo, única). Lo trae M-3b. El handler `IniciarInspeccion` la resuelve auto; el técnico no elige.
+> - **`GrupoMantenimientoId: int`** — clave del grupo del equipo. El cliente PWA filtra el catálogo de rutinas de monitoreo (M-16) con `rutina.GrupoMantenimientoId == equipo.GrupoMantenimientoId`. Sin tabla intermedia equipo↔rutinas-monitoreo en el ERP.
+>
+> El campo legacy `GrupoMantenimiento: string` ("BULLDOZER") fue **reemplazado** por `GrupoMantenimientoId: int` para uniformar con el resto de claves naturales del ERP (PK = `int`, código natural = `string`). Si la UI necesita el nombre del grupo, lo trae denormalizado el sync de catálogos o vía join con el catálogo de grupos.
+
+> **Estado del código a 2026-05-07:** la implementación en `src/Inspecciones.Domain/Catalogos/EquipoLocal.cs` (slices 1a-1f) materializa un **subset funcional** del record canonical aquí descrito — solo `EquipoId`, `EquipoCodigo`, `ProyectoId`, `RutinaTecnicaId`, `GrupoMantenimientoId`, `Partes`. El subset es suficiente para los slices cerrados; los campos restantes (`Placa`, `Descripcion`, medidores, `AtributosExtra`, `SincronizadoEn`) se agregan en el slice de sync M-3b cuando se implemente el adapter ERP.
+
+Sin campo `Modelo`. La rutina aplicable se determina por `GrupoMantenimientoId`.
 
 #### `Rutina` (*campo `Tipo` y enum `TipoRutina` superseded por §12.11.1*)
 
@@ -3568,12 +3584,16 @@ I-H10  Si Origen = Seguimiento → SeguimientoOrigenId obligatorio e inmutable
 I-H11  Si Origen = Seguimiento → AccionRequerida debe ser RequiereIntervencion
        (los seguimientos sólo se escalan a OT, no se reabren como otro seguimiento;
         ver también I-S1 en §15.8.7)
+I-H12  Solo hallazgos con AccionRequerida = RequiereIntervencion pueden tener
+       repuestos asignados (registrada formalmente al cerrar slice-1f
+       AsignarRepuesto, 2026-05-06; antes vivía como "I10" en §12.10.12 sin
+       código canónico. Implementada como PRE-C del comando AsignarRepuesto)
 ```
 
 ### 15.4 Catálogo final del MVP — 20 eventos
 
 > **Convención de tipos de IDs (decisión 2026-05-04, opción 1b):**
-> - **IDs del ERP (PKs de tablas Sinco) → `int`** (System.Int32, 32-bit). Ejemplos: `EquipoId`, `ProyectoId`/`ObraId`, `RutinaId`, `ParteId`/`ParteEquipoId`, `ActividadId`, `CausaFallaId`, `TipoFallaId`, `NovedadPreopId`, `SkuId`/`InsumoId`, `OTCorrectivaIdSinco`, `ItemId`, `RutinaMonitoreoId`. Acompañados de `<X>Codigo: string` cuando aplica (legible para UI/URLs, ej. `equipoCodigo="D11T-001"`, `obraCodigo="OB-2026-CALI-001"`, `rutinaCodigo="INSP. BULL.MOTOR"`).
+> - **IDs del ERP (PKs de tablas Sinco) → `int`** (System.Int32, 32-bit). Ejemplos: `EquipoId`, `ProyectoId`/`ObraId`, `RutinaId`, `ParteId`/`ParteEquipoId`, `ActividadId`, `CausaFallaId`, `TipoFallaId`, `NovedadPreopId`, `SkuId`/`InsumoId`, `OTCorrectivaIdSinco`, `ItemId`, `RutinaMonitoreoId`, `GrupoMantenimientoId` (decisión 2026-05-05 — clave para derivar rutinas de monitoreo, ver §12.11.5). Acompañados de `<X>Codigo: string` cuando aplica (legible para UI/URLs, ej. `equipoCodigo="D11T-001"`, `obraCodigo="OB-2026-CALI-001"`, `rutinaCodigo="INSP. BULL.MOTOR"`).
 > - **IDs internos del módulo (generados por el cliente / aggregate) → `Guid`** (preferido v7 para ordenamiento natural por tiempo). Ejemplos: `InspeccionId`, `HallazgoId`, `RepuestoId`, `AdjuntoId` (cuando es del Blob Storage propio), `SeguimientoHallazgoId`. Estos IDs no existen en el ERP y no necesitan convivir con códigos legibles.
 > - **Path params HTTP del ERP**: usan códigos legibles cuando existen (ej. `GET /equipos/{equipoCodigo}` con `D11T-001`). Bodies y responses usan `int` para los `<X>Id` y `string` para los `<X>Codigo`.
 

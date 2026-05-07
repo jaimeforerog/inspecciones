@@ -1,3 +1,4 @@
+using Inspecciones.Domain.Catalogos;
 using Marten;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
@@ -33,6 +34,10 @@ public sealed class PostgresFixture : IAsyncLifetime
             opts.Connection(_postgres.GetConnectionString());
             opts.DatabaseSchemaName = "inspecciones";
             opts.AutoCreateSchemaObjects = Weasel.Core.AutoCreate.CreateOrUpdate;
+
+            opts.Schema.For<EquipoLocal>().Identity(x => x.EquipoId);
+            opts.Schema.For<RutinaTecnicaLocal>().Identity(x => x.RutinaId);
+            opts.Schema.For<RepuestoLocal>().Identity(x => x.SkuId);
         });
         _services = collection.BuildServiceProvider();
     }

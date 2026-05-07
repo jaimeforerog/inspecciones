@@ -4,29 +4,18 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 
 ## Estado del proyecto
 
-- **Fase actual:** Fase 0 (diseño) al 98 %. Bootstrap + slice-1a en red phase. El resto sin código aún.
-- **Próximo trabajo:** cerrar slice-1a (`IniciarInspeccion` técnica) end-to-end con el squad TDD.
+- **Fase actual:** Fase 1 (slice 1a-1f cerrados). API HTTP funcional para `IniciarInspeccion`, `RegistrarHallazgo`, `ActualizarHallazgo`, `AsignarRepuesto`, `EliminarHallazgo`.
+- **Próximo trabajo:** continuar con la rama de firma/dictamen + sagas OT, o avanzar a inspección de monitoreo (comando hermano `IniciarInspeccionMonitoreo`).
 
-### ⚠️ Embargo de docs (decisión Jaime 2026-05-05)
+### Embargo de docs — LEVANTADO 2026-05-07
 
-**Vigente hasta:** 3-4 slices cerrados con `feat(slice-{N}): X` y DoD completo (estimado: slice-1a + slice-1b + slice-2 + slice-3).
+**Estado:** **levantado** por Jaime el 2026-05-07 (disparador implícito ya cumplido — 6 slices cerrados: 1a, 1b, 1c, 1d, 1e, 1f).
 
-**Razón:** la doc:código ratio actual es alta y los conceptos se replican en múltiples docs. Cerrar slices reales va a evidenciar qué partes del modelo/ADRs son load-bearing y cuáles eran sobre-diseño. Editar docs ahora amplifica el costo de cualquier cambio (esta sesión 2026-05-05 = 5 cambios mayores tocaron ~25 archivos).
+**Histórico (vigente entre 2026-05-05 y 2026-05-07):** se prohibieron edits no-triviales a `Inspecciones/docs/*` para evitar amplificar el costo de cambios mientras los slices iniciales evidenciaban qué partes del modelo/ADRs eran load-bearing. Razón documentada en commit `30a0e71 docs(metodología): embargo de docs hasta cerrar 4 slices`.
 
-**Qué se embarga:**
-- Edits NO-triviales a `Inspecciones/docs/*` (modelo, ADRs nuevos refinements, wireframes, workflows, brief, SOW, contrato APIs).
-- Reescritura de secciones del modelo §15.
-- Nuevos diagramas / HTMLs interactivos.
+**Reconciliación 2026-05-07:** al levantarse, se aplicó la propagación de `EquipoLocal.GrupoMantenimientoId` al modelo §12.7 (campo añadido al record canonical, alineado con M-3b decisión 2026-05-05).
 
-**Qué SÍ se permite:**
-- Artefactos de slice (`slices/{N}-*/spec.md`, red-notes, green-notes, refactor-notes, review-notes).
-- Código de producción y tests.
-- `FOLLOWUPS.md` — registrar deuda detectada durante slices.
-- ADR **nuevo** si el slice produce decisión arquitectónica genuina (no refinement de uno existente).
-- Fix de inconsistencia que bloquee al squad (p. ej. CLAUDE.md decía "sin código aún" — fix permitido).
-- `CLAUDE.md`, `METHODOLOGY.md`, `templates/agent-personas/*` cuando sea relevante para el squad.
-
-**Cómo levantar el embargo:** el usuario lo dice explícito ("levantamos embargo de docs") o se cumple el disparador (4 slices cerrados — el orquestador lo nota al cerrar el cuarto y pregunta).
+**Próximo embargo:** si se necesita uno nuevo, registrarlo aquí con fecha y disparador de levantamiento.
 - **Roadmap:** `Inspecciones/docs/roadmap.md` (fases 0..10).
 - **Modelo de dominio:** `Inspecciones/docs/01-modelo-dominio.md` §15 (fuente de verdad).
 - **Contrato de APIs ERP:** `Inspecciones/docs/06-contrato-apis-erp.md` (16 obligatorios MVP + 1 condicional + 8 diferidos — M-16 promovido a MVP el 2026-05-05 por inclusión de monitoreo; U-1/U-2 eliminados el 2026-05-05 — identidad 100% del host PWA).
