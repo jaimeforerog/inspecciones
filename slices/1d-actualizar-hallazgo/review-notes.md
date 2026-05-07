@@ -31,7 +31,7 @@ El slice está bien ejecutado: 15 de 16 escenarios tienen test activo, el único
 ### 2.3 Implementación
 
 - [x] Código de producción mínimo: todos los métodos y tipos públicos nuevos ejercidos por tests activos. `HallazgoEliminadoException` tiene cobertura line=0 por el skip §6.7 — aceptado como consecuencia documentada del prerrequisito de `EliminarHallazgo`.
-- [x] Sin `DateTime.UtcNow`, `Guid.NewGuid()` ni acceso a APIs del navegador en el dominio. `ahora` se inyecta como parámetro; `TecnicoId` llega desde fuera.
+- [x] Sin `DateTime.UtcNow`, `Guid.NewGuid()` ni acceso a APIs del navegador en el dominio. `ahora` se inyecta como parámetro; `EmitidoPor` llega desde fuera.
 - [x] `HallazgoActualizado_v1` es `sealed record` — sin setters públicos.
 - [x] `UbicacionGps` usado en su tipo propio; `TipoFallaId`/`CausaFallaId` son `int?` (ERP IDs conforme a §15.4); sin primitivos pelados para coordenadas.
 - [x] `Apply(HallazgoActualizado_v1)` puro: no lanza, no valida, no re-aplica invariantes. El caso `idx < 0` retorna silenciosamente con comentario explicativo correcto.
@@ -56,7 +56,7 @@ El slice está bien ejecutado: 15 de 16 escenarios tienen test activo, el único
 
 - [x] Alineado con `01-modelo-dominio.md §15.3`: `HallazgoActualizado_v1` no contiene `Origen`, `ParteEquipoId`, `NovedadPreopOrigenId`, `SeguimientoOrigenId` — verificado contra el record de producción.
 - [x] Alineado con `§15.4`: PKs del ERP (`TipoFallaId`, `CausaFallaId`) son `int?`; IDs internos (`InspeccionId`, `HallazgoId`) son `Guid`.
-- [x] Alineado con ADR-002 (tentativo): `TecnicoId` llega como parámetro desde fuera del dominio; mock `"ana.gomez"` consistente con slices anteriores hasta resolución de followup #14.
+- [x] Alineado con ADR-002 (tentativo): `EmitidoPor` llega como parámetro desde fuera del dominio; mock `"ana.gomez"` consistente con slices anteriores hasta resolución de followup #14.
 - [x] Alineado con ADR-008: spec §7 documenta el patrón `X-Client-Command-Id` con el mismo estado de followup #15 vigente desde slice 1c. Sin regresión ni avance no autorizado.
 - [x] `ObservacionCampo` presente en el evento pero ausente del record `Hallazgo` del agregado — decisión deliberada documentada, aceptable para MVP (ver followup #20).
 

@@ -371,7 +371,7 @@ public sealed class Inspeccion
             ObservacionCampo: cmd.ObservacionCampo,
             UbicacionGps: cmd.UbicacionGps,
             ActualizadoEn: ahora,
-            TecnicoId: cmd.TecnicoId);
+            EmitidoPor: cmd.EmitidoPor);
 
         return new object[] { evento };
     }
@@ -399,7 +399,7 @@ public sealed class Inspeccion
             UbicacionGps = e.UbicacionGps,
             MotivoEliminacion = _hallazgos[idx].MotivoEliminacion,
         };
-        _contribuyentes.Add(e.TecnicoId);
+        _contribuyentes.Add(e.EmitidoPor);
     }
 
     // ── Slice 1e — EliminarHallazgo ──────────────────────────────────────────

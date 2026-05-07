@@ -213,7 +213,7 @@ internal static class HallazgoFixtures
         int? causaFallaId = 12,
         string? observacionCampo = null,
         UbicacionGps? ubicacionGps = null,
-        string tecnicoId = "ana.gomez") =>
+        string emitidoPor = "ana.gomez") =>
         new(InspeccionId: InspeccionIdNueva,
             HallazgoId: hallazgoId ?? HallazgoG1,
             NovedadTecnica: novedadTecnica,
@@ -223,13 +223,13 @@ internal static class HallazgoFixtures
             CausaFallaId: causaFallaId,
             ObservacionCampo: observacionCampo,
             UbicacionGps: ubicacionGps,
-            TecnicoId: tecnicoId);
+            EmitidoPor: emitidoPor);
 
     /// <summary>Comando de actualización — downgrade a RequiereSeguimiento (limpia campos intervención).</summary>
     public static ActualizarHallazgo ComandoActualizarConSeguimiento(
         Guid? hallazgoId = null,
         string novedadTecnica = "Desgaste progresivo, requiere monitoreo continuo",
-        string tecnicoId = "ana.gomez") =>
+        string emitidoPor = "ana.gomez") =>
         new(InspeccionId: InspeccionIdNueva,
             HallazgoId: hallazgoId ?? HallazgoG1,
             NovedadTecnica: novedadTecnica,
@@ -239,13 +239,13 @@ internal static class HallazgoFixtures
             CausaFallaId: null,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: tecnicoId);
+            EmitidoPor: emitidoPor);
 
     /// <summary>Comando de actualización — solo texto, mantiene AccionRequerida=NoRequiereIntervencion.</summary>
     public static ActualizarHallazgo ComandoActualizarSoloTexto(
         Guid? hallazgoId = null,
         string novedadTecnica = "Manguera con desgaste leve — actualización de descripción",
-        string tecnicoId = "ana.gomez") =>
+        string emitidoPor = "ana.gomez") =>
         new(InspeccionId: InspeccionIdNueva,
             HallazgoId: hallazgoId ?? HallazgoG1,
             NovedadTecnica: novedadTecnica,
@@ -255,7 +255,7 @@ internal static class HallazgoFixtures
             CausaFallaId: null,
             ObservacionCampo: null,
             UbicacionGps: null,
-            TecnicoId: tecnicoId);
+            EmitidoPor: emitidoPor);
 
     // ── Eventos de ejemplo para Given ────────────────────────────────────
 
