@@ -8,6 +8,8 @@ using Wolverine.Marten;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Marten — event store + read models + projections (sobre PostgreSQL).
 // ─────────────────────────────────────────────────────────────────────────────
