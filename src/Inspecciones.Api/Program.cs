@@ -33,6 +33,7 @@ builder.Services.AddMarten((StoreOptions options) =>
         options.Schema.For<EquipoLocal>().Identity(x => x.EquipoId);
         options.Schema.For<RutinaTecnicaLocal>().Identity(x => x.RutinaId);
         options.Schema.For<RepuestoLocal>().Identity(x => x.SkuId);
+        options.Schema.For<RutinaMonitoreoLocal>().Identity(x => x.RutinaMonitoreoId);
 
         // Solo crear/migrar el schema en Development. En prod los DDL se aplican via pipeline.
         if (isDevelopment)
@@ -98,6 +99,7 @@ builder.Services.AddScoped<ActualizarHallazgoHandler>();
 builder.Services.AddScoped<EliminarHallazgoHandler>();
 builder.Services.AddScoped<AsignarRepuestoHandler>();
 builder.Services.AddScoped<FirmarInspeccionHandler>();
+builder.Services.AddScoped<IniciarInspeccionMonitoreoHandler>();
 
 var app = builder.Build();
 

@@ -126,3 +126,8 @@ public sealed class GpsRequeridoException(string mensaje)
 /// <summary>PRE-9 / I-F (aggregate) — el técnico que intenta firmar no es un contribuyente registrado en el stream.</summary>
 public sealed class TecnicoNoContribuyenteException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1h — IniciarInspeccionMonitoreo ────────────────────────────────────
+// (Las excepciones de handler PRE-3..PRE-6 viven en Inspecciones.Application.Inspecciones.Excepciones.cs)
+// Las excepciones PRE-8 y PRE-9 reusan ProyectoNoAutorizadoException y FechaReportadaFueraDeRangoException
+// ya definidas en este archivo (slices 1a/1b) — no se duplican.

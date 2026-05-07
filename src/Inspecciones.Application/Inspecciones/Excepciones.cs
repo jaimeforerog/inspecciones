@@ -40,3 +40,28 @@ public sealed class RepuestoNoEncontradoEnCatalogoException(string mensaje)
 /// </summary>
 public sealed class SkuIncompatibleConParteException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1h — IniciarInspeccionMonitoreo ────────────────────────────────────
+
+/// <summary>
+/// PRE-4 (handler slice 1h) — el <c>RutinaMonitoreoId</c> del comando no existe en
+/// el catálogo local <c>RutinaMonitoreoLocal</c>. Código de error <c>I-I-Mon-0</c>.
+/// Mapea a <c>422 Unprocessable Entity</c>.
+/// </summary>
+public sealed class RutinaMonitoreoNoSincronizadaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>
+/// PRE-5 (handler slice 1h) — la rutina de monitoreo no pertenece al mismo grupo de
+/// mantenimiento que el equipo (I-I-Mon-2). Código de error <c>I-I-Mon-2</c>.
+/// Mapea a <c>422 Unprocessable Entity</c>.
+/// </summary>
+public sealed class RutinaNoAplicableAlGrupoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>
+/// PRE-6 (handler slice 1h) — la rutina de monitoreo no tiene items activos (I-I-Mon-1).
+/// Código de error <c>I-I-Mon-1</c>. Mapea a <c>422 Unprocessable Entity</c>.
+/// </summary>
+public sealed class EquipoSinRutinasMonitoreoException(string mensaje)
+    : InspeccionDomainException(mensaje);

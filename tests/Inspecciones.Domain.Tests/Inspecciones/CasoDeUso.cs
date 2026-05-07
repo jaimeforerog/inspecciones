@@ -100,4 +100,22 @@ internal static class CasoDeUso
         var aggregate = Inspeccion.Reconstruir(dados);
         return aggregate.Firmar(cmd, ahora);
     }
+
+    /// <summary>
+    /// Decisión <c>IniciarMonitoreo</c>. Slice 1h — IniciarInspeccionMonitoreo.
+    /// El aggregate se crea sobre stream vacío (PRE-7 I-I1 corto-circuita en el
+    /// handler antes de llegar aquí). El handler pasa <paramref name="itemsSnapshot"/>
+    /// ya filtrados y ordenados (PRE-6 / I-I-Mon-1 ya validada).
+    /// </summary>
+    public static IReadOnlyList<object> IniciarMonitoreo(
+        IReadOnlyList<object> dados,
+        IniciarInspeccionMonitoreo cmd,
+        ClaimsTecnico claims,
+        string rutinaNombre,
+        IReadOnlyList<ItemRutinaMonitoreoSnapshot> itemsSnapshot,
+        DateTimeOffset ahora)
+    {
+        _ = Inspeccion.Reconstruir(dados);
+        return Inspeccion.IniciarMonitoreo(cmd, claims, rutinaNombre, itemsSnapshot, ahora);
+    }
 }

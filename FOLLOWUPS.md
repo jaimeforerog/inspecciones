@@ -109,6 +109,51 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** slice que implemente `DetalleInspeccionView` o cualquier proyección que proyecte `ObservacionCampo` del hallazgo. En ese slice: añadir `ObservacionCampo: string?` al record `Hallazgo`, incluirlo en el `with { ... }` de `Apply(HallazgoActualizado_v1)`, y añadir test que verifique el campo en el state del aggregate.
 **Notas:** el compilador forzará la actualización del `with` automáticamente una vez se añada el campo al record `Hallazgo`.
 
+### #23 — Extraer `MensajeActiva` a constante compartida entre handlers y alinear duplicación estructural 1b/1h 🟢
+
+**Origen:** slice 1h refactorer — candidatos §5.1 y §5.2 de green-notes
+**Fecha:** 2026-05-07
+**Tipo:** deuda técnica · DRY
+**Descripción:** `IniciarInspeccionHandler` (slice 1b) e `IniciarInspeccionMonitoreoHandler` (slice 1h) comparten: (a) la constante `MensajeActiva = "Ya hay inspección activa, abriendo la existente"`, y (b) estructura casi idéntica — I-I1 blanda → lookup equipo → lookup catálogo → validaciones → aggregate → `StartStream` → `SaveChangesAsync` → catch 23505. La duplicación es deliberada (green la dejó para que el refactorer decidiera). La constante puede moverse a una clase `MensajesHandler` en `Application/Inspecciones/` y la estructura podría extraerse a un helper estático `EjecutarConDefensaI_I1<TResult>`. El refactor de este followup toca `IniciarInspeccionHandler` (slice 1b) — es transversal y requiere decisión del orquestador.
+**Disparador para abrir slice:** tercer handler que repita el patrón (p. ej. `IniciarInspeccionPreopHandler`) — en ese momento la duplicación es DRY real con tres instancias y vale la extracción. Alternativamente, hacerlo como slice de limpieza antes de la integración al host.
+**Notas:** no bloqueante. La duplicación actual es 2 instancias — el umbral típico de DRY. Esperar un tercer caso antes de abstraer.
+
+### #24 — Evaluar unificar `IniciarInspeccionResult` e `IniciarInspeccionMonitoreoResult` en un tipo canónico 🟢
+
+**Origen:** slice 1h refactorer — candidato §5.3 de green-notes
+**Fecha:** 2026-05-07
+**Tipo:** deuda técnica · naming · simplificación
+**Descripción:** los dos records son structuralmente idénticos tras la corrección del tipo `Version` en slice 1h refactor. La unificación en un record `IniciarInspeccionResultado` (o similar) eliminaría un tipo redundante, pero toca el resultado del slice 1b (`IniciarInspeccionResult`) y los tests de integración y API que lo referencian. El naming diferenciado actual tiene valor si el endpoint del orquestador mapea ambos de forma distinta a la respuesta HTTP; si mapea idéntico, la unificación es obvia.
+**Disparador para abrir slice:** cuando el orquestador (`infra-wire`) implemente el endpoint `POST /api/v1/inspecciones/monitoreo` del slice 1h y pueda verificar si el mapeo HTTP es idéntico al de `POST /api/v1/inspecciones`. Si es idéntico → unificar en ese slice.
+**Notas:** no bloqueante.
+
+### #25 — Añadir aserción `fila.Tipo == TipoInspeccion.Monitoreo` en test de integración §6.1 🟢
+
+**Origen:** slice 1h review — hallazgo #1
+**Fecha:** 2026-05-07
+**Tipo:** deuda técnica · test
+**Descripción:** El test `IniciarMonitoreo_happy_path_evento_y_proyeccion_persisten_atomicos_seccion_6_1` verifica la existencia de la fila en `InspeccionAbiertaPorEquipoView` y su `InspeccionId`, pero no verifica `fila.Tipo == TipoInspeccion.Monitoreo`. La spec §6.1 lo requiere explícitamente. La proyección `InspeccionAbiertaPorEquipoProjection.cs:42` proyecta `Tipo: e.Tipo` correctamente, pero sin la aserción el test no documenta ni defiende ese comportamiento. El campo `Tipo` en la view fue añadido en este slice (spec §8.1) precisamente para que el frontend distinga el tipo activo al redirigir.
+**Disparador para abrir slice:** primera corrida de tests de integración con Docker disponible (previa al primer merge que toque `InspeccionAbiertaPorEquipoProjection`). Añadir `fila.Tipo.Should().Be(TipoInspeccion.Monitoreo)` en el bloque Then del test §6.1.
+**Notas:** baja criticidad. La proyección es correcta; falta la aserción defensiva.
+
+### #26 — Unificar fuente de `TecnicoIniciador` en `Inspeccion.IniciarMonitoreo` para alinear con `Iniciar` 🟢
+
+**Origen:** slice 1h review — hallazgo #2
+**Fecha:** 2026-05-07
+**Tipo:** deuda técnica · coherencia interna
+**Descripción:** `Inspeccion.IniciarMonitoreo` (slice 1h) asigna `TecnicoIniciador: cmd.IniciadaPor` (línea 179), mientras `Inspeccion.Iniciar` (slice 1b) usa `TecnicoIniciador: claims.TecnicoIniciador` (línea 126). Son semánticamente equivalentes hoy (el handler construye `ClaimsTecnico` con `TecnicoIniciador = cmd.IniciadaPor`), pero la asimetría es una trampa latente: si en algún momento el handler normaliza o enriquece el campo en `ClaimsTecnico` antes de pasarlo al aggregate, `IniciarMonitoreo` quedaría desfasado al leer del comando directamente. El patrón correcto y consistente es que el aggregate siempre lea el técnico desde los claims.
+**Disparador para abrir slice:** cualquier slice que modifique `Inspeccion.IniciarMonitoreo` o el handler `IniciarInspeccionMonitoreoHandler`. En ese momento, cambiar `cmd.IniciadaPor` por `claims.TecnicoIniciador` y actualizar el test que verifica el campo `TecnicoIniciador` del evento.
+**Notas:** no bloqueante. La corrección es de una línea.
+
+### #22 — Confirmar con David que M-16 expone `Activo: bool` y `Orden: int` por item de rutina monitoreo 🟢
+
+**Origen:** slice 1h spec §12 — usuario asumió `sí` a ambas ambigüedades el 2026-05-07 para destrabar `red`.
+**Fecha:** 2026-05-07
+**Tipo:** integración · contrato API ERP · M-16
+**Descripción:** la spec del slice 1h asume que el endpoint `M-16` (`GET /catalogos/rutinas-monitoreo`) expone por cada item: (a) `bool Activo` para distinguir items deprecados sin romper inspecciones en curso, y (b) `int Orden` para que la UI recorra los items en el orden canónico de la rutina. El record `ItemRutinaMonitoreo` en `01-modelo-dominio.md §12.11.5` no incluye estos campos explícitamente. La asunción se aceptó como optimista: si M-16 los expone, el adapter los propaga; si no, el adapter materializa `Activo=true` y `Orden=índice de la lista` (defaults inertes), sin cambio en el dominio. El handler del slice 1h ya filtra por `Activo=true` y ordena por `Orden ASC` antes de pasar el snapshot al aggregate — esa lógica queda inerte si los defaults aplican.
+**Disparador para abrir slice:** previo al slice del adapter `RutinasMonitoreoAdapter` (paso 4.x del roadmap, equipo MYE). Confirmar contrato con David antes de implementar el adapter; si M-16 no soporta los campos, decidir si (i) se solicita extensión al ERP, (ii) el adapter usa defaults, o (iii) §12.11.5 del modelo se actualiza.
+**Notas:** no bloquea el slice 1h ni los slices siguientes de monitoreo (3.16f/g/h). El módulo Azure es robusto a ambos caminos. Pregunta para `07-preguntas-destrabar-followups.md` cuando se prepare la siguiente ronda con David.
+
 ### #19 — Test `RegistrarHallazgo_con_parte_valida_del_equipo_no_lanza_INV_PartePerteneceAlEquipo` aserta excepción del stub en lugar del happy path del handler 🟢
 
 **Origen:** slice 1c review §2 FU-19

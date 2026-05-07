@@ -40,6 +40,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             opts.Schema.For<EquipoLocal>().Identity(x => x.EquipoId);
             opts.Schema.For<RutinaTecnicaLocal>().Identity(x => x.RutinaId);
             opts.Schema.For<RepuestoLocal>().Identity(x => x.SkuId);
+            opts.Schema.For<RutinaMonitoreoLocal>().Identity(x => x.RutinaMonitoreoId);
 
             // FU-13 — proyección inline para InspeccionAbiertaPorEquipoView.
             opts.Projections.Add<InspeccionAbiertaPorEquipoProjection>(ProjectionLifecycle.Inline);

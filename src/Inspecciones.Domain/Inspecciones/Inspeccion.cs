@@ -25,6 +25,12 @@ public sealed class Inspeccion
     public LecturaMedidor? LecturaMedidorPrimario { get; private set; }
     public LecturaMedidor? LecturaMedidorSecundario { get; private set; }
 
+    // ── Slice 1h — IniciarInspeccionMonitoreo ────────────────────────────────
+    /// <summary>Id de la rutina de monitoreo elegida. Null cuando Tipo=Tecnica.</summary>
+    public int? RutinaMonitoreoSeleccionadaId { get; private set; }
+    /// <summary>Snapshot inmutable de items activos al momento de iniciar. Null cuando Tipo=Tecnica.</summary>
+    public IReadOnlyList<ItemRutinaMonitoreoSnapshot>? ItemsSnapshot { get; private set; }
+
     // ── Slice 1g — FirmarInspeccion ──────────────────────────────────────────
     public string? DiagnosticoFinal { get; private set; }
     public DictamenOperacion? Dictamen { get; private set; }
@@ -124,6 +130,61 @@ public sealed class Inspeccion
             FechaReportada: cmd.FechaReportada,
             LecturaMedidorPrimario: cmd.LecturaMedidorPrimario,
             LecturaMedidorSecundario: cmd.LecturaMedidorSecundario);
+
+        return new object[] { evento };
+    }
+
+    /// <summary>
+    /// Método de decisión del slice 1h. Valida PRE-8 (I-I2 defensa en
+    /// profundidad) y PRE-9 (I-I3 FechaReportada) en el aggregate. Las demás
+    /// pre-condiciones (PRE-3..PRE-7) se validan en el handler antes de
+    /// llamar aquí. El handler pasa los <paramref name="itemsSnapshot"/>
+    /// ya filtrados (solo activos) y ordenados.
+    /// </summary>
+    public static IReadOnlyList<object> IniciarMonitoreo(
+        IniciarInspeccionMonitoreo cmd,
+        ClaimsTecnico claims,
+        string rutinaNombre,
+        IReadOnlyList<ItemRutinaMonitoreoSnapshot> itemsSnapshot,
+        DateTimeOffset ahora)
+    {
+        // PRE-8 (I-I2 defensa en profundidad) — el proyecto del comando debe estar entre los asignados.
+        if (!claims.ProyectosAsignados.Contains(cmd.ProyectoId))
+        {
+            throw new ProyectoNoAutorizadoException(
+                $"El técnico {claims.TecnicoIniciador} no tiene asignación al proyecto {cmd.ProyectoId}.");
+        }
+
+        // PRE-9 (I-I3) — FechaReportada debe estar en rango [hoy-30, hoy].
+        var hoy = DateOnly.FromDateTime(ahora.UtcDateTime);
+        var limiteInferior = hoy.AddDays(-30);
+        if (cmd.FechaReportada > hoy)
+        {
+            throw new FechaReportadaFueraDeRangoException(
+                $"FechaReportada {cmd.FechaReportada:yyyy-MM-dd} no puede ser futura. Fecha hoy: {hoy:yyyy-MM-dd}.");
+        }
+
+        if (cmd.FechaReportada < limiteInferior)
+        {
+            throw new FechaReportadaFueraDeRangoException(
+                $"FechaReportada {cmd.FechaReportada:yyyy-MM-dd} excede la ventana de 30 días retroactivos. Mínimo aceptable: {limiteInferior:yyyy-MM-dd}.");
+        }
+
+        var evento = new InspeccionIniciada_v1(
+            InspeccionId: cmd.InspeccionId,
+            Tipo: TipoInspeccion.Monitoreo,
+            EquipoId: cmd.EquipoId,
+            RutinaId: cmd.RutinaMonitoreoId,
+            RutinaCodigo: rutinaNombre,
+            TecnicoIniciador: cmd.IniciadaPor,
+            ProyectoId: cmd.ProyectoId,
+            Ubicacion: cmd.Ubicacion,
+            IniciadaEn: ahora,
+            FechaReportada: cmd.FechaReportada,
+            LecturaMedidorPrimario: cmd.LecturaMedidorPrimario,
+            LecturaMedidorSecundario: cmd.LecturaMedidorSecundario,
+            RutinaMonitoreoSeleccionadaId: cmd.RutinaMonitoreoId,
+            ItemsSnapshot: itemsSnapshot);
 
         return new object[] { evento };
     }
@@ -285,6 +346,9 @@ public sealed class Inspeccion
         FechaReportada = e.FechaReportada;
         LecturaMedidorPrimario = e.LecturaMedidorPrimario;
         LecturaMedidorSecundario = e.LecturaMedidorSecundario;
+        // Slice 1h — campos de monitoreo (null cuando Tipo=Tecnica — backward compat).
+        RutinaMonitoreoSeleccionadaId = e.RutinaMonitoreoSeleccionadaId;
+        ItemsSnapshot = e.ItemsSnapshot;
         _contribuyentes.Add(e.TecnicoIniciador);
     }
 

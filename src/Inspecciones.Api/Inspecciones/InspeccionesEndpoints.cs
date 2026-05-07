@@ -94,6 +94,85 @@ public static class InspeccionesEndpoints
             })
            .WithName("IniciarInspeccion");
 
+        // ── Slice 1h — IniciarInspeccionMonitoreo ──────────────────────────
+        app.MapPost("/api/v1/inspecciones/monitoreo", async (
+                IniciarInspeccionMonitoreoRequest request,
+                IniciarInspeccionMonitoreoHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — followup #14 (claims reales desde JWT cuando ADR-002 se resuelva).
+                var claims = new ClaimsTecnico(
+                    TecnicoIniciador: "rmartinez",
+                    ProyectosAsignados: new HashSet<int> { request.ProyectoId },
+                    TieneCapabilityEjecutarInspeccion: true);
+
+                var cmd = new IniciarInspeccionMonitoreo(
+                    InspeccionId: request.InspeccionId,
+                    EquipoId: request.EquipoId,
+                    ProyectoId: request.ProyectoId,
+                    RutinaMonitoreoId: request.RutinaMonitoreoId,
+                    IniciadaPor: claims.TecnicoIniciador,
+                    Ubicacion: request.Ubicacion,
+                    FechaReportada: request.FechaReportada,
+                    LecturaMedidorPrimario: request.LecturaMedidorPrimario,
+                    LecturaMedidorSecundario: request.LecturaMedidorSecundario,
+                    Capabilities: Array.Empty<string>());
+
+                try
+                {
+                    var resultado = await handler.ManejarAsync(cmd, claims, ct);
+
+                    var response = new IniciarInspeccionMonitoreoResponse(
+                        InspeccionId: resultado.InspeccionId,
+                        RedirigeAExistente: resultado.RedirigeAExistente,
+                        Version: resultado.Version,
+                        Mensaje: resultado.Mensaje);
+
+                    if (resultado.RedirigeAExistente)
+                    {
+                        return Results.Ok(response);
+                    }
+
+                    return Results.Created(
+                        uri: $"/api/v1/inspecciones/{resultado.InspeccionId}",
+                        value: response);
+                }
+                catch (EquipoNoEncontradoException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-3", mensaje = ex.Message });
+                }
+                catch (ProyectoNoAutorizadoException)
+                {
+                    return Results.Forbid();
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        RutinaMonitoreoNoSincronizadaException => "I-I-Mon-0",
+                        RutinaNoAplicableAlGrupoException      => "I-I-Mon-2",
+                        EquipoSinRutinasMonitoreoException     => "I-I-Mon-1",
+                        FechaReportadaFueraDeRangoException    => "I-I3",
+                        EquipoNoPerteneceAProyectoException    => "PRE-4",
+                        CapabilityRequeridaException           => "PRE-1",
+                        _                                      => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("IniciarInspeccionMonitoreo");
+
         // ── Slice 1c — RegistrarHallazgo ────────────────────────────────────
         app.MapPost("/api/v1/inspecciones/{id:guid}/hallazgos", async (
                 Guid id,

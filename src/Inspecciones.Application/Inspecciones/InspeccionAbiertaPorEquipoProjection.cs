@@ -38,7 +38,8 @@ public sealed class InspeccionAbiertaPorEquipoProjection : EventProjection
             InspeccionId: e.InspeccionId,
             TecnicoIniciador: e.TecnicoIniciador,
             IniciadaEn: e.IniciadaEn,
-            ProyectoId: e.ProyectoId);
+            ProyectoId: e.ProyectoId,
+            Tipo: e.Tipo);
         ops.Insert(view);
     }
 
