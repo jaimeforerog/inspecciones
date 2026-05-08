@@ -102,6 +102,7 @@ builder.Services.AddScoped<FirmarInspeccionHandler>();
 builder.Services.AddScoped<IniciarInspeccionMonitoreoHandler>();
 builder.Services.AddScoped<RegistrarMedicionHandler>();
 builder.Services.AddScoped<RegistrarEvaluacionCualitativaHandler>();
+builder.Services.AddScoped<OmitirItemMonitoreoHandler>();
 
 var app = builder.Build();
 

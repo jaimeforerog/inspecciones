@@ -179,3 +179,21 @@ public sealed class ItemNoEsCualitativoException(string mensaje)
 /// el comando futuro <c>ActualizarEvaluacionCualitativa</c>. HTTP 409 Conflict.</summary>
 public sealed class ItemYaEvaluadoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1j — OmitirItemMonitoreo ───────────────────────────────────────────
+
+/// <summary>PRE-8 / I-M8 (aggregate) — el ítem ya tiene una medición o evaluación
+/// cualitativa registrada en esta inspección. Un ítem ya procesado no puede omitirse.
+/// HTTP 422 Unprocessable Entity.</summary>
+public sealed class ItemYaProcesadoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-9 / I-M9 (aggregate) — el ítem ya fue omitido previamente en esta
+/// inspección. Doble omisión del mismo ítem no está permitida. HTTP 409 Conflict.</summary>
+public sealed class ItemYaOmitidoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-3 / PRE-4 — el motivo de omisión está vacío, es solo whitespace, o
+/// tiene menos de 10 caracteres. HTTP 400 Bad Request.</summary>
+public sealed class MotivoOmisionInvalidoException(string mensaje)
+    : InspeccionDomainException(mensaje);

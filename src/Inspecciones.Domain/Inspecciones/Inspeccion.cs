@@ -963,7 +963,7 @@ public sealed class Inspeccion
     public void Apply(ItemMonitoreoOmitido_v1 e)
     {
         _itemsOmitidos.Add(e.ItemId);
-        _contribuyentes.Add(e.OmitidoPor);
+        _contribuyentes.Add(e.EmitidoPor);
     }
 
     // ── Slice 1i' — RegistrarEvaluacionCualitativa ──────────────────────────
@@ -1080,6 +1080,83 @@ public sealed class Inspeccion
     {
         _itemsEvaluados.Add(e.ItemId);
         _contribuyentes.Add(e.EmitidoPor);
+    }
+
+    // ── Slice 1j — OmitirItemMonitoreo ──────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1j. Valida las pre-condiciones PRE-3..PRE-9
+    /// y emite exactamente un <see cref="ItemMonitoreoOmitido_v1"/>.
+    /// La omisión nunca genera hallazgo automático (§12.11.5 punto 6).
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> OmitirItem(OmitirItemMonitoreo cmd, DateTimeOffset ahora)
+    {
+        // PRE-3 / PRE-4: motivo no vacío, no solo whitespace, mínimo 10 chars.
+        if (string.IsNullOrWhiteSpace(cmd.Motivo))
+        {
+            throw new MotivoOmisionInvalidoException(
+                "El motivo de omisión es obligatorio.");
+        }
+
+        if (cmd.Motivo.Trim().Length < 10)
+        {
+            throw new MotivoOmisionInvalidoException(
+                $"El motivo de omisión debe tener al menos 10 caracteres. Recibido: {cmd.Motivo.Trim().Length}.");
+        }
+
+        // PRE-5 / I-M1: solo inspecciones de Tipo=Monitoreo.
+        if (Tipo != TipoInspeccion.Monitoreo)
+        {
+            throw new InspeccionNoEsMonitoreoException(
+                $"La inspección {InspeccionId} es de tipo {Tipo}. OmitirItemMonitoreo solo aplica a inspecciones de Tipo=Monitoreo.");
+        }
+
+        // PRE-6 / I-M2: estado debe ser EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden omitir ítems en estado EnEjecucion.");
+        }
+
+        // PRE-7 / I-M3: el ItemId debe existir en el snapshot.
+        var snapshotIds = ItemsSnapshot?.Select(i => i.ItemId.ToString()) ?? [];
+        var snapshot = ItemsSnapshot?.FirstOrDefault(i => i.ItemId == cmd.ItemId);
+        if (snapshot is null)
+        {
+            throw new ItemNoEncontradoEnSnapshotException(
+                $"El ítem {cmd.ItemId} no forma parte del snapshot de esta inspección. Solo pueden omitirse ítems del snapshot: [{string.Join(", ", snapshotIds)}].");
+        }
+
+        // PRE-8 / I-M8: el ítem no debe haber sido medido ni evaluado.
+        if (_itemsMedidos.Contains(cmd.ItemId))
+        {
+            throw new ItemYaProcesadoException(
+                $"El ítem {cmd.ItemId} ya tiene una medición registrada en esta inspección. Un ítem procesado no puede omitirse.");
+        }
+
+        if (_itemsEvaluados.Contains(cmd.ItemId))
+        {
+            throw new ItemYaProcesadoException(
+                $"El ítem {cmd.ItemId} ya tiene una evaluación registrada en esta inspección. Un ítem procesado no puede omitirse.");
+        }
+
+        // PRE-9 / I-M9: el ítem no debe haber sido omitido previamente.
+        if (_itemsOmitidos.Contains(cmd.ItemId))
+        {
+            throw new ItemYaOmitidoException(
+                $"El ítem {cmd.ItemId} ya fue omitido en esta inspección. La doble omisión del mismo ítem no está permitida.");
+        }
+
+        // Emisión: exactamente un evento. La omisión nunca genera hallazgo.
+        var evento = new ItemMonitoreoOmitido_v1(
+            InspeccionId: InspeccionId,
+            ItemId: cmd.ItemId,
+            Motivo: cmd.Motivo,
+            EmitidoPor: cmd.EmitidoPor,
+            OmitidoEn: ahora);
+
+        return new object[] { evento };
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────

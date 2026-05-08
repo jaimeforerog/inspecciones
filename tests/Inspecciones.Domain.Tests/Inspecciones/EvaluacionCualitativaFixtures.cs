@@ -218,8 +218,8 @@ internal static class EvaluacionCualitativaFixtures
         var omisionEvt = new ItemMonitoreoOmitido_v1(
             InspeccionId: InspeccionIdMonitoreo,
             ItemId: itemIdOmitido,
-            MotivoOmision: "El técnico no pudo acceder al compartimento",
-            OmitidoPor: "ana.gomez",
+            Motivo: "El técnico no pudo acceder al compartimento",
+            EmitidoPor: "ana.gomez",
             OmitidoEn: Ahora.AddMinutes(5));
 
         return [inicioEvt, omisionEvt];

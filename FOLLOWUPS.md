@@ -109,12 +109,21 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** slice que implemente `DetalleInspeccionView` o cualquier proyección que proyecte `ObservacionCampo` del hallazgo. En ese slice: añadir `ObservacionCampo: string?` al record `Hallazgo`, incluirlo en el `with { ... }` de `Apply(HallazgoActualizado_v1)`, y añadir test que verifique el campo en el state del aggregate.
 **Notas:** el compilador forzará la actualización del `with` automáticamente una vez se añada el campo al record `Hallazgo`.
 
+### #29 — Registrar invariantes I-M1..I-M9 de Monitoreo en `01-modelo-dominio.md §15` 🟢
+
+**Origen:** slice 1j review hallazgo #1
+**Fecha:** 2026-05-08
+**Tipo:** doc · domain model
+**Descripción:** Las invariantes I-M1..I-M9 del contexto Monitoreo están definidas en las specs de los slices 1i, 1i' y 1j, y están implementadas en el aggregate `Inspeccion`, pero nunca fueron incorporadas al modelo de dominio como sección canónica. La sección §15.3 es "Invariantes del Hallazgo" (I-H*) y no es el lugar semántico correcto. No existe subsección §15.X dedicada a invariantes de monitoreo. La deuda es acumulativa: I-M1..I-M7 deberían haberse registrado en slices 1i/1i'; I-M8 e I-M9 fueron anunciadas por la spec del slice 1j pero tampoco aparecen en el documento. Acción: crear subsección `§15.13 Invariantes de Monitoreo (I-M*)` con el catálogo I-M1..I-M9 y sus textos canónicos extraídos de las specs de slices 1i, 1i' y 1j. Sin cambio de código.
+**Disparador para abrir slice:** primer slice que extienda o modifique una invariante de monitoreo, o cualquier tarea de doc-writer que toque §15.
+**Notas:** no bloqueante. Las invariantes existen en código y specs; solo falta la sección canónica en el modelo de dominio como referencia oficial.
+
 ### #27 — Extraer guard `X-Client-Command-Id` duplicado en 7 endpoints a helper o middleware 🟢
 
 **Origen:** slice 1i refactorer — candidato §3 green-notes
-**Fecha:** 2026-05-08
+**Fecha:** 2026-05-08 · **Actualizado:** 2026-05-08 (slice 1j)
 **Tipo:** deuda técnica · DRY
-**Descripción:** el bloque de validación del header `X-Client-Command-Id` se repite en los 7 endpoints de `InspeccionesEndpoints.cs` (IniciarInspeccion, IniciarInspeccionMonitoreo, RegistrarHallazgo, ActualizarHallazgo, AsignarRepuesto, FirmarInspeccion, EliminarHallazgo, RegistrarMedicion). Cada endpoint repite el mismo `TryGetValue` + `IsNullOrWhiteSpace` + `Results.BadRequest`. Puede extraerse a un método estático de extensión `RequiereClientCommandId(this HttpContext ctx)` que devuelva `IResult?` (null = ok, not-null = bad request a retornar), o a un filtro de endpoint Minimal API registrado globalmente con `.AddEndpointFilter`. La duplicación es acumulativa desde el slice 1b; el 1i la lleva a 7 instancias — umbral de DRY alcanzado.
+**Descripción:** el bloque de validación del header `X-Client-Command-Id` se repite en los 9 endpoints de `InspeccionesEndpoints.cs` (IniciarInspeccion, IniciarInspeccionMonitoreo, RegistrarHallazgo, ActualizarHallazgo, AsignarRepuesto, FirmarInspeccion, EliminarHallazgo, RegistrarMedicion, RegistrarEvaluacionCualitativa, OmitirItemMonitoreo). Cada endpoint repite el mismo `TryGetValue` + `IsNullOrWhiteSpace` + `Results.BadRequest`. Puede extraerse a un método estático de extensión `RequiereClientCommandId(this HttpContext ctx)` que devuelva `IResult?` (null = ok, not-null = bad request a retornar), o a un filtro de endpoint Minimal API registrado globalmente con `.AddEndpointFilter`. La duplicación es acumulativa desde el slice 1b; el 1j la lleva a 9 instancias — umbral de DRY alcanzado con holgura.
 **Disparador para abrir slice:** cualquier slice que añada un endpoint nuevo, o un slice de limpieza previo a la integración al host. El umbral de DRY (3+ instancias) ya se superó.
 **Notas:** no bloqueante. El comportamiento es idéntico en todos los endpoints; el riesgo de inconsistencia por edición manual aumenta con cada nuevo endpoint.
 

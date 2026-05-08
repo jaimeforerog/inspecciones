@@ -683,6 +683,83 @@ public static class InspeccionesEndpoints
             })
            .WithName("RegistrarEvaluacionCualitativa");
 
+        // ── Slice 1j — OmitirItemMonitoreo ─────────────────────────────────
+        app.MapPost("/api/v1/inspecciones/{inspeccionId:guid}/items/{itemId:int}/omitir", async (
+                Guid inspeccionId,
+                int itemId,
+                OmitirItemMonitoreoRequest request,
+                OmitirItemMonitoreoHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+
+                var cmd = new OmitirItemMonitoreo(
+                    InspeccionId: inspeccionId,
+                    ItemId: itemId,
+                    Motivo: request.Motivo,
+                    EmitidoPor: tecnicoId,
+                    Capabilities: Array.Empty<string>());
+
+                try
+                {
+                    var resultado = await handler.Handle(cmd, ct);
+
+                    return Results.Ok(new
+                    {
+                        inspeccionId = resultado.InspeccionId,
+                        itemId = resultado.ItemId,
+                        motivo = resultado.Motivo,
+                        omitidoEn = resultado.OmitidoEn
+                    });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-2", mensaje = ex.Message });
+                }
+                catch (ItemNoEncontradoEnSnapshotException ex)
+                {
+                    return Results.NotFound(new { codigoError = "I-M3", mensaje = ex.Message });
+                }
+                catch (MotivoOmisionInvalidoException ex)
+                {
+                    // PRE-3 vacío o PRE-4 longitud — 400 Bad Request. El código se distingue
+                    // por el contenido del mensaje (que el aggregate construye en cada caso).
+                    var codigoError = ex.Message.Contains("obligatorio", StringComparison.OrdinalIgnoreCase)
+                        ? "MOTIVO-VACIO"
+                        : "MOTIVO-LONGITUD";
+                    return Results.BadRequest(new { codigoError, mensaje = ex.Message });
+                }
+                catch (ItemYaOmitidoException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I-M9", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoEsMonitoreoException => "I-M1",
+                        InspeccionNoEnEjecucionException => "I-M2",
+                        ItemYaProcesadoException         => "I-M8",
+                        _                                => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("OmitirItemMonitoreo");
+
         return app;
     }
 }
