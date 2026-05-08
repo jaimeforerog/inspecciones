@@ -165,3 +165,17 @@ public sealed class ItemYaMedidoException(string mensaje)
 /// Followup #22: confirmar que M-16 expone ParteEquipoId por ítem.</summary>
 public sealed class ParteEquipoIdAusenteEnSnapshotException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1i' — RegistrarEvaluacionCualitativa ───────────────────────────────
+
+/// <summary>PRE-7 / I-M5b (aggregate) — el ítem tiene evaluación numérica
+/// (<see cref="MedicionEsperada"/>) y no acepta <c>RegistrarEvaluacionCualitativa</c>.
+/// Usar el comando <c>RegistrarMedicion</c> para ítems numéricos.</summary>
+public sealed class ItemNoEsCualitativoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-8 / I-M7 (aggregate) — el ítem ya fue evaluado cualitativamente en
+/// esta inspección. Una sola evaluación por ítem por inspección. La corrección requiere
+/// el comando futuro <c>ActualizarEvaluacionCualitativa</c>. HTTP 409 Conflict.</summary>
+public sealed class ItemYaEvaluadoException(string mensaje)
+    : InspeccionDomainException(mensaje);

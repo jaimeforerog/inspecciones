@@ -36,6 +36,11 @@ public sealed class Inspeccion
     public IReadOnlySet<int> ItemsMedidos => _itemsMedidos;
     private readonly HashSet<int> _itemsMedidos = [];
 
+    // ── Slice 1i' — RegistrarEvaluacionCualitativa ───────────────────────────
+    /// <summary>Ítems del snapshot que ya recibieron evaluación cualitativa en esta inspección (I-M7).</summary>
+    public IReadOnlySet<int> ItemsEvaluados => _itemsEvaluados;
+    private readonly HashSet<int> _itemsEvaluados = [];
+
     /// <summary>Ítems del snapshot que fueron omitidos en esta inspección (I-M4).
     /// Inicialmente vacío hasta que exista el slice OmitirItemMonitoreo.
     /// Este slice lee el set para validar PRE-6 / I-M4.</summary>
@@ -278,7 +283,8 @@ public sealed class Inspeccion
             HallazgoId: cmd.HallazgoId,
             Origen: cmd.Origen,
             NovedadPreopOrigenId: cmd.NovedadPreopOrigenId,
-            MedicionOrigenId: null,  // Slice 1i: null para orígenes Manual/PreOperacional
+            MedicionOrigenId: null,      // Slice 1i: null para orígenes Manual/PreOperacional
+            EvaluacionOrigenId: null,    // Slice 1i': null para orígenes Manual/PreOperacional
             ParteEquipoId: cmd.ParteEquipoId,
             ActividadId: cmd.ActividadId,
             ActividadDescripcion: cmd.ActividadDescripcion,
@@ -339,6 +345,10 @@ public sealed class Inspeccion
             case ItemMonitoreoOmitido_v1 e:
                 Apply(e);
                 break;
+            // Slice 1i' — RegistrarEvaluacionCualitativa
+            case EvaluacionCualitativaRegistrada_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -391,7 +401,8 @@ public sealed class Inspeccion
             UbicacionGps: e.Ubicacion,
             Eliminado: false,
             MotivoEliminacion: null,
-            MedicionOrigenId: e.MedicionOrigenId));  // Slice 1i — propagado desde el evento
+            MedicionOrigenId: e.MedicionOrigenId,         // Slice 1i — propagado desde el evento
+            EvaluacionOrigenId: e.EvaluacionOrigenId));   // Slice 1i' — propagado desde el evento
         _contribuyentes.Add(e.EmitidoPor);
     }
 
@@ -903,7 +914,8 @@ public sealed class Inspeccion
                 HallazgoId: cmd.HallazgoId,
                 Origen: OrigenHallazgo.Monitoreo,
                 NovedadPreopOrigenId: null,
-                MedicionOrigenId: cmd.ItemId,
+                MedicionOrigenId: cmd.ItemId,  // Slice 1i: ítem numérico origen de la medición
+                EvaluacionOrigenId: null,       // Slice 1i': null para hallazgos de medición numérica
                 ParteEquipoId: snapshot.ParteEquipoId.Value,
                 ActividadId: null,
                 ActividadDescripcion: null,
@@ -952,6 +964,122 @@ public sealed class Inspeccion
     {
         _itemsOmitidos.Add(e.ItemId);
         _contribuyentes.Add(e.OmitidoPor);
+    }
+
+    // ── Slice 1i' — RegistrarEvaluacionCualitativa ──────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1i'. Valida las pre-condiciones PRE-3..PRE-8
+    /// y el guard I-H1, emitiendo 1 o 2 eventos en orden causal en un único
+    /// <c>SaveChangesAsync</c>. Apply es puro — las validaciones viven aquí.
+    /// </summary>
+    public IReadOnlyList<object> RegistrarEvaluacionCualitativa(
+        RegistrarEvaluacionCualitativa cmd,
+        DateTimeOffset ahora)
+    {
+        // PRE-3 / I-M1: solo inspecciones de Tipo=Monitoreo.
+        if (Tipo != TipoInspeccion.Monitoreo)
+        {
+            throw new InspeccionNoEsMonitoreoException(
+                $"La inspección {InspeccionId} es de tipo {Tipo}. RegistrarEvaluacionCualitativa solo aplica a inspecciones de Tipo=Monitoreo.");
+        }
+
+        // PRE-4 / I-M2: estado debe ser EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden registrar evaluaciones en estado EnEjecucion.");
+        }
+
+        // PRE-5 / I-M3: el ItemId debe existir en el snapshot.
+        var snapshot = ItemsSnapshot?.FirstOrDefault(i => i.ItemId == cmd.ItemId);
+        if (snapshot is null)
+        {
+            throw new ItemNoEncontradoEnSnapshotException(
+                $"El ítem {cmd.ItemId} no forma parte del snapshot de esta inspección.");
+        }
+
+        // PRE-6 / I-M4: el ítem no debe haber sido omitido.
+        if (_itemsOmitidos.Contains(cmd.ItemId))
+        {
+            throw new ItemOmitidoNoPuedeMedirseException(
+                $"El ítem {cmd.ItemId} fue omitido en esta inspección. Un ítem omitido no puede recibir evaluación posterior.");
+        }
+
+        // PRE-7 / I-M5b: el ítem debe tener evaluación cualitativa (EvaluacionCualitativaEsperada).
+        if (snapshot.Evaluacion is not EvaluacionCualitativaEsperada)
+        {
+            throw new ItemNoEsCualitativoException(
+                $"El ítem {cmd.ItemId} ('{snapshot.Parte}') tiene evaluación numérica. Usa el comando RegistrarMedicion para este ítem.");
+        }
+
+        // PRE-8 / I-M7: el ítem no debe haber sido evaluado previamente.
+        if (_itemsEvaluados.Contains(cmd.ItemId))
+        {
+            throw new ItemYaEvaluadoException(
+                $"El ítem {cmd.ItemId} ya fue evaluado en esta inspección. Para corregir una evaluación, usa el comando ActualizarEvaluacionCualitativa (disponible en slice futuro).");
+        }
+
+        var eventos = new List<object>();
+
+        // Evento 1 (siempre): EvaluacionCualitativaRegistrada_v1.
+        var evEvaluacion = new EvaluacionCualitativaRegistrada_v1(
+            InspeccionId: InspeccionId,
+            ItemId: cmd.ItemId,
+            Calificacion: cmd.Calificacion,
+            Observacion: cmd.Observacion,
+            EmitidoPor: cmd.EmitidoPor,
+            RegistradaEn: ahora);
+        eventos.Add(evEvaluacion);
+
+        // Evento 2 (solo si Calificacion=Malo): HallazgoRegistrado_v1 con Origen=Monitoreo.
+        if (cmd.Calificacion == CalificacionCualitativa.Malo)
+        {
+            // Guard I-H1: ParteEquipoId obligatorio cuando se genera hallazgo automático.
+            if (snapshot.ParteEquipoId is null)
+            {
+                throw new ParteEquipoIdAusenteEnSnapshotException(
+                    $"El snapshot del ítem {cmd.ItemId} no tiene ParteEquipoId. " +
+                    "El hallazgo automático requiere ParteEquipoId (I-H1). Refresha los catálogos y reinicia la inspección (followup #22).");
+            }
+
+            // NovedadTecnica autogenerada — formato P-6 del spec: "Estado calificado Malo en {Parte}".
+            var novedadTecnica = $"Estado calificado Malo en {snapshot.Parte}";
+
+            var evHallazgo = new HallazgoRegistrado_v1(
+                InspeccionId: InspeccionId,
+                HallazgoId: cmd.HallazgoId,
+                Origen: OrigenHallazgo.Monitoreo,
+                NovedadPreopOrigenId: null,
+                MedicionOrigenId: null,           // null para hallazgos cualitativos
+                EvaluacionOrigenId: cmd.ItemId,   // trazabilidad bidireccional hacia ítem cualitativo
+                ParteEquipoId: snapshot.ParteEquipoId.Value,
+                ActividadId: null,
+                ActividadDescripcion: null,
+                NovedadTecnica: novedadTecnica,
+                AccionRequerida: AccionRequerida.RequiereSeguimiento,
+                AccionCorrectiva: null,
+                TipoFallaId: null,
+                CausaFallaId: null,
+                ObservacionCampo: cmd.Observacion,
+                Ubicacion: null,
+                EmitidoPor: cmd.EmitidoPor,
+                RegistradoEn: ahora);
+            eventos.Add(evHallazgo);
+        }
+
+        return eventos;
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="EvaluacionCualitativaRegistrada_v1"/>: añade el
+    /// ítem a <see cref="_itemsEvaluados"/> y registra el contribuyente. Sin validaciones.
+    /// Las pre-condiciones viven en <see cref="RegistrarEvaluacionCualitativa"/>. Slice 1i'.
+    /// </summary>
+    public void Apply(EvaluacionCualitativaRegistrada_v1 e)
+    {
+        _itemsEvaluados.Add(e.ItemId);
+        _contribuyentes.Add(e.EmitidoPor);
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────

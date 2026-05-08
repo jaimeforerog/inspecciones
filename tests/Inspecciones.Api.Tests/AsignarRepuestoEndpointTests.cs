@@ -49,7 +49,8 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
                 HallazgoId: hallazgoId,
                 Origen: OrigenHallazgo.Manual,
                 NovedadPreopOrigenId: null,
-                MedicionOrigenId: null,  // Slice 1i: null para Manual (backward compat)
+                MedicionOrigenId: null,      // Slice 1i: null para Manual (backward compat)
+                EvaluacionOrigenId: null,    // Slice 1i': null para Manual (backward compat)
                 ParteEquipoId: ParteEquipoId,
                 ActividadId: null,
                 ActividadDescripcion: "Revisión sello hidráulico",

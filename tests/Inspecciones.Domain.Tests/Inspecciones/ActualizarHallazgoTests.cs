@@ -380,7 +380,8 @@ public sealed class ActualizarHallazgoTests
                 HallazgoId: HallazgoG1,
                 Origen: OrigenHallazgo.PreOperacional,
                 NovedadPreopOrigenId: 1042,
-                MedicionOrigenId: null,  // Slice 1i: null para PreOperacional (backward compat)
+                MedicionOrigenId: null,      // Slice 1i: null para PreOperacional (backward compat)
+                EvaluacionOrigenId: null,    // Slice 1i': null para PreOperacional (backward compat)
                 ParteEquipoId: 88,
                 ActividadId: null,
                 ActividadDescripcion: null,

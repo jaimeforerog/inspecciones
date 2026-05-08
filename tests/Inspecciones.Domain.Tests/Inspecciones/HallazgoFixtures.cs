@@ -307,7 +307,8 @@ internal static class HallazgoFixtures
             HallazgoId: hallazgoId ?? HallazgoG1,
             Origen: origen,
             NovedadPreopOrigenId: novedadPreopOrigenId,
-            MedicionOrigenId: null,  // Slice 1i: null para orígenes Manual/PreOperacional (backward compat)
+            MedicionOrigenId: null,      // Slice 1i: null para orígenes Manual/PreOperacional (backward compat)
+            EvaluacionOrigenId: null,    // Slice 1i': null para orígenes Manual/PreOperacional (backward compat)
             ParteEquipoId: parteEquipoId,
             ActividadId: null,
             ActividadDescripcion: "descripción de ejemplo",

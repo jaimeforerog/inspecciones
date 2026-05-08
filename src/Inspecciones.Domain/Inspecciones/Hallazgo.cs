@@ -23,5 +23,8 @@ public sealed record Hallazgo(
     bool            Eliminado,
     string?         MotivoEliminacion,
     // Slice 1i — MedicionOrigenId: int? (nullable — null para Manual/PreOperacional/Seguimiento;
-    // = ItemId cuando Origen=Monitoreo). Backward compat: Apply(HallazgoRegistrado_v1) propaga null.
-    int?            MedicionOrigenId = null);
+    // = ItemId cuando Origen=Monitoreo numérico). Backward compat: Apply(HallazgoRegistrado_v1) propaga null.
+    int?            MedicionOrigenId = null,
+    // Slice 1i' — EvaluacionOrigenId: int? (nullable — null para Manual/PreOperacional/Seguimiento/numérico;
+    // = ItemId cuando Origen=Monitoreo cualitativo). Backward compat: Apply propaga null.
+    int?            EvaluacionOrigenId = null);
