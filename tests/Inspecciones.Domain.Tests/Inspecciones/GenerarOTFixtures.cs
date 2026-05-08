@@ -292,8 +292,8 @@ internal static class GenerarOTFixtures
         var baseStream = StreamFirmadoNoPuedeOperar();
         var otRechazada = new GeneracionOTRechazada_v1(
             InspeccionId: InspeccionIdNueva,
+            Motivo: "Presupuesto insuficiente para el período",          // D-2: renombrado MotivoRechazo → Motivo
             RechazadoPor: "gerente.01",
-            MotivoRechazo: "Presupuesto insuficiente para el período",
             RechazadaEn: AhoraOT.AddMinutes(-60));
         return [.. baseStream, otRechazada];
     }
@@ -436,7 +436,7 @@ internal static class GenerarOTFixtures
                 emitidoPor: "carlos.ruiz"),
             new InspeccionCerradaSinOT_v1(
                 InspeccionId: InspeccionIdNueva,
-                CerradoPor: "sistema",
+                MotivoCierre: MotivoCierreSinOT.AutomaticoSinIntervencion,  // D-3: eliminado CerradoPor
                 CerradaEn: Ahora),
         ];
     }

@@ -62,6 +62,13 @@ public sealed class Inspeccion
     /// <summary>Momento en que se solicitó la OT (null hasta que se emita <see cref="OTSolicitada_v1"/>).</summary>
     public DateTimeOffset? SolicitadaEn { get; private set; }
 
+    // ── Slice 1l — RechazarGenerarOT ─────────────────────────────────────────
+    /// <summary>
+    /// Motivo del rechazo de la OT. Null hasta que se emita <see cref="GeneracionOTRechazada_v1"/>.
+    /// Eleva el stub de 1k: ahora persiste el motivo textual para proyecciones/sagas. (slice 1l)
+    /// </summary>
+    public string? MotivoRechazoOT { get; private set; }
+
     /// <summary>Hallazgos registrados en esta inspección (I-H6: multiplicidad permitida).</summary>
     public IReadOnlyList<Hallazgo> Hallazgos => _hallazgos.AsReadOnly();
     private readonly List<Hallazgo> _hallazgos = [];
@@ -350,6 +357,7 @@ public sealed class Inspeccion
             case MedicionRegistrada_v1 e:
                 Apply(e);
                 break;
+            // Slice 1j — OmitirItemMonitoreo
             case ItemMonitoreoOmitido_v1 e:
                 Apply(e);
                 break;
@@ -357,7 +365,7 @@ public sealed class Inspeccion
             case EvaluacionCualitativaRegistrada_v1 e:
                 Apply(e);
                 break;
-            // Slice 1k — GenerarOT
+            // Slice 1k — GenerarOT / Slice 1l — RechazarGenerarOT
             case OTSolicitada_v1 e:
                 Apply(e);
                 break;
@@ -1203,7 +1211,7 @@ public sealed class Inspeccion
         }
 
         // PRE-4 / I-F4.b: debe haber al menos un hallazgo activo con RequiereIntervencion.
-        if (!_hallazgos.Any(h => !h.Eliminado && h.AccionRequerida == AccionRequerida.RequiereIntervencion))
+        if (!TieneHallazgosConIntervencionActivos())
         {
             throw new SinHallazgosConIntervencionException(
                 $"La inspección {InspeccionId} no tiene hallazgos activos con AccionRequerida=RequiereIntervencion. GenerarOT requiere al menos uno.");
@@ -1235,6 +1243,73 @@ public sealed class Inspeccion
         return new object[] { evento };
     }
 
+    // ── Slice 1l — RechazarGenerarOT ─────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1l. Valida las pre-condiciones PRE-4..PRE-7 (I-F6)
+    /// y emite exactamente dos eventos: <see cref="GeneracionOTRechazada_v1"/> seguido de
+    /// <see cref="InspeccionCerradaSinOT_v1"/>. Atomicidad garantizada por el handler.
+    /// PRE-1 (capability "generar-ot") se valida en la capa HTTP (middleware).
+    /// PRE-2 (inspección existe) se valida en el handler.
+    /// PRE-3 (Motivo ≥ 10 chars) se valida en el handler o al inicio de este método.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> RechazarOT(RechazarGenerarOT cmd, DateTimeOffset ahora)
+    {
+        // PRE-3 — motivo ≥ 10 chars (I-F6-MOTIVO)
+        if (cmd.Motivo.Trim().Length < 10)
+        {
+            throw new MotivoRechazoInvalidoException(
+                $"El motivo del rechazo debe tener al menos 10 caracteres. " +
+                $"Se recibieron {cmd.Motivo.Trim().Length} después de trim.");
+        }
+
+        // PRE-4 — estado Firmada (I-F6.a)
+        if (Estado != EstadoInspeccion.Firmada)
+        {
+            throw new InspeccionNoFirmadaException(
+                $"La inspección {InspeccionId} está en estado '{Estado}'. " +
+                $"RechazarGenerarOT solo aplica a inspecciones en estado 'Firmada'.");
+        }
+
+        // PRE-5 — ≥1 hallazgo activo con RequiereIntervencion (I-F6.b)
+        if (!TieneHallazgosConIntervencionActivos())
+        {
+            throw new SinHallazgosConIntervencionException(
+                $"La inspección {InspeccionId} no tiene hallazgos activos con " +
+                $"AccionRequerida=RequiereIntervencion. RechazarGenerarOT no aplica.");
+        }
+
+        // PRE-6 — OT no solicitada (I-F6.c)
+        if (OTSolicitada)
+        {
+            throw new OTYaSolicitadaException(
+                $"La inspección {InspeccionId} ya tiene una OT solicitada. " +
+                $"No se puede rechazar una OT ya enviada al ERP.");
+        }
+
+        // PRE-7 — OT no rechazada previamente (I-F6.d) — defensa de segunda línea
+        if (OTRechazada)
+        {
+            throw new OTYaRechazadaException(
+                $"La inspección {InspeccionId} ya tiene una OT rechazada. " +
+                $"No se acepta doble rechazo.");
+        }
+
+        var rechazada = new GeneracionOTRechazada_v1(
+            InspeccionId: cmd.InspeccionId,
+            Motivo: cmd.Motivo,
+            RechazadoPor: cmd.RechazadoPor,
+            RechazadaEn: ahora);
+
+        var cerrada = new InspeccionCerradaSinOT_v1(
+            InspeccionId: cmd.InspeccionId,
+            MotivoCierre: MotivoCierreSinOT.RechazadaPorAprobador,
+            CerradaEn: ahora);
+
+        return new object[] { rechazada, cerrada };
+    }
+
     /// <summary>
     /// Aplicación pura de <see cref="OTSolicitada_v1"/>: marca <see cref="OTSolicitada"/>
     /// como <c>true</c> y persiste el timestamp. Sin validaciones — solo mutación.
@@ -1247,19 +1322,22 @@ public sealed class Inspeccion
     }
 
     /// <summary>
-    /// Aplicación pura stub de <see cref="GeneracionOTRechazada_v1"/>: marca
-    /// <see cref="OTRechazada"/> como <c>true</c>. Sin validaciones. Stub para
-    /// PRE-6 del slice 1k. Implementación completa en slice futuro.
+    /// Aplicación pura de <see cref="GeneracionOTRechazada_v1"/>: marca <see cref="OTRechazada"/>
+    /// como <c>true</c> y persiste el motivo. Sin validaciones — solo mutación de estado.
+    /// Eleva el stub de 1k — añade <see cref="MotivoRechazoOT"/>. Slice 1l.
+    /// Las pre-condiciones viven en <c>RechazarOT</c>.
     /// </summary>
     public void Apply(GeneracionOTRechazada_v1 e)
     {
         OTRechazada = true;
+        MotivoRechazoOT = e.Motivo;    // nuevo campo slice 1l (D-2: campo Motivo, no MotivoRechazo)
     }
 
     /// <summary>
-    /// Aplicación pura stub de <see cref="InspeccionCerradaSinOT_v1"/>: transiciona
-    /// el estado a <see cref="EstadoInspeccion.CerradaSinOT"/>. Sin validaciones.
-    /// Stub para PRE-3 escenario §6.12 del slice 1k. Implementación completa en slice futuro.
+    /// Aplicación pura de <see cref="InspeccionCerradaSinOT_v1"/>: transiciona
+    /// el estado a <see cref="EstadoInspeccion.CerradaSinOT"/>. Sin validaciones — solo mutación.
+    /// El campo <c>MotivoCierre</c> (D-3, D-5) es informativo para proyecciones; el aggregate
+    /// solo necesita el estado terminal. Slice 1l eleva el stub de 1k.
     /// </summary>
     public void Apply(InspeccionCerradaSinOT_v1 e)
     {
@@ -1267,6 +1345,15 @@ public sealed class Inspeccion
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Devuelve <c>true</c> si existe al menos un hallazgo activo (no eliminado) con
+    /// <c>AccionRequerida=RequiereIntervencion</c>. Usado por <see cref="SolicitarOT"/>
+    /// (PRE-4 / I-F4.b) y <see cref="RechazarOT"/> (PRE-5 / I-F6.b) — misma condición
+    /// en ambos métodos de decisión.
+    /// </summary>
+    private bool TieneHallazgosConIntervencionActivos() =>
+        _hallazgos.Any(h => !h.Eliminado && h.AccionRequerida == AccionRequerida.RequiereIntervencion);
 
     /// <summary>
     /// Busca el hallazgo por <paramref name="hallazgoId"/> en el stream y verifica

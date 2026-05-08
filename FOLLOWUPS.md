@@ -235,14 +235,15 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** cualquier doc-writer que toque §17 o §15.4, o previo al slice `EjecutarOTSaga` (3.24b) que consume el evento.
 **Notas:** no bloqueante. La spec del slice 1k ya documenta la desviación con justificación en §3.1 y §12 P-1/P-2.
 
-### #30 — Comentario de slice incorrecto en `AplicarEvento` switch: `ItemMonitoreoOmitido_v1` bajo "Slice 1i" 🟢
+### #35 — `spec.md §8.1` del slice 1l afirma incorrectamente que la proyección consume `InspeccionCerradaSinOT_v1` 🟢
 
-**Origen:** slice 1k refactorer — observación transversal
+**Origen:** slice 1l review — hallazgo #2
 **Fecha:** 2026-05-08
-**Tipo:** deuda técnica · naming
-**Descripción:** En `Inspeccion.cs` el switch `AplicarEvento` agrupa `MedicionRegistrada_v1` e `ItemMonitoreoOmitido_v1` bajo el comentario `// Slice 1i — RegistrarMedicion`. `ItemMonitoreoOmitido_v1` pertenece al slice 1j (`OmitirItemMonitoreo`), no al 1i. El comentario incorrecto podría confundir al siguiente desarrollador que edite esa región. Corrección: separar en dos comentarios: `// Slice 1i — RegistrarMedicion` (para `MedicionRegistrada_v1`) y `// Slice 1j — OmitirItemMonitoreo` (para `ItemMonitoreoOmitido_v1`). Cambio de una línea.
-**Disparador para abrir slice:** cualquier slice que modifique la región del switch `AplicarEvento`, o un ciclo de limpieza transversal.
-**Notas:** no bloqueante. Sin impacto en compilación ni comportamiento.
+**Tipo:** doc · correctitud
+**Descripción:** `slices/1l-rechazar-generar-ot/spec.md §8.1` afirma: "el stub de 1k incluyó el case para `InspeccionCerradaSinOT_v1`" en `InspeccionAbiertaPorEquipoProjection`. La proyección real (`InspeccionAbiertaPorEquipoProjection.cs`) solo consume `InspeccionIniciada_v1`, `InspeccionFirmada_v1` e `InspeccionCancelada_v1` — no tiene handler para `InspeccionCerradaSinOT_v1`. La afirmación es incorrecta. Funcionalmente no es un bug: en el stream del aggregate, `InspeccionFirmada_v1` siempre precede a `InspeccionCerradaSinOT_v1` (el equipo ya queda libre al firmar), por lo que la proyección ya libera el equipo antes de que llegue el evento de cierre. Sin embargo, la afirmación falsa puede inducir a error en slices futuros de proyecciones.
+**Cierre parcial 2026-05-08 (infra-wire slice 1l):** se aplicó el punto (2) — `InspeccionAbiertaPorEquipoProjection.cs` ahora documenta explícitamente en su xmldoc por qué no consume `InspeccionCerradaSinOT_v1` (el flujo canónico garantiza que `InspeccionFirmada_v1` precede al cierre). Queda pendiente el punto (1): corregir la afirmación falsa en `slices/1l-rechazar-generar-ot/spec.md §8.1` — los `spec.md` cerrados típicamente se mantienen como audit trail, así que la corrección puede hacerse como nota de erratum al pie de §8.1 o como ADR-cross-reference si se prefiere preservar el spec original sin tocarlo.
+**Disparador para abrir slice:** cualquier doc-writer que toque `spec.md §8.1` o el modelo de dominio §15.12.6.
+**Notas:** no bloqueante. La proyección es funcionalmente correcta y ahora también documentada correctamente; solo la afirmación del spec es incorrecta.
 
 ### #32 — Bug preexistente: `Api.Tests` rotos por `RunOaktonCommands(args)` que rompe `WebApplicationFactory<Program>` 🟢
 
@@ -263,6 +264,22 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Notas:** vinculado a followup #13 (migración a `MultiStreamProjection` inline). Si #13 se materializa, este cambio queda absorbido en el rediseño de la proyección. Si #13 sigue diferido, el cambio del slice 1k debe quedar documentado y testeado en aislamiento.
 
 ## Cerrados
+
+### #34 — FU-30 cerrado en código pero no marcado cerrado en FOLLOWUPS.md ✅
+
+**Origen:** slice 1l review — hallazgo #1
+**Fecha apertura / cierre:** 2026-05-08 / 2026-05-08
+**Tipo:** deuda técnica · doc
+**Descripción:** El refactorer del slice 1l cerró FU-30 (comentario incorrecto en switch `AplicarEvento`) en código mediante el refactor #2 del slice, pero no actualizó `FOLLOWUPS.md` para mover la entrada a la sección `## Cerrados`. Detectado en la auditoría del reviewer.
+**Resolución:** el reviewer del slice 1l aplicó el cierre en `FOLLOWUPS.md` (entrada FU-30 marcada con ✅ con descripción de resolución) y el orquestador `infra-wire` del slice 1l completó la convención moviendo tanto FU-30 como FU-34 a la sección `## Cerrados`. Este followup se cierra junto con su apertura.
+
+### #30 — Comentario de slice incorrecto en `AplicarEvento` switch: `ItemMonitoreoOmitido_v1` bajo "Slice 1i" ✅
+
+**Origen:** slice 1k refactorer — observación transversal
+**Fecha apertura / cierre:** 2026-05-08 / 2026-05-08
+**Tipo:** deuda técnica · naming
+**Descripción:** En `Inspeccion.cs` el switch `AplicarEvento` agrupaba `MedicionRegistrada_v1` e `ItemMonitoreoOmitido_v1` bajo el comentario `// Slice 1i — RegistrarMedicion`. `ItemMonitoreoOmitido_v1` pertenece al slice 1j (`OmitirItemMonitoreo`), no al 1i.
+**Resolución:** el refactorer del slice 1l (refactor #2) separó los comentarios: `// Slice 1i — RegistrarMedicion` para `MedicionRegistrada_v1` y `// Slice 1j — OmitirItemMonitoreo` para `ItemMonitoreoOmitido_v1`. También actualizó el bloque 1k para mencionar 1l: `// Slice 1k — GenerarOT / Slice 1l — RechazarGenerarOT`. Verificado en `Inspeccion.cs` — 197 tests pasan sin regresión.
 
 ### #21 — Test §6.7 (`PRE-B2 — HallazgoId eliminado`) en skip hasta slice `EliminarHallazgo` ✅
 

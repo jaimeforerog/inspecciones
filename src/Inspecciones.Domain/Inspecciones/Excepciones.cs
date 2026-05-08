@@ -229,3 +229,18 @@ public sealed class OTRechazadaException(string mensaje)
 /// Solo ConRestriccion o NoPuedeOperar permiten GenerarOT. HTTP 422 Unprocessable Entity.</summary>
 public sealed class DictamenNoPermiteOTException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1l — RechazarGenerarOT ─────────────────────────────────────────────
+
+/// <summary>PRE-3 / I-F6-MOTIVO (handler o método de decisión) — el motivo del rechazo
+/// está vacío, es solo whitespace, o tiene menos de 10 caracteres después de trim.
+/// HTTP 422 Unprocessable Entity.</summary>
+public sealed class MotivoRechazoInvalidoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-7 / I-F6.d (aggregate) — ya existe un <see cref="GeneracionOTRechazada_v1"/>
+/// en el stream (<c>OTRechazada == true</c>) pero el estado no es <c>CerradaSinOT</c>
+/// (stream hipotéticamente inconsistente). Defensa de segunda línea — en flujo normal
+/// PRE-4 intercepta antes. HTTP 409 Conflict.</summary>
+public sealed class OTYaRechazadaException(string mensaje)
+    : InspeccionDomainException(mensaje);

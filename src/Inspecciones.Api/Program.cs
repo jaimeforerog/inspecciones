@@ -109,6 +109,7 @@ builder.Services.AddScoped<RegistrarMedicionHandler>();
 builder.Services.AddScoped<RegistrarEvaluacionCualitativaHandler>();
 builder.Services.AddScoped<OmitirItemMonitoreoHandler>();
 builder.Services.AddScoped<GenerarOTHandler>();
+builder.Services.AddScoped<RechazarGenerarOTHandler>();
 
 var app = builder.Build();
 

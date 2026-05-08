@@ -20,6 +20,15 @@ namespace Inspecciones.Application.Inspecciones;
 /// El agente <c>refactorer</c> puede considerar agregar <c>EquipoId</c> a los eventos terminales
 /// para habilitar <c>MultiStreamProjection</c> puro si se requiere mayor rendimiento.
 ///
+/// Slice 1l (FU-35): <c>InspeccionCerradaSinOT_v1</c> NO se maneja aquí. En el flujo canónico
+/// del aggregate <c>Inspeccion</c>, <c>InspeccionFirmada_v1</c> siempre precede a
+/// <c>InspeccionCerradaSinOT_v1</c> (el equipo ya queda libre al firmar — el cierre es un
+/// estado terminal posterior). Por lo tanto la fila ya fue eliminada por el handler de
+/// <c>InspeccionFirmada_v1</c> antes de que llegue el evento de cierre. Si en el futuro
+/// emerge un flujo donde <c>InspeccionCerradaSinOT_v1</c> aparezca sin un
+/// <c>InspeccionFirmada_v1</c> previo (p. ej. cierre directo desde un estado de excepción),
+/// añadir el handler aquí.
+///
 /// // TODO: actualizar BandejaTecnicoView en slice de proyecciones (spec §8.2).
 /// </summary>
 public sealed class InspeccionAbiertaPorEquipoProjection : EventProjection

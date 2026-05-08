@@ -862,6 +862,92 @@ public static class InspeccionesEndpoints
             })
            .WithName("GenerarOT");
 
+        // ── Slice 1l — RechazarGenerarOT ───────────────────────────────────
+        // El endpoint verifica PRE-1 (capability "generar-ot" — misma que GenerarOT) y el header
+        // X-Client-Command-Id. El cierre es síncrono (D-4: 200 OK, no 202) — el handler emite
+        // GeneracionOTRechazada_v1 + InspeccionCerradaSinOT_v1 atómicamente y la inspección queda
+        // en estado terminal CerradaSinOT al retornar. No hay saga asíncrona ni POST al ERP.
+        app.MapPost("/api/v1/inspecciones/{id:guid}/rechazar-generar-ot", async (
+                Guid id,
+                RechazarGenerarOTRequest request,
+                RechazarGenerarOTHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // PRE-1 — capability "generar-ot" requerida (spec §4, §6.3 — misma capability que GenerarOT).
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
+                // El header X-Sin-Capability-Generar-OT se usa en tests para simular claims sin capability.
+                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Generar-OT");
+                if (sinCapabilityHeader)
+                {
+                    return Results.Forbid();
+                }
+
+                // Claims mock — capability "generar-ot" hardcodeada hasta ADR-002.
+                const string aprobadorId = "jefe.campo.01";
+                var capabilities = (IReadOnlyCollection<string>)["generar-ot"];
+
+                var cmd = new RechazarGenerarOT(
+                    InspeccionId: id,
+                    Motivo: request.Motivo ?? string.Empty,
+                    RechazadoPor: aprobadorId,
+                    Capabilities: capabilities);
+
+                try
+                {
+                    var resultado = await handler.Handle(cmd, ct);
+
+                    // D-4: 200 OK — el cierre es síncrono, la inspección ya está CerradaSinOT
+                    // al momento de retornar. No es asíncrono como GenerarOT (202).
+                    return Results.Ok(new
+                    {
+                        inspeccionId = resultado.InspeccionId,
+                        estado = resultado.Estado,
+                        rechazadaEn = resultado.RechazadaEn,
+                        rechazadoPor = resultado.RechazadoPor,
+                        motivo = resultado.Motivo
+                    });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-2", mensaje = ex.Message });
+                }
+                catch (MotivoRechazoInvalidoException ex)
+                {
+                    return Results.UnprocessableEntity(new { codigoError = "I-F6-MOTIVO", mensaje = ex.Message });
+                }
+                catch (OTYaSolicitadaException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I-F6-OT-YA-SOLICITADA", mensaje = ex.Message });
+                }
+                catch (OTYaRechazadaException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I-F6-OT-YA-RECHAZADA", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoFirmadaException            => "I-F6-ESTADO",
+                        SinHallazgosConIntervencionException    => "I-F6-SIN-INTERVENCION",
+                        _                                       => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("RechazarGenerarOT");
+
         return app;
     }
 }
