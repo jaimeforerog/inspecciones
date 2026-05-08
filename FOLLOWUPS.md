@@ -109,6 +109,24 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Disparador para abrir slice:** slice que implemente `DetalleInspeccionView` o cualquier proyección que proyecte `ObservacionCampo` del hallazgo. En ese slice: añadir `ObservacionCampo: string?` al record `Hallazgo`, incluirlo en el `with { ... }` de `Apply(HallazgoActualizado_v1)`, y añadir test que verifique el campo en el state del aggregate.
 **Notas:** el compilador forzará la actualización del `with` automáticamente una vez se añada el campo al record `Hallazgo`.
 
+### #27 — Extraer guard `X-Client-Command-Id` duplicado en 7 endpoints a helper o middleware 🟢
+
+**Origen:** slice 1i refactorer — candidato §3 green-notes
+**Fecha:** 2026-05-08
+**Tipo:** deuda técnica · DRY
+**Descripción:** el bloque de validación del header `X-Client-Command-Id` se repite en los 7 endpoints de `InspeccionesEndpoints.cs` (IniciarInspeccion, IniciarInspeccionMonitoreo, RegistrarHallazgo, ActualizarHallazgo, AsignarRepuesto, FirmarInspeccion, EliminarHallazgo, RegistrarMedicion). Cada endpoint repite el mismo `TryGetValue` + `IsNullOrWhiteSpace` + `Results.BadRequest`. Puede extraerse a un método estático de extensión `RequiereClientCommandId(this HttpContext ctx)` que devuelva `IResult?` (null = ok, not-null = bad request a retornar), o a un filtro de endpoint Minimal API registrado globalmente con `.AddEndpointFilter`. La duplicación es acumulativa desde el slice 1b; el 1i la lleva a 7 instancias — umbral de DRY alcanzado.
+**Disparador para abrir slice:** cualquier slice que añada un endpoint nuevo, o un slice de limpieza previo a la integración al host. El umbral de DRY (3+ instancias) ya se superó.
+**Notas:** no bloqueante. El comportamiento es idéntico en todos los endpoints; el riesgo de inconsistencia por edición manual aumenta con cada nuevo endpoint.
+
+### #28 — Cast directo por posición `(MedicionRegistrada_v1)eventos[0]` en `RegistrarMedicionHandler` 🟢
+
+**Origen:** slice 1i refactorer — candidato §3 green-notes
+**Fecha:** 2026-05-08
+**Tipo:** deuda técnica · robustez
+**Descripción:** `RegistrarMedicionHandler.Handle` asume que `eventos[0]` es siempre `MedicionRegistrada_v1` mediante cast directo. El contrato del aggregate lo garantiza hoy, pero no hay un tipo que lo exprese. Alternativa más robusta: hacer que `Inspeccion.RegistrarMedicion` retorne un tipo discriminado `(MedicionRegistrada_v1 Medicion, HallazgoRegistrado_v1? Hallazgo)` o una clase `RegistrarMedicionEvento` con las dos propiedades. El cambio afectaría el tipo de retorno del aggregate y todos los tests que destructuran `resultado[0]`/`resultado[1]` — scope amplio.
+**Disparador para abrir slice:** emerge una regresión donde `eventos[0]` ya no es `MedicionRegistrada_v1` (p. ej. si se añade un evento de auditoría antes), o cuando se diseñe el patrón canónico de retorno del aggregate para slices de monitoreo.
+**Notas:** riesgo muy bajo mientras `RegistrarMedicion` siga emitiéndo exactamente 1 o 2 eventos en ese orden.
+
 ### #23 — Extraer `MensajeActiva` a constante compartida entre handlers y alinear duplicación estructural 1b/1h 🟢
 
 **Origen:** slice 1h refactorer — candidatos §5.1 y §5.2 de green-notes

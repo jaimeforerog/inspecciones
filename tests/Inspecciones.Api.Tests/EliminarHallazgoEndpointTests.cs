@@ -45,6 +45,7 @@ public class EliminarHallazgoEndpointTests(InspeccionesAppFactory factory)
                 HallazgoId: hallazgoId,
                 Origen: OrigenHallazgo.Manual,
                 NovedadPreopOrigenId: null,
+                MedicionOrigenId: null,  // Slice 1i: null para Manual (backward compat)
                 ParteEquipoId: 77,
                 ActividadId: null,
                 ActividadDescripcion: "Revisión visual de manguera",

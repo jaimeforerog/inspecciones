@@ -31,6 +31,17 @@ public sealed class Inspeccion
     /// <summary>Snapshot inmutable de items activos al momento de iniciar. Null cuando Tipo=Tecnica.</summary>
     public IReadOnlyList<ItemRutinaMonitoreoSnapshot>? ItemsSnapshot { get; private set; }
 
+    // ── Slice 1i — RegistrarMedicion ─────────────────────────────────────────
+    /// <summary>Ítems del snapshot que ya recibieron medición en esta inspección (I-M6).</summary>
+    public IReadOnlySet<int> ItemsMedidos => _itemsMedidos;
+    private readonly HashSet<int> _itemsMedidos = [];
+
+    /// <summary>Ítems del snapshot que fueron omitidos en esta inspección (I-M4).
+    /// Inicialmente vacío hasta que exista el slice OmitirItemMonitoreo.
+    /// Este slice lee el set para validar PRE-6 / I-M4.</summary>
+    public IReadOnlySet<int> ItemsOmitidos => _itemsOmitidos;
+    private readonly HashSet<int> _itemsOmitidos = [];
+
     // ── Slice 1g — FirmarInspeccion ──────────────────────────────────────────
     public string? DiagnosticoFinal { get; private set; }
     public DictamenOperacion? Dictamen { get; private set; }
@@ -267,6 +278,7 @@ public sealed class Inspeccion
             HallazgoId: cmd.HallazgoId,
             Origen: cmd.Origen,
             NovedadPreopOrigenId: cmd.NovedadPreopOrigenId,
+            MedicionOrigenId: null,  // Slice 1i: null para orígenes Manual/PreOperacional
             ParteEquipoId: cmd.ParteEquipoId,
             ActividadId: cmd.ActividadId,
             ActividadDescripcion: cmd.ActividadDescripcion,
@@ -320,6 +332,13 @@ public sealed class Inspeccion
             case AdjuntoEliminado_v1 e:
                 Apply(e);
                 break;
+            // Slice 1i — RegistrarMedicion
+            case MedicionRegistrada_v1 e:
+                Apply(e);
+                break;
+            case ItemMonitoreoOmitido_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -371,7 +390,8 @@ public sealed class Inspeccion
             CausaFallaId: e.CausaFallaId,
             UbicacionGps: e.Ubicacion,
             Eliminado: false,
-            MotivoEliminacion: null));
+            MotivoEliminacion: null,
+            MedicionOrigenId: e.MedicionOrigenId));  // Slice 1i — propagado desde el evento
         _contribuyentes.Add(e.EmitidoPor);
     }
 
@@ -789,6 +809,149 @@ public sealed class Inspeccion
         {
             set.Remove(e.AdjuntoId);
         }
+    }
+
+    // ── Slice 1i — RegistrarMedicion ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1i. Valida las pre-condiciones PRE-3..PRE-8
+    /// y emite 1 o 2 eventos (en orden causal) en un único <c>SaveChangesAsync</c>.
+    /// </summary>
+    public IReadOnlyList<object> RegistrarMedicion(RegistrarMedicion cmd, DateTimeOffset ahora)
+    {
+        // PRE-3 / I-M1: solo inspecciones de Tipo=Monitoreo.
+        if (Tipo != TipoInspeccion.Monitoreo)
+        {
+            throw new InspeccionNoEsMonitoreoException(
+                $"La inspección {InspeccionId} es de tipo {Tipo}. RegistrarMedicion solo aplica a inspecciones de Tipo=Monitoreo.");
+        }
+
+        // PRE-4 / I-M2: estado debe ser EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden registrar mediciones en estado EnEjecucion.");
+        }
+
+        // PRE-5 / I-M3: el ItemId debe existir en el snapshot.
+        var snapshot = ItemsSnapshot?.FirstOrDefault(i => i.ItemId == cmd.ItemId);
+        if (snapshot is null)
+        {
+            var ids = ItemsSnapshot?.Select(i => i.ItemId.ToString()) ?? [];
+            throw new ItemNoEncontradoEnSnapshotException(
+                $"El ítem {cmd.ItemId} no forma parte del snapshot de esta inspección. Solo pueden medirse los ítems del snapshot: [{string.Join(", ", ids)}].");
+        }
+
+        // PRE-6 / I-M4: el ítem no debe haber sido omitido.
+        if (_itemsOmitidos.Contains(cmd.ItemId))
+        {
+            throw new ItemOmitidoNoPuedeMedirseException(
+                $"El ítem {cmd.ItemId} fue omitido en esta inspección. Un ítem omitido no puede recibir medición posterior.");
+        }
+
+        // PRE-7 / I-M5: el ítem debe tener evaluación numérica (MedicionEsperada).
+        if (snapshot.Evaluacion is not MedicionEsperada medicionEsperada)
+        {
+            throw new ItemNoEsNumericoException(
+                $"El ítem {cmd.ItemId} ('{snapshot.Parte}') tiene evaluación cualitativa. Usa el comando RegistrarEvaluacionCualitativa para este ítem.");
+        }
+
+        // PRE-8 / I-M6: el ítem no debe haber sido medido previamente.
+        if (_itemsMedidos.Contains(cmd.ItemId))
+        {
+            throw new ItemYaMedidoException(
+                $"El ítem {cmd.ItemId} ya fue medido en esta inspección. Para corregir una medición, usa el comando ActualizarMedicion (disponible en slice futuro).");
+        }
+
+        // Calcular FueraDeRango — rango cerrado [ValorMinimo, ValorMaximo] (P-2).
+        var fueraDeRango = cmd.ValorMedido < medicionEsperada.ValorMinimo
+                           || cmd.ValorMedido > medicionEsperada.ValorMaximo;
+
+        var eventos = new List<object>();
+
+        // Evento 1 (siempre): MedicionRegistrada_v1.
+        var evMedicion = new MedicionRegistrada_v1(
+            InspeccionId: InspeccionId,
+            ItemId: cmd.ItemId,
+            ValorMedido: cmd.ValorMedido,
+            Observacion: cmd.Observacion,
+            FueraDeRango: fueraDeRango,
+            EmitidoPor: cmd.EmitidoPor,
+            RegistradaEn: ahora);
+        eventos.Add(evMedicion);
+
+        // Evento 2 (solo si fuera de rango): HallazgoRegistrado_v1 con Origen=Monitoreo.
+        if (fueraDeRango)
+        {
+            // Guard I-H1: ParteEquipoId obligatorio. Si el snapshot no lo tiene (streams del slice 1h
+            // creados antes de que M-16 expusiera ParteEquipoId), el hallazgo no puede generarse.
+            // Followup #22: confirmar con David que M-16 expone ParteEquipoId por ítem.
+            if (snapshot.ParteEquipoId is null)
+            {
+                throw new ParteEquipoIdAusenteEnSnapshotException(
+                    $"El snapshot del ítem {cmd.ItemId} no tiene ParteEquipoId. " +
+                    "El hallazgo automático requiere ParteEquipoId (I-H1). Refresha los catálogos y reinicia la inspección (followup #22).");
+            }
+
+            // NovedadTecnica autogenerada (spec §6.2 — formato exacto del test).
+            var novedadTecnica =
+                $"{CapitalizarPrimera(medicionEsperada.Magnitud)} {cmd.ValorMedido}{medicionEsperada.Unidad} " +
+                $"fuera de rango esperado [{medicionEsperada.ValorMinimo}, {medicionEsperada.ValorMaximo}]";
+
+            var evHallazgo = new HallazgoRegistrado_v1(
+                InspeccionId: InspeccionId,
+                HallazgoId: cmd.HallazgoId,
+                Origen: OrigenHallazgo.Monitoreo,
+                NovedadPreopOrigenId: null,
+                MedicionOrigenId: cmd.ItemId,
+                ParteEquipoId: snapshot.ParteEquipoId.Value,
+                ActividadId: null,
+                ActividadDescripcion: null,
+                NovedadTecnica: novedadTecnica,
+                AccionRequerida: AccionRequerida.RequiereSeguimiento,
+                AccionCorrectiva: null,
+                TipoFallaId: null,
+                CausaFallaId: null,
+                ObservacionCampo: cmd.Observacion,
+                Ubicacion: null,
+                EmitidoPor: cmd.EmitidoPor,
+                RegistradoEn: ahora);
+            eventos.Add(evHallazgo);
+        }
+
+        return eventos;
+    }
+
+    /// <summary>Capitaliza la primera letra de una cadena.</summary>
+    private static string CapitalizarPrimera(string texto)
+    {
+        if (string.IsNullOrEmpty(texto))
+        {
+            return texto;
+        }
+
+        return char.ToUpper(texto[0]) + texto[1..];
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="MedicionRegistrada_v1"/>: añade el ítem a
+    /// <see cref="_itemsMedidos"/> y registra el contribuyente. Sin validaciones.
+    /// </summary>
+    public void Apply(MedicionRegistrada_v1 e)
+    {
+        _itemsMedidos.Add(e.ItemId);
+        _contribuyentes.Add(e.EmitidoPor);
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="ItemMonitoreoOmitido_v1"/>: añade el ítem a
+    /// <see cref="_itemsOmitidos"/>. Sin validaciones. Stub mínimo — el slice
+    /// <c>OmitirItemMonitoreo</c> lo completará.
+    /// </summary>
+    public void Apply(ItemMonitoreoOmitido_v1 e)
+    {
+        _itemsOmitidos.Add(e.ItemId);
+        _contribuyentes.Add(e.OmitidoPor);
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────

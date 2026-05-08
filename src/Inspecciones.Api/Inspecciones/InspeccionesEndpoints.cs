@@ -533,6 +533,77 @@ public static class InspeccionesEndpoints
             })
            .WithName("EliminarHallazgo");
 
+        // ── Slice 1i — RegistrarMedicion ───────────────────────────────────
+        app.MapPost("/api/v1/inspecciones/{inspeccionId:guid}/items/{itemId:int}/medicion", async (
+                Guid inspeccionId,
+                int itemId,
+                RegistrarMedicionRequest request,
+                RegistrarMedicionHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
+                const string tecnicoId = "rmartinez";
+
+                var cmd = new RegistrarMedicion(
+                    InspeccionId: inspeccionId,
+                    HallazgoId: request.HallazgoId,
+                    ItemId: itemId,
+                    ValorMedido: request.ValorMedido,
+                    Observacion: request.Observacion,
+                    EmitidoPor: tecnicoId,
+                    Capabilities: Array.Empty<string>());
+
+                try
+                {
+                    var resultado = await handler.Handle(cmd, ct);
+
+                    return Results.Ok(new
+                    {
+                        inspeccionId = resultado.InspeccionId,
+                        itemId = resultado.ItemId,
+                        valorMedido = resultado.ValorMedido,
+                        fueraDeRango = resultado.FueraDeRango,
+                        hallazgoGeneradoId = resultado.HallazgoGeneradoId,
+                        registradaEn = resultado.RegistradaEn
+                    });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-2", mensaje = ex.Message });
+                }
+                catch (ItemYaMedidoException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I-M6", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoEsMonitoreoException           => "I-M1",
+                        InspeccionNoEnEjecucionException           => "I-M2",
+                        ItemNoEncontradoEnSnapshotException        => "I-M3",
+                        ItemOmitidoNoPuedeMedirseException         => "I-M4",
+                        ItemNoEsNumericoException                  => "I-M5",
+                        ParteEquipoIdAusenteEnSnapshotException    => "I-H1",
+                        _                                          => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("RegistrarMedicion");
+
         return app;
     }
 }

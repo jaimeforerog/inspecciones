@@ -21,4 +21,7 @@ public sealed record Hallazgo(
     int?            CausaFallaId,
     UbicacionGps?   UbicacionGps,
     bool            Eliminado,
-    string?         MotivoEliminacion);
+    string?         MotivoEliminacion,
+    // Slice 1i — MedicionOrigenId: int? (nullable — null para Manual/PreOperacional/Seguimiento;
+    // = ItemId cuando Origen=Monitoreo). Backward compat: Apply(HallazgoRegistrado_v1) propaga null.
+    int?            MedicionOrigenId = null);

@@ -10,4 +10,8 @@ public sealed record ItemRutinaMonitoreoSnapshot(
     int ItemId,
     string Parte,
     string Actividad,
-    EvaluacionEsperada Evaluacion);
+    EvaluacionEsperada Evaluacion,
+    // Slice 1i — P-1 (opción A): ParteEquipoId int? (nullable backward-compat con snapshots
+    // del slice 1h donde el campo aún no se capturaba). Followup #22: confirmar con David
+    // que M-16 expone ParteEquipoId por ítem.
+    int? ParteEquipoId = null);

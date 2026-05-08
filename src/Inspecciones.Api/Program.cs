@@ -100,6 +100,7 @@ builder.Services.AddScoped<EliminarHallazgoHandler>();
 builder.Services.AddScoped<AsignarRepuestoHandler>();
 builder.Services.AddScoped<FirmarInspeccionHandler>();
 builder.Services.AddScoped<IniciarInspeccionMonitoreoHandler>();
+builder.Services.AddScoped<RegistrarMedicionHandler>();
 
 var app = builder.Build();
 

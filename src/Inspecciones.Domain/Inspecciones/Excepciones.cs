@@ -131,3 +131,37 @@ public sealed class TecnicoNoContribuyenteException(string mensaje)
 // (Las excepciones de handler PRE-3..PRE-6 viven en Inspecciones.Application.Inspecciones.Excepciones.cs)
 // Las excepciones PRE-8 y PRE-9 reusan ProyectoNoAutorizadoException y FechaReportadaFueraDeRangoException
 // ya definidas en este archivo (slices 1a/1b) — no se duplican.
+
+// ── Slice 1i — RegistrarMedicion ─────────────────────────────────────────────
+
+/// <summary>PRE-3 / I-M1 (aggregate) — <c>RegistrarMedicion</c> se invocó sobre una
+/// inspección de <see cref="TipoInspeccion.Tecnica"/>. Solo es válido para Monitoreo.</summary>
+public sealed class InspeccionNoEsMonitoreoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-5 / I-M3 (aggregate) — el <c>ItemId</c> no existe en el snapshot de ítems
+/// capturado al iniciar la inspección de monitoreo.</summary>
+public sealed class ItemNoEncontradoEnSnapshotException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-6 / I-M4 (aggregate) — el ítem fue previamente omitido
+/// (<see cref="ItemMonitoreoOmitido_v1"/>); no puede recibir medición posterior.</summary>
+public sealed class ItemOmitidoNoPuedeMedirseException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-7 / I-M5 (aggregate) — el ítem tiene evaluación cualitativa
+/// (<see cref="EvaluacionCualitativaEsperada"/>) y no acepta <c>RegistrarMedicion</c>.
+/// Usar el comando <c>RegistrarEvaluacionCualitativa</c>.</summary>
+public sealed class ItemNoEsNumericoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-8 / I-M6 (aggregate) — el ítem ya fue medido en esta inspección.
+/// Una sola medición por ítem por inspección. Corrección requiere <c>ActualizarMedicion</c>.</summary>
+public sealed class ItemYaMedidoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>Guard I-H1 en RegistrarMedicion — el snapshot del ítem no tiene <c>ParteEquipoId</c>.
+/// Ocurre cuando la inspección fue iniciada con una versión de M-16 que no expone el campo.
+/// Followup #22: confirmar que M-16 expone ParteEquipoId por ítem.</summary>
+public sealed class ParteEquipoIdAusenteEnSnapshotException(string mensaje)
+    : InspeccionDomainException(mensaje);
