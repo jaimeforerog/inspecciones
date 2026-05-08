@@ -54,6 +54,14 @@ public sealed class Inspeccion
     public UbicacionGps? UbicacionFirma { get; private set; }
     public DateTimeOffset? FirmadaEn { get; private set; }
 
+    // ── Slice 1k — GenerarOT ─────────────────────────────────────────────────
+    /// <summary>Indica si ya existe un <see cref="OTSolicitada_v1"/> en el stream (I-F4.c).</summary>
+    public bool OTSolicitada { get; private set; }
+    /// <summary>Indica si ya existe un <see cref="GeneracionOTRechazada_v1"/> en el stream (I-F4.d / I-F6).</summary>
+    public bool OTRechazada { get; private set; }
+    /// <summary>Momento en que se solicitó la OT (null hasta que se emita <see cref="OTSolicitada_v1"/>).</summary>
+    public DateTimeOffset? SolicitadaEn { get; private set; }
+
     /// <summary>Hallazgos registrados en esta inspección (I-H6: multiplicidad permitida).</summary>
     public IReadOnlyList<Hallazgo> Hallazgos => _hallazgos.AsReadOnly();
     private readonly List<Hallazgo> _hallazgos = [];
@@ -347,6 +355,16 @@ public sealed class Inspeccion
                 break;
             // Slice 1i' — RegistrarEvaluacionCualitativa
             case EvaluacionCualitativaRegistrada_v1 e:
+                Apply(e);
+                break;
+            // Slice 1k — GenerarOT
+            case OTSolicitada_v1 e:
+                Apply(e);
+                break;
+            case GeneracionOTRechazada_v1 e:
+                Apply(e);
+                break;
+            case InspeccionCerradaSinOT_v1 e:
                 Apply(e);
                 break;
             default:
@@ -1157,6 +1175,95 @@ public sealed class Inspeccion
             OmitidoEn: ahora);
 
         return new object[] { evento };
+    }
+
+    // ── Slice 1k — GenerarOT ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1k. Valida las pre-condiciones PRE-3..PRE-7 (I-F4)
+    /// y emite exactamente un <see cref="OTSolicitada_v1"/>.
+    /// PRE-1 (capability "generar-ot") se valida en la capa HTTP (middleware).
+    /// PRE-2 (inspección existe) se valida en el handler.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> SolicitarOT(GenerarOT cmd, DateTimeOffset ahora)
+    {
+        // PRE-3 / I-F4.a: la inspección debe estar en estado Firmada.
+        if (Estado != EstadoInspeccion.Firmada)
+        {
+            throw new InspeccionNoFirmadaException(
+                $"La inspección {InspeccionId} está en estado '{Estado}'. GenerarOT solo aplica a inspecciones en estado 'Firmada'.");
+        }
+
+        // PRE-7 / I-F4.e (defensa): el dictamen no puede ser PuedeOperar.
+        if (Dictamen == DictamenOperacion.PuedeOperar)
+        {
+            throw new DictamenNoPermiteOTException(
+                "El dictamen 'PuedeOperar' no permite generar OT. Solo ConRestriccion o NoPuedeOperar son válidos.");
+        }
+
+        // PRE-4 / I-F4.b: debe haber al menos un hallazgo activo con RequiereIntervencion.
+        if (!_hallazgos.Any(h => !h.Eliminado && h.AccionRequerida == AccionRequerida.RequiereIntervencion))
+        {
+            throw new SinHallazgosConIntervencionException(
+                $"La inspección {InspeccionId} no tiene hallazgos activos con AccionRequerida=RequiereIntervencion. GenerarOT requiere al menos uno.");
+        }
+
+        // PRE-5 / I-F4.c: no debe haber una OT solicitada previamente.
+        if (OTSolicitada)
+        {
+            throw new OTYaSolicitadaException(
+                $"La inspección {InspeccionId} ya tiene una OT solicitada. No se aceptan dos solicitudes de OT sobre el mismo stream.");
+        }
+
+        // PRE-6 / I-F4.d: no debe haber una OT rechazada previamente.
+        if (OTRechazada)
+        {
+            throw new OTRechazadaException(
+                $"La inspección {InspeccionId} ya tiene la generación de OT rechazada. No se puede solicitar OT una vez rechazada.");
+        }
+
+        var evento = new OTSolicitada_v1(
+            InspeccionId: InspeccionId,
+            SolicitadaPor: cmd.SolicitadaPor,
+            Responsable: cmd.Responsable,
+            Prioridad: cmd.Prioridad,
+            Observaciones: cmd.Observaciones,
+            ComentarioJefe: cmd.ComentarioJefe,
+            SolicitadaEn: ahora);
+
+        return new object[] { evento };
+    }
+
+    /// <summary>
+    /// Aplicación pura de <see cref="OTSolicitada_v1"/>: marca <see cref="OTSolicitada"/>
+    /// como <c>true</c> y persiste el timestamp. Sin validaciones — solo mutación.
+    /// Las pre-condiciones viven en <see cref="SolicitarOT"/>. Slice 1k.
+    /// </summary>
+    public void Apply(OTSolicitada_v1 e)
+    {
+        OTSolicitada = true;
+        SolicitadaEn = e.SolicitadaEn;
+    }
+
+    /// <summary>
+    /// Aplicación pura stub de <see cref="GeneracionOTRechazada_v1"/>: marca
+    /// <see cref="OTRechazada"/> como <c>true</c>. Sin validaciones. Stub para
+    /// PRE-6 del slice 1k. Implementación completa en slice futuro.
+    /// </summary>
+    public void Apply(GeneracionOTRechazada_v1 e)
+    {
+        OTRechazada = true;
+    }
+
+    /// <summary>
+    /// Aplicación pura stub de <see cref="InspeccionCerradaSinOT_v1"/>: transiciona
+    /// el estado a <see cref="EstadoInspeccion.CerradaSinOT"/>. Sin validaciones.
+    /// Stub para PRE-3 escenario §6.12 del slice 1k. Implementación completa en slice futuro.
+    /// </summary>
+    public void Apply(InspeccionCerradaSinOT_v1 e)
+    {
+        Estado = EstadoInspeccion.CerradaSinOT;
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────

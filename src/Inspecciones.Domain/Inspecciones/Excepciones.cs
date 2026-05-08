@@ -197,3 +197,35 @@ public sealed class ItemYaOmitidoException(string mensaje)
 /// tiene menos de 10 caracteres. HTTP 400 Bad Request.</summary>
 public sealed class MotivoOmisionInvalidoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1k — GenerarOT ──────────────────────────────────────────────────────
+
+/// <summary>PRE-3 / I-F4.a (aggregate) — <c>GenerarOT</c> se invocó sobre una
+/// inspección que no está en estado <see cref="EstadoInspeccion.Firmada"/>.
+/// Solo es válido para inspecciones firmadas. HTTP 422 Unprocessable Entity.</summary>
+public sealed class InspeccionNoFirmadaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-4 / I-F4.b (aggregate) — la inspección no tiene ningún hallazgo activo
+/// (no eliminado) con <c>AccionRequerida=RequiereIntervencion</c>. GenerarOT requiere
+/// al menos uno. HTTP 422 Unprocessable Entity.</summary>
+public sealed class SinHallazgosConIntervencionException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-5 / I-F4.c (aggregate) — ya existe un <see cref="OTSolicitada_v1"/>
+/// en el stream. No se aceptan dos solicitudes de OT sobre el mismo stream.
+/// HTTP 409 Conflict.</summary>
+public sealed class OTYaSolicitadaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-6 / I-F4.d (aggregate) — ya existe un <see cref="GeneracionOTRechazada_v1"/>
+/// en el stream. Una vez rechazada no se puede re-solicitar en el MVP (I-F6).
+/// HTTP 409 Conflict.</summary>
+public sealed class OTRechazadaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-7 / I-F4.e (aggregate) — el dictamen es <see cref="DictamenOperacion.PuedeOperar"/>.
+/// Defensa explícita de segunda línea (V-F8 debería haberlo bloqueado al firmar).
+/// Solo ConRestriccion o NoPuedeOperar permiten GenerarOT. HTTP 422 Unprocessable Entity.</summary>
+public sealed class DictamenNoPermiteOTException(string mensaje)
+    : InspeccionDomainException(mensaje);

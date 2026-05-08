@@ -44,30 +44,27 @@ public sealed class InspeccionAbiertaPorEquipoProjection : EventProjection
     }
 
     /// <summary>Elimina la fila cuando la inspección es firmada (equipo queda libre).</summary>
-    public static async Task Project(InspeccionFirmada_v1 e, IQuerySession session, IDocumentOperations ops)
+    /// <remarks>
+    /// Fix slice 1k: (1) se eliminó el parámetro <c>IQuerySession session</c> que Marten 7
+    /// no soporta en <c>EventProjection.Project</c>; (2) se reemplazó el patrón
+    /// query-entonces-delete por <c>DeleteWhere</c> para evitar que inserts del mismo batch
+    /// no sean visibles al query en modo inline (race condition dentro del mismo
+    /// <c>SaveChangesAsync</c> cuando la siembra incluye InspeccionIniciada_v1 y
+    /// InspeccionFirmada_v1 en el mismo stream commit).
+    /// </remarks>
+    public static void Project(InspeccionFirmada_v1 e, IDocumentOperations ops)
     {
-        // Carga la fila buscando por InspeccionId para obtener el EquipoId (PK del documento).
-        // El EventProjection recibe el IQuerySession para poder hacer queries de estado.
-        var fila = await session.Query<InspeccionAbiertaPorEquipoView>()
-            .Where(v => v.InspeccionId == e.InspeccionId)
-            .FirstOrDefaultAsync();
-
-        if (fila is not null)
-        {
-            ops.Delete<InspeccionAbiertaPorEquipoView>(fila.Id);
-        }
+        // DeleteWhere por InspeccionId resuelve la fila sin necesitar el EquipoId (que no está
+        // en InspeccionFirmada_v1). No requiere visibilidad del insert previo en el mismo batch.
+        ops.DeleteWhere<InspeccionAbiertaPorEquipoView>(v => v.InspeccionId == e.InspeccionId);
     }
 
     /// <summary>Elimina la fila cuando la inspección es cancelada (equipo queda libre).</summary>
-    public static async Task Project(InspeccionCancelada_v1 e, IQuerySession session, IDocumentOperations ops)
+    /// <remarks>
+    /// Fix slice 1k: mismo fix que <c>InspeccionFirmada_v1</c> — DeleteWhere sin query previo.
+    /// </remarks>
+    public static void Project(InspeccionCancelada_v1 e, IDocumentOperations ops)
     {
-        var fila = await session.Query<InspeccionAbiertaPorEquipoView>()
-            .Where(v => v.InspeccionId == e.InspeccionId)
-            .FirstOrDefaultAsync();
-
-        if (fila is not null)
-        {
-            ops.Delete<InspeccionAbiertaPorEquipoView>(fila.Id);
-        }
+        ops.DeleteWhere<InspeccionAbiertaPorEquipoView>(v => v.InspeccionId == e.InspeccionId);
     }
 }

@@ -760,6 +760,108 @@ public static class InspeccionesEndpoints
             })
            .WithName("OmitirItemMonitoreo");
 
+        // ── Slice 1k — GenerarOT ───────────────────────────────────────────
+        // TODO stub: lanza NotImplementedException hasta que el green implemente el handler.
+        // El endpoint ya verifica PRE-1 (capability) y el header X-Client-Command-Id.
+        app.MapPost("/api/v1/inspecciones/{id:guid}/generar-ot", async (
+                Guid id,
+                GenerarOTRequest request,
+                GenerarOTHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // PRE-1 — capability "generar-ot" requerida (spec §4, §6.3).
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
+                // El header X-Sin-Capability-Generar-OT se usa en tests para simular claims sin capability.
+                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Generar-OT");
+                if (sinCapabilityHeader)
+                {
+                    return Results.Forbid();
+                }
+
+                // Claims mock — capability "generar-ot" hardcodeada hasta ADR-002.
+                const string aprobadorId = "jefe.campo.01";
+                var capabilities = (IReadOnlyCollection<string>)["generar-ot"];
+
+                if (!Enum.TryParse<ResponsableCosto>(request.Responsable, ignoreCase: true, out var responsable))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "RESPONSABLE-INVALIDO",
+                        mensaje = $"Responsable '{request.Responsable}' no válido. Valores aceptados: Proyecto, DepartamentoEquipos."
+                    });
+                }
+
+                if (!Enum.TryParse<PrioridadOT>(request.Prioridad, ignoreCase: true, out var prioridad))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "PRIORIDAD-INVALIDA",
+                        mensaje = $"Prioridad '{request.Prioridad}' no válida. Valores aceptados: Baja, Normal, Alta, Urgente."
+                    });
+                }
+
+                var cmd = new GenerarOT(
+                    InspeccionId: id,
+                    SolicitadaPor: aprobadorId,
+                    Responsable: responsable,
+                    Observaciones: request.Observaciones,
+                    ComentarioJefe: request.ComentarioJefe,
+                    Capabilities: capabilities,
+                    Prioridad: prioridad);
+
+                try
+                {
+                    var resultado = await handler.Handle(cmd, ct);
+
+                    return Results.Accepted(
+                        uri: $"/api/v1/inspecciones/{id}",
+                        value: new
+                        {
+                            inspeccionId = resultado.InspeccionId,
+                            solicitadaEn = resultado.SolicitadaEn,
+                            solicitadaPor = resultado.SolicitadaPor,
+                            responsable = resultado.Responsable,
+                            prioridad = resultado.Prioridad
+                        });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-2", mensaje = ex.Message });
+                }
+                catch (OTYaSolicitadaException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I-F4-OT-DUPLICADA", mensaje = ex.Message });
+                }
+                catch (OTRechazadaException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I-F4-OT-RECHAZADA", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoFirmadaException            => "I-F4-ESTADO",
+                        SinHallazgosConIntervencionException    => "I-F4-SIN-INTERVENCION",
+                        DictamenNoPermiteOTException            => "I-F4-DICTAMEN",
+                        _                                       => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("GenerarOT");
+
         return app;
     }
 }

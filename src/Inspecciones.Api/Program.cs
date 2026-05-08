@@ -35,6 +35,11 @@ builder.Services.AddMarten((StoreOptions options) =>
         options.Schema.For<RepuestoLocal>().Identity(x => x.SkuId);
         options.Schema.For<RutinaMonitoreoLocal>().Identity(x => x.RutinaMonitoreoId);
 
+        // Identidad del aggregate Inspeccion — requerida por Marten 7.40 para AggregateStreamAsync<Inspeccion>.
+        // InspeccionId sigue la convención {ClassName}Id pero se registra explícitamente para garantizar
+        // que el aggregate projection se compile correctamente.
+        options.Schema.For<Inspecciones.Domain.Inspecciones.Inspeccion>().Identity(x => x.InspeccionId);
+
         // Solo crear/migrar el schema en Development. En prod los DDL se aplican via pipeline.
         if (isDevelopment)
         {
@@ -103,6 +108,7 @@ builder.Services.AddScoped<IniciarInspeccionMonitoreoHandler>();
 builder.Services.AddScoped<RegistrarMedicionHandler>();
 builder.Services.AddScoped<RegistrarEvaluacionCualitativaHandler>();
 builder.Services.AddScoped<OmitirItemMonitoreoHandler>();
+builder.Services.AddScoped<GenerarOTHandler>();
 
 var app = builder.Build();
 

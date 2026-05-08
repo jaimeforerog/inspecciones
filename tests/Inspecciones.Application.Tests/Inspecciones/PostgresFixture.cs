@@ -1,5 +1,6 @@
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
+using Inspecciones.Domain.Inspecciones;
 using Marten;
 using Marten.Events.Projections;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +42,11 @@ public sealed class PostgresFixture : IAsyncLifetime
             opts.Schema.For<RutinaTecnicaLocal>().Identity(x => x.RutinaId);
             opts.Schema.For<RepuestoLocal>().Identity(x => x.SkuId);
             opts.Schema.For<RutinaMonitoreoLocal>().Identity(x => x.RutinaMonitoreoId);
+
+            // Identidad del aggregate Inspeccion requerida por Marten 7 para AggregateStreamAsync<Inspeccion>.
+            // InspeccionId sigue la convención {ClassName}Id, pero Marten 7.40 la requiere explícita
+            // para compilar el aggregate projection en entornos con private set.
+            opts.Schema.For<Inspeccion>().Identity(x => x.InspeccionId);
 
             // FU-13 — proyección inline para InspeccionAbiertaPorEquipoView.
             opts.Projections.Add<InspeccionAbiertaPorEquipoProjection>(ProjectionLifecycle.Inline);

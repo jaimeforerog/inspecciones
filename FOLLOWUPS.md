@@ -226,6 +226,41 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Notas:** Si emerge en piloto, el camino es híbrido (no on-demand puro): catálogos chicos siguen con sync completo + catálogos grandes pasan a prefetch-by-proyecto (`GET /api/v1/<catalogo>?proyecto={id}`) + lookup on-demand individual (`GET /api/v1/<catalogo>/{id}`). Ese diseño preserva offline duro mientras reduce el footprint. **Mitigación complementaria sin cambio de arquitectura (Opción 2 de la decisión 2026-05-05):** pedir a David consolidar bumps de ETag de insumos en un único `version++` diario (ver pregunta nueva en `07-preguntas-destrabar-followups.md`). Cross-ref: ADR-008 sección "Comportamiento por plataforma" (riesgo iOS) y `08-volumenes-clientes-erp.md` §2 (volúmenes reales) y §3 hallazgo 7 (dimensionamiento Azure).
 
 
+### #31 — Shape canónico de `OTSolicitada_v1` en §17 usa `DateTime` en lugar de `DateTimeOffset` y carece de `Prioridad`, `Observaciones`, `ComentarioJefe` 🟢
+
+**Origen:** slice 1k review — hallazgo de coherencia con §17
+**Fecha:** 2026-05-08
+**Tipo:** doc · model
+**Descripción:** el shape canónico de `OTSolicitada_v1` en `01-modelo-dominio.md §17` (línea ~4596) usa `DateTime SolicitadaEn` en lugar de `DateTimeOffset` (convención del módulo), y el record mínimo del ADR no incluye los campos `PrioridadOT Prioridad`, `string? Observaciones` y `string? ComentarioJefe` añadidos en el spec del slice 1k (decisiones P-1 opción B y P-2). La implementación en código es correcta; es el documento que quedó desfasado. También el `GenerarOT` canónico en §17 no incluye `Prioridad`, `Observaciones` ni `ComentarioJefe`. Acción: actualizar ambos records en §17 para reflejar la implementación real. Ningún cambio de código necesario.
+**Disparador para abrir slice:** cualquier doc-writer que toque §17 o §15.4, o previo al slice `EjecutarOTSaga` (3.24b) que consume el evento.
+**Notas:** no bloqueante. La spec del slice 1k ya documenta la desviación con justificación en §3.1 y §12 P-1/P-2.
+
+### #30 — Comentario de slice incorrecto en `AplicarEvento` switch: `ItemMonitoreoOmitido_v1` bajo "Slice 1i" 🟢
+
+**Origen:** slice 1k refactorer — observación transversal
+**Fecha:** 2026-05-08
+**Tipo:** deuda técnica · naming
+**Descripción:** En `Inspeccion.cs` el switch `AplicarEvento` agrupa `MedicionRegistrada_v1` e `ItemMonitoreoOmitido_v1` bajo el comentario `// Slice 1i — RegistrarMedicion`. `ItemMonitoreoOmitido_v1` pertenece al slice 1j (`OmitirItemMonitoreo`), no al 1i. El comentario incorrecto podría confundir al siguiente desarrollador que edite esa región. Corrección: separar en dos comentarios: `// Slice 1i — RegistrarMedicion` (para `MedicionRegistrada_v1`) y `// Slice 1j — OmitirItemMonitoreo` (para `ItemMonitoreoOmitido_v1`). Cambio de una línea.
+**Disparador para abrir slice:** cualquier slice que modifique la región del switch `AplicarEvento`, o un ciclo de limpieza transversal.
+**Notas:** no bloqueante. Sin impacto en compilación ni comportamiento.
+
+### #32 — Bug preexistente: `Api.Tests` rotos por `RunOaktonCommands(args)` que rompe `WebApplicationFactory<Program>` 🟢
+
+**Origen:** slice 1k green/refactorer — diagnóstico transversal al ejecutar `Inspecciones.Api.Tests`
+**Fecha:** 2026-05-08
+**Tipo:** deuda técnica · test infra · alta severidad
+**Descripción:** Todos los tests de `Inspecciones.Api.Tests` (incluidos los del slice 1k `GenerarOTEndpointTests`) fallan con `InvalidOperationException: The server has not been started or no web application was configured.` cuando se intenta usar `WebApplicationFactory<Program>`. La causa raíz es que `src/Inspecciones.Api/Program.cs` llama a `RunOaktonCommands(args)` (alrededor de la línea 135), método que consume el lifecycle del host y, al ser invocado durante la construcción del `TestServer`, impide que `WebApplicationFactory` arranque el pipeline HTTP. El bug es preexistente desde el slice 1g (`FirmarInspeccion`) — fue introducido sin que ningún slice posterior corriera la suite completa de `Api.Tests`. Slice 1k lo detectó al intentar correr sus tests de endpoint nuevos. Workaround temporal: los tests de endpoint del slice 1k quedan documentados en `slices/1k-generar-ot/red-notes.md` y fueron verificados a nivel handler vía `Application.Tests` (5/7 verdes + 2 Skip justificados); la verificación HTTP queda pendiente al cierre de este followup. Solución sugerida: extraer el dispatch de Oakton a una rama condicional (p. ej. `if (args.Length > 0 && IsOaktonCommand(args)) return await RunOaktonCommands(args);`) o usar el patrón `WebApplication.CreateBuilder` + condicional sobre `WEBSITES_PORT` / `ASPNETCORE_ENVIRONMENT`. Alternativa: reemplazar `Program` por un `IHostBuilder` factory que `WebApplicationFactory` pueda envolver sin disparar Oakton.
+**Disparador para abrir slice:** **antes de cerrar la Fase 1**. Mientras el bug persista, ningún slice posterior puede agregar tests HTTP nuevos que pasen en CI. Severidad alta porque enmascara regresiones del pipeline HTTP en todos los slices subsecuentes. Recomendado: slice de fix transversal `fix(slice-1k): TestServer/Oakton lifecycle` o equivalente, idealmente como primer item de cierre de Fase 1.
+**Notas:** los tests de endpoint del slice 1k (`GenerarOTEndpointTests.cs`) quedan en el commit pero no pasan por este bug; cuando FU-32 se resuelva, validar que el suite completo del slice 1k vuelva a verde sin cambios al test. La cobertura del comando se mantiene a nivel handler (`Application.Tests`) y dominio (`Domain.Tests`), por lo que la lógica del slice está cubierta funcionalmente.
+
+### #33 — Cambio cross-slice no documentado en `InspeccionAbiertaPorEquipoProjection.cs` durante slice 1k 🟢
+
+**Origen:** slice 1k green — modificación detectada en diff sobre archivo fuera del scope declarado del slice
+**Fecha:** 2026-05-08
+**Tipo:** deuda técnica · auditoría · proyección
+**Descripción:** Durante la fase `green` del slice 1k se modificó `src/Inspecciones.Application/Inspecciones/InspeccionAbiertaPorEquipoProjection.cs` para resolver un race condition entre `IQuerySession` (no soportado por Marten 7 en proyecciones inline) y un race en el mismo batch del event store. El cambio fue necesario para que los handlers del slice 1k (`GenerarOTHandler`) funcionaran correctamente sin colisionar con la proyección. El refactorer del slice 1k **no documentó este cambio en `refactor-notes.md`** como modificación cross-slice fuera del scope. La proyección fue introducida en slice 1g (`FirmarInspeccion` migración a `EventProjection`) y este ajuste afecta a los slices que la usan en lectura (1b, 1g, 1h y todos los que cargan `InspeccionAbiertaPorEquipoView`). Acción: auditoría posterior para (a) confirmar que el cambio es semánticamente correcto, (b) verificar que no introduce regresiones en los flujos de los slices 1a-1f que ya estaban verdes, (c) documentar formalmente el cambio en `slices/1k-generar-ot/refactor-notes.md` o en una nota agregada al review-notes del slice 1g si la corrección pertenece a ese contexto. Severidad media porque el cambio destrabó el slice 1k pero introduce riesgo de regresión silenciosa en proyecciones consumidas por slices previos.
+**Disparador para abrir slice:** auditoría como parte del cierre de Fase 1, o cuando emerja un test de integración que verifique el shape completo de `InspeccionAbiertaPorEquipoView` tras el batch del slice 1k. Idealmente vinculado al slice de fix de FU-32 (mismo ciclo de saneamiento de la capa Api/proyecciones).
+**Notas:** vinculado a followup #13 (migración a `MultiStreamProjection` inline). Si #13 se materializa, este cambio queda absorbido en el rediseño de la proyección. Si #13 sigue diferido, el cambio del slice 1k debe quedar documentado y testeado en aislamiento.
 
 ## Cerrados
 

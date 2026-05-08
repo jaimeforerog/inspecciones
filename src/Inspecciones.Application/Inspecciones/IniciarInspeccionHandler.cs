@@ -76,10 +76,11 @@ public sealed class IniciarInspeccionHandler(IDocumentSession session, TimeProvi
         {
             await _session.SaveChangesAsync(ct);
         }
-        catch (MartenCommandException ex)
-            when (ex.InnerException is PostgresException pg && pg.SqlState == "23505")
+        catch (Exception ex) when (Es23505(ex))
         {
             // I-I1 defensa dura: el equipo ya tenía inspección activa (race ganada por otro handler).
+            // Marten 7 puede envolver el 23505 como MartenCommandException o DocumentAlreadyExistsException
+            // dependiendo de la operación (Insert en el projection vs Insert directo). Se atrapa ambas.
             // Relee la proyección para obtener el InspeccionId del ganador.
             await using var lecturaRace = _session.DocumentStore.QuerySession();
             var activaRace = await lecturaRace.LoadAsync<InspeccionAbiertaPorEquipoView>(cmd.EquipoId, ct);
@@ -96,4 +97,16 @@ public sealed class IniciarInspeccionHandler(IDocumentSession session, TimeProvi
             Version: 1,
             Mensaje: null);
     }
+
+    /// <summary>
+    /// Detecta si la excepción es un 23505 (unique violation) en cualquiera de las formas
+    /// que Marten 7 puede lanzarla: <see cref="MartenCommandException"/> con inner
+    /// <see cref="PostgresException"/> SqlState=23505, o <see cref="DocumentAlreadyExistsException"/>
+    /// (Marten la lanza cuando la proyección EventProjection usa Insert y el documento ya existe).
+    /// </summary>
+    private static bool Es23505(Exception ex) =>
+        ex is DocumentAlreadyExistsException ||
+        (ex is MartenCommandException mce &&
+         mce.InnerException is PostgresException pg &&
+         pg.SqlState == "23505");
 }
