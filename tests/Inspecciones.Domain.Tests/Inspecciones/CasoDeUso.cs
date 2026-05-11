@@ -215,6 +215,19 @@ internal static class CasoDeUso
     }
 
     /// <summary>
+    /// Decisión <c>ActualizarRepuesto</c>. Slice 1o — ActualizarRepuesto. Reconstruye
+    /// el aggregate desde el stream previo y delega al método de decisión del aggregate.
+    /// </summary>
+    public static IReadOnlyList<object> ActualizarRepuesto(
+        IReadOnlyList<object> dados,
+        ActualizarRepuesto cmd,
+        DateTimeOffset ahora)
+    {
+        var aggregate = Inspeccion.Reconstruir(dados);
+        return aggregate.ActualizarRepuesto(cmd, ahora);
+    }
+
+    /// <summary>
     /// Decisión <c>IniciarMonitoreo</c>. Slice 1h — IniciarInspeccionMonitoreo.
     /// El aggregate se crea sobre stream vacío (PRE-7 I-I1 corto-circuita en el
     /// handler antes de llegar aquí). El handler pasa <paramref name="itemsSnapshot"/>

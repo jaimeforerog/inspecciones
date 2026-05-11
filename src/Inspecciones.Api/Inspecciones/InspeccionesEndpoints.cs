@@ -1108,6 +1108,100 @@ public static class InspeccionesEndpoints
             })
            .WithName("DescartarNovedadPreop");
 
+        // ── Slice 1o — ActualizarRepuesto ───────────────────────────────────
+        // PRE-0 (capability "ejecutar-inspeccion") verificada vía header X-Sin-Capability-Ejecutar.
+        // Verbo PATCH: los campos patcheables son opcionales independientemente (spec §9 D-6).
+        // Stub — el handler lanza NotImplementedException hasta que green lo implemente.
+        app.MapMethods("/api/v1/inspecciones/{inspeccionId:guid}/hallazgos/{hallazgoId:guid}/repuestos/{repuestoId:guid}",
+            ["PATCH"], async (
+                Guid inspeccionId,
+                Guid hallazgoId,
+                Guid repuestoId,
+                ActualizarRepuestoRequest request,
+                ActualizarRepuestoHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // PRE-0 — capability "ejecutar-inspeccion" requerida (spec §4, §6.12).
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
+                // El header X-Sin-Capability-Ejecutar se usa en tests para simular claims sin capability.
+                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Ejecutar");
+                if (sinCapabilityHeader)
+                {
+                    return Forbidden403("PRE-0", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                // Claims mock — ADR-002 tentativo.
+                const string tecnicoId = "rmartinez";
+
+                // P-2: normalizar ObservacionNueva vacía a null en handler (spec §12 P-2 opción A).
+                var observacionNormalizada = string.IsNullOrWhiteSpace(request.ObservacionNueva)
+                    ? null
+                    : request.ObservacionNueva;
+
+                var cmd = new ActualizarRepuesto(
+                    InspeccionId: inspeccionId,
+                    HallazgoId: hallazgoId,
+                    RepuestoId: repuestoId,
+                    CantidadNueva: request.CantidadNueva,
+                    ObservacionNueva: observacionNormalizada,
+                    ActualizadoPor: tecnicoId);
+
+                try
+                {
+                    var resultado = await handler.Handle(cmd, ct);
+
+                    return Results.Ok(new
+                    {
+                        inspeccionId = resultado.InspeccionId,
+                        hallazgoId = resultado.HallazgoId,
+                        repuestoId = resultado.RepuestoId,
+                        cantidad = resultado.Cantidad,
+                        justificacion = resultado.Justificacion,
+                        actualizadoEn = resultado.ActualizadoEn
+                    });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-1", mensaje = ex.Message });
+                }
+                catch (HallazgoNoEncontradoException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-3", mensaje = ex.Message });
+                }
+                catch (RepuestoNoEncontradoException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-5", mensaje = ex.Message });
+                }
+                catch (ComandoSinCambiosException ex)
+                {
+                    return Results.BadRequest(new { codigoError = "PRE-8", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        InspeccionNoEnEjecucionException => "I-H7",
+                        HallazgoEliminadoException       => "PRE-4-ELIMINADO",
+                        CantidadInvalidaException        => "PRE-7",
+                        _                                => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("ActualizarRepuesto");
+
         return app;
     }
 

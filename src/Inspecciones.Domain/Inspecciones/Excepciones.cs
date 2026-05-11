@@ -269,3 +269,17 @@ public sealed class NovedadYaDescartadaException(string mensaje)
 /// HTTP 422 Unprocessable Entity.</summary>
 public sealed class NovedadYaConvertidaEnHallazgoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1o — ActualizarRepuesto ─────────────────────────────────────────────
+
+/// <summary>PRE-5 (aggregate) — el <c>RepuestoId</c> no existe en el aggregate
+/// o existe pero pertenece a un <c>HallazgoId</c> distinto al indicado en el comando.
+/// HTTP 404 Not Found, <c>codigoError="PRE-5"</c>.</summary>
+public sealed class RepuestoNoEncontradoException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-8 (aggregate) — ambos campos patcheables (<c>CantidadNueva</c> y
+/// <c>ObservacionNueva</c>) son <c>null</c>. Se requiere al menos uno para que el
+/// comando tenga efecto. HTTP 400 Bad Request, <c>codigoError="PRE-8"</c>.</summary>
+public sealed class ComandoSinCambiosException(string mensaje)
+    : InspeccionDomainException(mensaje);

@@ -288,6 +288,25 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para cerrar:** PR de documentación junto con FU-40 (fix simetría) o antes del cierre de Fase 1.
 **Acción:** agregar entrada INV-ND1 a `Inspecciones/docs/01-modelo-dominio.md §15.3` con shape canónico de invariantes (enunciado, comandos que la enforcean, slices relacionados).
 
+### #42 — Test E2E §6.9 (`PRE-5 cross-hallazgo`) ausente en `ActualizarRepuestoEndpointTests` 🟢
+
+**Origen:** slice 1o review hallazgo #1
+**Fecha:** 2026-05-11
+**Tipo:** cobertura de tests · E2E
+**Descripción:** El escenario §6.9 del spec 1o (PRE-5: RepuestoId en hallazgo incorrecto → 404 `PRE-5`) está documentado en el docblock de `ActualizarRepuestoEndpointTests.cs` pero no tiene método `[Fact]` propio. El escenario está cubierto a nivel dominio. Riesgo bajo porque §6.8 y §6.9 producen idéntica respuesta HTTP (`404 + "PRE-5"`), pero el contrato HTTP queda sin verificación explícita en E2E.
+**Disparador para abrir slice:** cuando emerja necesidad de auditar cobertura E2E completa, o como nit al cierre de Fase 1.
+**Acción:** agregar test `PATCH_repuesto_repuesto_en_hallazgo_incorrecto_responde_404_PRE5` en `tests/Inspecciones.Api.Tests/ActualizarRepuestoEndpointTests.cs` siguiendo el patrón de §6.8.
+
+### #43 — Colisión de EquipoIds en Api.Tests entre slices (manifestación expandida de FU-39) 🟢
+
+**Origen:** slice 1o green/orquestador — fix aplicado durante el slice
+**Fecha:** 2026-05-11
+**Tipo:** deuda técnica · test infra · IDs hardcoded
+**Descripción:** El slice 1o nació usando EquipoIds `80001-80010` que colisionaron con los hardcoded de slices 1m (`CancelarInspeccionEndpointTests`, `80001-80009`) y 1n (`DescartarNovedadPreopEndpointTests`, `90001-90007`). Al sembrar `InspeccionAbiertaPorEquipoView` con EquipoId duplicado en tests de distintos archivos, el segundo en correr fallaba con `DocumentAlreadyExistsException`. Fix temporal aplicado por orquestador: renombrar IDs slice 1o a `100001-100010`. **Es la misma causa raíz que FU-39** (IDs hardcoded sin reset entre tests), pero ya alcanza `Api.Tests` (no solo `Application.Tests`).
+**Disparador para abrir slice:** próximo slice de Fase 1 que agregue tests E2E (slice 1p `RemoverRepuesto` o `AdjuntarArchivo` van a chocar también si no se resuelve). O cuando proliferación de rangos `80000+, 90000+, 100000+, 110000+...` sea insostenible.
+**Acción sugerida:** implementar `Func<int> NextEquipoId()` en `InspeccionesAppFactory` o helper compartido que devuelva un `int` único por test (counter atómico). Reemplazar IDs hardcoded en todos los tests E2E. Alternativa: schema reset entre tests (más costoso pero más simple).
+**Notas:** vinculado a FU-39 (Application.Tests sin Docker). Ambos cierran probablemente en el mismo slice de saneamiento de test infra.
+
 ## Cerrados
 
 ### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path ✅
@@ -403,6 +422,20 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Origen:** notas reunión diseño 2026-04-29 — Jaime/Sergio sugirieron "el campo 'proyecto' se mantendría solo si es relevante". Modelo usaba `ObraId` / `ObraLocal`.
 **Fecha apertura / cierre:** 2026-04-29 / 2026-04-30
 **Resolución:** opción **(a) sinónimos**, palabra que queda = **"proyecto"** (decisión Jaime 2026-04-30). Sub-decisión: **(B) módulo usa `Proyecto` interno; ERP mantiene `Obra` en URLs/DTOs**. El adapter del módulo traduce `Proyecto` ↔ `Obra` al hablar con MYE. Aplicado: rename masivo de identificadores (`ObraId` → `ProyectoId`, `ObraLocal` → `ProyectoLocal`, etc.) en `01-modelo-dominio.md`, `04-brief-consultor-producto.md`, `roadmap.md`, `02d-wireframes-seguimientos.html`, `05-catalogo-eventos.md`, `03-sow-consultor.md`. Endpoints del módulo: `?obra=` → `?proyecto=`. URLs del ERP `/api/v1/catalogos/obras` y `?obra=` se mantienen literales con nota de aclaración. **Pregunta menor pendiente con David**: ¿el ERP corporativo planea estandarizar a "proyecto" en algún momento? — ver doc 07.
+
+### #42 — Slice 1o: test E2E faltante para escenario PRE-5 cross-hallazgo (§6.9) 🟢
+
+**Origen:** slice 1o-actualizar-repuesto review §3 hallazgo #1
+**Fecha:** 2026-05-11
+**Tipo:** deuda técnica · cobertura
+**Descripción:** `ActualizarRepuestoEndpointTests` lista §6.9 (RepuestoId en hallazgo distinto → 404 PRE-5) en el docblock de clase pero no tiene método `[Fact]` propio. El escenario está cubierto a nivel de dominio en `ActualizarRepuestoTests`. A nivel HTTP la distinción §6.8 / §6.9 produce la misma respuesta `404 + "PRE-5"` — no afecta la verificación de contrato. Agregar `PATCH_repuesto_repuesto_en_hallazgo_incorrecto_responde_404_PRE5` en Api.Tests para completar la cobertura E2E del escenario.
+
+### #43 — Colisión de EquipoIds hardcoded en Api.Tests (manifestación FU-39) 🟢
+
+**Origen:** slice 1o-actualizar-repuesto review §3 hallazgo #2 (reportado por orquestador durante fase green)
+**Fecha:** 2026-05-11
+**Tipo:** deuda técnica · infraestructura de tests
+**Descripción:** Los EquipoIds de siembra del slice 1o originalmente asignados (80001-80010) colisionaron con slices 1m/1n. El orquestador los renombró a 100001-100010. La causa raíz es FU-39: IDs hardcoded en tests de integración sin aislamiento por colección. Cada nuevo slice requiere elegir rangos manualmente. Solución: cuando el número de suites haga inviable la asignación manual, implementar generación dinámica de IDs de siembra (`Guid.NewGuid()` para streams Marten, o rangos con offset generado por colección) para eliminar la necesidad de coordinación manual.
 
 ---
 

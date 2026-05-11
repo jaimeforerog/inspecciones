@@ -395,6 +395,10 @@ public sealed class Inspeccion
             case NovedadPreopDescartada_v1 e:
                 Apply(e);
                 break;
+            // Slice 1o — ActualizarRepuesto
+            case RepuestoActualizado_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -795,6 +799,77 @@ public sealed class Inspeccion
             Justificacion: e.Justificacion,
             Unidad: e.Unidad));
         _contribuyentes.Add(e.AsignadoPor);
+    }
+
+    // ── Slice 1o — ActualizarRepuesto ────────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1o. Valida PRE-2..PRE-8 y emite
+    /// <see cref="RepuestoActualizado_v1"/>. Apply es puro — las validaciones viven aquí.
+    /// PRE-1 vive en el handler (acceso a Marten). PRE-0 en capa HTTP.
+    /// </summary>
+    public IReadOnlyList<object> ActualizarRepuesto(ActualizarRepuesto cmd, DateTimeOffset ahora)
+    {
+        // PRE-2 (I-H7): estado debe ser EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección está en estado '{Estado}'. Solo se pueden actualizar repuestos en estado EnEjecucion.");
+        }
+
+        // PRE-3 + PRE-4: el hallazgo debe existir y no estar eliminado.
+        ObtenerHallazgoActivo(cmd.HallazgoId);
+
+        // PRE-8: al menos un campo patcheable debe ser no-null (antes de PRE-7 para rechazar comando vacío).
+        if (cmd.CantidadNueva is null && cmd.ObservacionNueva is null)
+        {
+            throw new ComandoSinCambiosException(
+                "Se requiere al menos un campo para actualizar (CantidadNueva o ObservacionNueva).");
+        }
+
+        // PRE-7: CantidadNueva > 0 si está presente.
+        if (cmd.CantidadNueva is not null && cmd.CantidadNueva <= 0)
+        {
+            throw new CantidadInvalidaException(
+                "Cantidad debe ser mayor que cero.");
+        }
+
+        // PRE-5: el repuesto debe existir y pertenecer al hallazgo indicado.
+        if (!_repuestos.Any(r => r.RepuestoId == cmd.RepuestoId && r.HallazgoId == cmd.HallazgoId))
+        {
+            throw new RepuestoNoEncontradoException(
+                $"El repuesto {cmd.RepuestoId} no existe en el hallazgo {cmd.HallazgoId} de la inspección {InspeccionId}.");
+        }
+
+        return [new RepuestoActualizado_v1(
+            InspeccionId: InspeccionId,
+            HallazgoId: cmd.HallazgoId,
+            RepuestoId: cmd.RepuestoId,
+            Cantidad: cmd.CantidadNueva,
+            Justificacion: cmd.ObservacionNueva,
+            ActualizadoPor: cmd.ActualizadoPor,
+            ActualizadoEn: ahora)];
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="RepuestoActualizado_v1"/>: aplica el delta
+    /// sobre el VO <see cref="Repuesto"/> en <see cref="_repuestos"/>. Sin validaciones —
+    /// solo mutación de estado. Las pre-condiciones viven en <see cref="ActualizarRepuesto"/>.
+    /// Si el <c>RepuestoId</c> no existe (e.g. stream con <c>RepuestoRemovido_v1</c>
+    /// intercalado), el Apply hace return silencioso.
+    /// </summary>
+    public void Apply(RepuestoActualizado_v1 e)
+    {
+        var idx = _repuestos.FindIndex(r => r.RepuestoId == e.RepuestoId);
+        if (idx < 0) { return; } // repuesto removido en slice posterior — puro, no lanza.
+
+        var prev = _repuestos[idx];
+        _repuestos[idx] = prev with
+        {
+            Cantidad      = e.Cantidad      ?? prev.Cantidad,
+            Justificacion = e.Justificacion ?? prev.Justificacion,
+        };
+        _contribuyentes.Add(e.ActualizadoPor);
     }
 
     // ── Slice 1g — FirmarInspeccion ──────────────────────────────────────────

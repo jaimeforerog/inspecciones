@@ -111,6 +111,7 @@ builder.Services.AddScoped<GenerarOTHandler>();
 builder.Services.AddScoped<RechazarGenerarOTHandler>();
 builder.Services.AddScoped<CancelarInspeccionHandler>();
 builder.Services.AddScoped<DescartarNovedadPreopHandler>();
+builder.Services.AddScoped<ActualizarRepuestoHandler>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON serializer — Minimal APIs: enums como string en request y response bodies.
