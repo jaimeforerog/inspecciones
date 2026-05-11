@@ -71,9 +71,9 @@ public static class InspeccionesEndpoints
                 {
                     return Results.NotFound(new { codigoError = "PRE-3", mensaje = ex.Message });
                 }
-                catch (ProyectoNoAutorizadoException)
+                catch (ProyectoNoAutorizadoException ex)
                 {
-                    return Results.Forbid();
+                    return Forbidden403("PRE-3-PROYECTO", ex.Message);
                 }
                 catch (InspeccionDomainException ex)
                 {
@@ -152,9 +152,9 @@ public static class InspeccionesEndpoints
                 {
                     return Results.NotFound(new { codigoError = "PRE-3", mensaje = ex.Message });
                 }
-                catch (ProyectoNoAutorizadoException)
+                catch (ProyectoNoAutorizadoException ex)
                 {
-                    return Results.Forbid();
+                    return Forbidden403("PRE-3-PROYECTO", ex.Message);
                 }
                 catch (InspeccionDomainException ex)
                 {
@@ -447,13 +447,13 @@ public static class InspeccionesEndpoints
                 {
                     return Results.NotFound(new { codigoError = "PRE-F", mensaje = ex.Message });
                 }
-                catch (CapabilityRequeridaException)
+                catch (CapabilityRequeridaException ex)
                 {
-                    return Results.Forbid();
+                    return Forbidden403("PRE-1", ex.Message);
                 }
-                catch (TecnicoNoContribuyenteException)
+                catch (TecnicoNoContribuyenteException ex)
                 {
-                    return Results.Forbid();
+                    return Forbidden403("PRE-F3", ex.Message);
                 }
                 catch (InspeccionNoEnEjecucionException ex)
                 {
@@ -787,7 +787,7 @@ public static class InspeccionesEndpoints
                 var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Generar-OT");
                 if (sinCapabilityHeader)
                 {
-                    return Results.Forbid();
+                    return Forbidden403("PRE-1", MensajeCapabilityGenerarOT);
                 }
 
                 // Claims mock — capability "generar-ot" hardcodeada hasta ADR-002.
@@ -891,7 +891,7 @@ public static class InspeccionesEndpoints
                 var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Generar-OT");
                 if (sinCapabilityHeader)
                 {
-                    return Results.Forbid();
+                    return Forbidden403("PRE-1", MensajeCapabilityGenerarOT);
                 }
 
                 // Claims mock — capability "generar-ot" hardcodeada hasta ADR-002.
@@ -950,4 +950,14 @@ public static class InspeccionesEndpoints
 
         return app;
     }
+
+    /// <summary>
+    /// Construye una respuesta HTTP 403 Forbidden con body <c>{ codigoError, mensaje }</c>.
+    /// Reemplaza <c>Results.Forbid()</c> que requiere <c>IAuthenticationService</c> (no registrado — ADR-002).
+    /// Fix FU-38.
+    /// </summary>
+    private static IResult Forbidden403(string codigoError, string mensaje)
+        => Results.Json(new { codigoError, mensaje }, statusCode: 403);
+
+    private const string MensajeCapabilityGenerarOT = "Capability 'generar-ot' requerida.";
 }
