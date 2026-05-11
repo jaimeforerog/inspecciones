@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Inspecciones.Api.Inspecciones;
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
@@ -24,10 +25,6 @@ builder.Services.AddMarten((StoreOptions options) =>
     {
         options.Connection(connectionString);
         options.DatabaseSchemaName = "inspecciones";
-
-        // JSON serializer — usa el default de Marten (Newtonsoft.Json). El detalle de
-        // configuración del serializer (System.Text.Json + casing + enum como string) se
-        // cierra en un slice posterior cuando emerja necesidad concreta.
 
         // PKs de catálogos ERP usan nombre de campo semántico (no "Id") — registrar identidad explícita.
         options.Schema.For<EquipoLocal>().Identity(x => x.EquipoId);
@@ -112,6 +109,14 @@ builder.Services.AddScoped<RegistrarEvaluacionCualitativaHandler>();
 builder.Services.AddScoped<OmitirItemMonitoreoHandler>();
 builder.Services.AddScoped<GenerarOTHandler>();
 builder.Services.AddScoped<RechazarGenerarOTHandler>();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON serializer — Minimal APIs: enums como string en request y response bodies.
+// ─────────────────────────────────────────────────────────────────────────────
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 var app = builder.Build();
 
