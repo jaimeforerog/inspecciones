@@ -245,14 +245,32 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** cualquier doc-writer que toque `spec.md §8.1` o el modelo de dominio §15.12.6.
 **Notas:** no bloqueante. La proyección es funcionalmente correcta y ahora también documentada correctamente; solo la afirmación del spec es incorrecta.
 
-### #32 — Bug preexistente: `Api.Tests` rotos por `RunOaktonCommands(args)` que rompe `WebApplicationFactory<Program>` 🟢
+### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path 🟢
 
-**Origen:** slice 1k green/refactorer — diagnóstico transversal al ejecutar `Inspecciones.Api.Tests`
-**Fecha:** 2026-05-08
-**Tipo:** deuda técnica · test infra · alta severidad
-**Descripción:** Todos los tests de `Inspecciones.Api.Tests` (incluidos los del slice 1k `GenerarOTEndpointTests`) fallan con `InvalidOperationException: The server has not been started or no web application was configured.` cuando se intenta usar `WebApplicationFactory<Program>`. La causa raíz es que `src/Inspecciones.Api/Program.cs` llama a `RunOaktonCommands(args)` (alrededor de la línea 135), método que consume el lifecycle del host y, al ser invocado durante la construcción del `TestServer`, impide que `WebApplicationFactory` arranque el pipeline HTTP. El bug es preexistente desde el slice 1g (`FirmarInspeccion`) — fue introducido sin que ningún slice posterior corriera la suite completa de `Api.Tests`. Slice 1k lo detectó al intentar correr sus tests de endpoint nuevos. Workaround temporal: los tests de endpoint del slice 1k quedan documentados en `slices/1k-generar-ot/red-notes.md` y fueron verificados a nivel handler vía `Application.Tests` (5/7 verdes + 2 Skip justificados); la verificación HTTP queda pendiente al cierre de este followup. Solución sugerida: extraer el dispatch de Oakton a una rama condicional (p. ej. `if (args.Length > 0 && IsOaktonCommand(args)) return await RunOaktonCommands(args);`) o usar el patrón `WebApplication.CreateBuilder` + condicional sobre `WEBSITES_PORT` / `ASPNETCORE_ENVIRONMENT`. Alternativa: reemplazar `Program` por un `IHostBuilder` factory que `WebApplicationFactory` pueda envolver sin disparar Oakton.
-**Disparador para abrir slice:** **antes de cerrar la Fase 1**. Mientras el bug persista, ningún slice posterior puede agregar tests HTTP nuevos que pasen en CI. Severidad alta porque enmascara regresiones del pipeline HTTP en todos los slices subsecuentes. Recomendado: slice de fix transversal `fix(slice-1k): TestServer/Oakton lifecycle` o equivalente, idealmente como primer item de cierre de Fase 1.
-**Notas:** los tests de endpoint del slice 1k (`GenerarOTEndpointTests.cs`) quedan en el commit pero no pasan por este bug; cuando FU-32 se resuelva, validar que el suite completo del slice 1k vuelva a verde sin cambios al test. La cobertura del comando se mantiene a nivel handler (`Application.Tests`) y dominio (`Domain.Tests`), por lo que la lógica del slice está cubierta funcionalmente.
+**Origen:** fix-FU-32 review hallazgo §4 — destrabe FU-32 expuso bug preexistente
+**Fecha:** 2026-05-11
+**Tipo:** bug · endpoint · alta severidad
+**Descripción:** Tras el fix-FU-32 que destrabó `WebApplicationFactory<Program>`, dos tests del slice 1c (`RegistrarHallazgoEndpointTests`) fallan con `400 BadRequest` cuando se espera `201 Created`: `POST_inspecciones_id_hallazgos_happy_path_responde_201_Created` y `POST_inspecciones_id_hallazgos_replay_con_mismo_ClientCommandId_no_duplica_evento_ADR_008`. El body del request incluye `X-Client-Command-Id` y la siembra es correcta (inspección iniciada + equipo con parte 77). El endpoint rechaza algo del body o el header del request — necesita debug para identificar la validación que dispara el 400. La validación a nivel handler/dominio del slice 1c está cubierta por `Application.Tests` (que SÍ pasaron en su momento), por lo que el bug está en la capa de minimal API o en la deserialización del request body.
+**Disparador para abrir slice:** Fase 1 (antes de integración al host). Trazar con tcpdump o middleware de logging del request body el motivo exacto del 400.
+**Notas:** baja prioridad para el negocio porque la lógica de dominio está correcta (Domain.Tests + Application.Tests verdes). Alta prioridad para el contrato HTTP que el frontend consumirá.
+
+### #37 — Handlers `GenerarOTHandler` y `RechazarGenerarOTHandler` usan `DateTime.UtcNow` directo (viola regla CLAUDE.md) 🟢
+
+**Origen:** fix-FU-32 review hallazgo §4 — destrabe FU-32 expuso bug preexistente
+**Fecha:** 2026-05-11
+**Tipo:** bug · domain integrity · CLAUDE.md compliance
+**Descripción:** Tests `POST_generar_ot_happy_path_responde_202_Accepted_con_body_correcto` y `POST_rechazar_generar_ot_happy_path_responde_200_OK_con_body_correcto` fallan porque `resultado.SolicitadaEn` / `resultado.RechazadaEn` retornan la fecha actual del sistema (`2026-05-11`) en lugar de la fecha del test (`2026-05-08`). El test inyecta `CapturadoEn` como `DateTimeOffset(2026, 5, 8, ...)` pero los handlers `GenerarOTHandler` y `RechazarGenerarOTHandler` (o el aggregate) usan `DateTimeOffset.UtcNow` / `DateTime.UtcNow` directo en algún punto en lugar del `TimeProvider` inyectado. CLAUDE.md regla dura: "prohibido `DateTime.UtcNow` en dominio". Acción: auditar `Inspecciones.Domain/Inspecciones/Inspeccion.cs` métodos `Inspeccion.GenerarOT` e `Inspeccion.RechazarGenerarOT` + sus handlers en `Inspecciones.Application` para detectar el uso directo y reemplazar por `TimeProvider.GetUtcNow()`.
+**Disparador para abrir slice:** Fase 1. Severidad alta — viola regla de CLAUDE.md que existe específicamente para que los tests sean deterministas y los flujos sean testables sin frozen clocks.
+**Notas:** bug introducido en slices 1k/1l. El dominio tiene `TimeProvider` inyectado en otros comandos (verificado en `IniciarInspeccion`, `RegistrarHallazgo`, etc.) — es un olvido localizado.
+
+### #38 — Endpoints `GenerarOT` y `RechazarGenerarOT` retornan 500 en vez de 403 cuando falta capability `generar-ot` 🟢
+
+**Origen:** fix-FU-32 review hallazgo §4 — destrabe FU-32 expuso bug preexistente
+**Fecha:** 2026-05-11
+**Tipo:** bug · endpoint · capability handling
+**Descripción:** Tests `POST_generar_ot_sin_capability_generar_ot_responde_403_Forbidden_PRE_1` y `POST_rechazar_generar_ot_sin_capability_generar_ot_responde_403_Forbidden_PRE_1` fallan: el endpoint retorna `500 InternalServerError` en lugar del `403 Forbidden` documentado en la spec PRE-1. El test envía un request sin `X-Capabilities: generar-ot` (o capability ausente del claim mock) y el endpoint debería rechazar con 403; en cambio lanza una excepción no manejada que el middleware traduce a 500. Probable causa: el endpoint asume que el `ClaimsTecnico.TieneCapabilityGenerarOT` está siempre populado y hace una dereferencia null, o un `.First()` sobre lista vacía. Acción: auditar `GenerarOTEndpoint.cs` y `RechazarGenerarOTEndpoint.cs` en `Inspecciones.Api/Inspecciones/` para detectar el punto donde se evalúa la capability y agregar el guard explícito que retorne `Results.Forbid()` con cuerpo de error apropiado.
+**Disparador para abrir slice:** Fase 1. Antes de integración al host PWA real — los endpoints deben ser robustos a claims ausentes, no asumir presencia.
+**Notas:** vinculado al FU-11 (`CapabilityRequeridaException` dominio vs HTTP). Si se resuelve usando el patrón de excepción del dominio + middleware de mapeo, ambos followups pueden cerrarse en el mismo slice.
 
 ### #33 — Cambio cross-slice no documentado en `InspeccionAbiertaPorEquipoProjection.cs` durante slice 1k 🟢
 
@@ -264,6 +282,14 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Notas:** vinculado a followup #13 (migración a `MultiStreamProjection` inline). Si #13 se materializa, este cambio queda absorbido en el rediseño de la proyección. Si #13 sigue diferido, el cambio del slice 1k debe quedar documentado y testeado en aislamiento.
 
 ## Cerrados
+
+### #32 — Bug preexistente: `Api.Tests` rotos por `RunOaktonCommands(args)` que rompe `WebApplicationFactory<Program>` ✅
+
+**Origen:** slice 1k green/refactorer — diagnóstico transversal al ejecutar `Inspecciones.Api.Tests`
+**Fecha apertura / cierre:** 2026-05-08 / 2026-05-11
+**Tipo:** deuda técnica · test infra · alta severidad
+**Descripción:** Todos los tests de `Inspecciones.Api.Tests` (incluidos los del slice 1k `GenerarOTEndpointTests`) fallaban con `InvalidOperationException: The server has not been started or no web application was configured.` cuando se intentaba usar `WebApplicationFactory<Program>`. La causa raíz era que `src/Inspecciones.Api/Program.cs` llamaba a `RunOaktonCommands(args)` como única rama de arranque, método que consume el lifecycle del host y, al ser invocado durante la construcción del `TestServer`, impedía que `WebApplicationFactory` arrancara el pipeline HTTP. El bug era preexistente desde el slice 1g.
+**Resolución (slice `fix-FU-32`, commit pendiente):** Fix consolidado de 6 cambios — (1) `Program.cs` condicional `args.Length > 0 && !args[0].StartsWith("--")` antes de `RunOaktonCommands`, fallback a `RunAsync`; (2) switch local Postgres vs Testcontainers en `InspeccionesAppFactory` via env var `POSTGRES_TEST_CONNSTRING`; (3) `UseSetting` para overrider connection string sobre `appsettings.Development.json`; (4) supresión de `EventLogLoggerProvider` que Wolverine usaba en `DisposeAsync`; (5) override `InvariantGlobalization=false` en `Api.Tests.csproj` para que FluentAssertions formatee mensajes de fallo correctamente; (6) `xunit.runner.json` con `maxParallelThreads: 1`. Resultado: 24/32 tests pass (de 0/32). Los 6 fallos remanentes son bugs preexistentes en handlers/endpoints — registrados como FU-36, FU-37, FU-38.
 
 ### #34 — FU-30 cerrado en código pero no marcado cerrado en FOLLOWUPS.md ✅
 

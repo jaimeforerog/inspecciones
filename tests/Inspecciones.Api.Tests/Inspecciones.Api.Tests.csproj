@@ -5,6 +5,13 @@
     Postgres. Verifican plumbing de Marten + Wolverine + endpoints HTTP.
   -->
 
+  <PropertyGroup>
+    <!-- FluentAssertions enumera assemblies para localizar xunit.assert al formatear
+         mensajes de fallo. Con InvariantGlobalization=true (default del repo) lanza
+         CultureNotFoundException y enmascara el assert real. Desactivamos solo en tests. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Inspecciones.Api\Inspecciones.Api.csproj" />
   </ItemGroup>
@@ -22,6 +29,13 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Deshabilita paralelismo entre clases del mismo collection: los tests de siembra
+         comparten una única DB (Testcontainer) y el INSERT de InspeccionAbiertaPorEquipoView
+         lanza DocumentAlreadyExistsException si dos clases corren en paralelo. -->
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -46,6 +46,8 @@ builder.Services.AddMarten((StoreOptions options) =>
             options.AutoCreateSchemaObjects = Weasel.Core.AutoCreate.CreateOrUpdate;
         }
 
+
+
         // Proyecciones inline corren sincrónicamente por default y registran read models
         // en la misma transacción del Append. Cada slice agrega las suyas al definirlas.
 
@@ -133,9 +135,19 @@ app.MapGet("/", () => Results.Ok(new
     descripcion = "Módulo de inspecciones técnicas Sinco MYE"
 }));
 
-await app.RunOaktonCommands(args);
+// Oakton CLI: solo activar cuando el primer argumento es un subcomando Oakton
+// (palabra clave sin prefijo "--"). Cuando WebApplicationFactory arranca el host
+// puede pasar flags como "--environment=Development" que no son subcomandos Oakton.
+var oaktonCommand = args.Length > 0 && !args[0].StartsWith("--");
+if (oaktonCommand)
+{
+    await app.RunOaktonCommands(args);
+}
+else
+{
+    await app.RunAsync();
+}
 
-// Marker class para que los tests E2E puedan usar WebApplicationFactory&lt;Program&gt;.
-
+// Marker class para que los tests E2E puedan usar WebApplicationFactory<Program>.
 
 public partial class Program;

@@ -22,12 +22,11 @@ namespace Inspecciones.Api.Tests;
 /// §6.13 — Idempotencia ADR-008 (Skip: requiere Wolverine envelope dedup en producción).
 /// Header — X-Client-Command-Id ausente → 400 Bad Request + codigoError HEADER-REQUERIDO.
 ///
-/// NOTA TRANSVERSAL — FU-32: estos tests están bloqueados al momento del commit del slice 1l
-/// por el bug preexistente del slice 1g donde <c>RunOaktonCommands(args)</c> en
-/// <c>Program.cs</c> impide que <c>WebApplicationFactory&lt;Program&gt;</c> arranque el
-/// pipeline HTTP (<c>InvalidOperationException</c>: "The server has not been started").
-/// Quedan documentados como skip explícito hasta que FU-32 se resuelva.
-/// La cobertura funcional del slice 1l vive en:
+/// NOTA FU-32 (resuelto): los tests del slice 1l estuvieron en skip explícito mientras
+/// <c>RunOaktonCommands(args)</c> en <c>Program.cs</c> impedía que
+/// <c>WebApplicationFactory&lt;Program&gt;</c> arranque el pipeline HTTP. Fix: condicionar
+/// el arranque a <c>args.Length &gt; 0</c> (fix-FU-32). Los tests están destrabados desde
+/// el commit del fix. Cobertura adicional en:
 ///   - <c>Inspecciones.Domain.Tests/Inspecciones/RechazarGenerarOTTests.cs</c> (18 tests, 94.92% cobertura).
 ///   - <c>Inspecciones.Application.Tests/Inspecciones/RechazarGenerarOTHandlerTests.cs</c>
 ///     (handler + Marten real con Testcontainers).
@@ -39,10 +38,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     private static readonly DateTimeOffset CapturadoEn =
         new(2026, 5, 8, 15, 0, 0, TimeSpan.Zero);
 
-    private const string SkipReasonFu32 =
-        "Bloqueado por FU-32 — RunOaktonCommands(args) en Program.cs impide que " +
-        "WebApplicationFactory<Program> arranque el pipeline HTTP. Cobertura funcional " +
-        "garantizada por Domain.Tests + Application.Tests. Reactivar al cerrar FU-32.";
+    // SkipReasonFu32 eliminada — FU-32 cerrado. Los tests a continuación ya no requieren skip.
 
     // ─────────────────────────────────────────────────────────────────────
     // Helpers de siembra
@@ -125,7 +121,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     // §6.1 Happy path — 200 OK con body correcto
     // ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = SkipReasonFu32)]
+    [Fact]
     public async Task POST_rechazar_generar_ot_happy_path_responde_200_OK_con_body_correcto()
     {
         var inspeccionId = await SembrarInspeccionFirmadaConIntervencion(equipoId: 60001);
@@ -158,7 +154,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     // §6.3 PRE-1 — capability "generar-ot" ausente → 403 Forbidden
     // ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = SkipReasonFu32)]
+    [Fact]
     public async Task POST_rechazar_generar_ot_sin_capability_generar_ot_responde_403_Forbidden_PRE_1()
     {
         var inspeccionId = await SembrarInspeccionFirmadaConIntervencion(equipoId: 60002);
@@ -183,7 +179,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     // §6.12 PRE-2 — InspeccionId inexistente → 404 Not Found
     // ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = SkipReasonFu32)]
+    [Fact]
     public async Task POST_rechazar_generar_ot_inspeccion_inexistente_responde_404_Not_Found_PRE_2()
     {
         var client = factory.CreateClient();
@@ -204,7 +200,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     // §6.4 PRE-3 — motivo < 10 chars → 422 Unprocessable Entity
     // ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = SkipReasonFu32)]
+    [Fact]
     public async Task POST_rechazar_generar_ot_motivo_corto_responde_422_I_F6_MOTIVO()
     {
         var inspeccionId = await SembrarInspeccionFirmadaConIntervencion(equipoId: 60003);
@@ -229,7 +225,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     // §6.6 PRE-4 — inspección no firmada → 422
     // ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = SkipReasonFu32)]
+    [Fact]
     public async Task POST_rechazar_generar_ot_inspeccion_no_firmada_responde_422_I_F6_ESTADO()
     {
         var store = factory.Services.GetRequiredService<IDocumentStore>();
@@ -272,7 +268,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     // §6.10 PRE-6 — OT ya solicitada → 409 Conflict
     // ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = SkipReasonFu32)]
+    [Fact]
     public async Task POST_rechazar_generar_ot_OT_ya_solicitada_responde_409_Conflict_I_F6_OT_YA_SOLICITADA()
     {
         var inspeccionId = await SembrarInspeccionFirmadaConIntervencion(equipoId: 60005);
@@ -316,8 +312,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     [Fact(Skip = "Requiere Wolverine envelope storage con MessageId dedup. " +
                  "El store en Testcontainers no tiene Wolverine envelope habilitado. " +
                  "Implementar cuando el handler esté registrado como Wolverine handler " +
-                 "con durable local queues. Ver spec §6.13, §7, ADR-008 §9.16. " +
-                 "Adicionalmente bloqueado por FU-32 (TestServer/Oakton lifecycle).")]
+                 "con durable local queues. Ver spec §6.13, §7, ADR-008 §9.16.")]
     public async Task POST_rechazar_generar_ot_replay_mismo_ClientCommandId_no_duplica_eventos_ADR_008()
     {
         await Task.CompletedTask;
@@ -327,7 +322,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     // Header X-Client-Command-Id ausente → 400 Bad Request
     // ─────────────────────────────────────────────────────────────────────
 
-    [Fact(Skip = SkipReasonFu32)]
+    [Fact]
     public async Task POST_rechazar_generar_ot_sin_header_X_Client_Command_Id_responde_400_Bad_Request()
     {
         var inspeccionId = await SembrarInspeccionFirmadaConIntervencion(equipoId: 60006);
