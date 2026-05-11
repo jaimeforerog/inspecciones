@@ -26,7 +26,7 @@ namespace Inspecciones.Api.Tests;
 public class GenerarOTEndpointTests(InspeccionesAppFactory factory)
 {
     private static readonly DateTimeOffset CapturadoEn =
-        new(2026, 5, 8, 14, 0, 0, TimeSpan.Zero);
+        new(2026, 5, 8, 15, 0, 0, TimeSpan.Zero);
 
     // ─────────────────────────────────────────────────────────────────────
     // Helpers de siembra

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -110,6 +111,26 @@ public sealed class InspeccionesAppFactory : WebApplicationFactory<Program>, IAs
             {
                 services.Remove(d);
             }
+
+            // Reemplazar TimeProvider.System por FakeTimeProvider con timestamp fijo, para que
+            // los tests E2E que asertan BeCloseTo(CapturadoEn, ...) sean deterministas
+            // independientemente del wall-clock real al momento de correr.
+            //
+            // CapturadoEn canónico de los tests: 2026-05-08T15:00:00Z.
+            //
+            // Cierra FU-37. Causa raíz original mal descrita: el bug NO es DateTime.UtcNow en
+            // handlers (auditado — los handlers usan TimeProvider correctamente). El bug es
+            // la ausencia del swap en esta fixture.
+            var timeDescriptors = services
+                .Where(d => d.ServiceType == typeof(TimeProvider))
+                .ToList();
+            foreach (var d in timeDescriptors)
+            {
+                services.Remove(d);
+            }
+            var fakeTime = new FakeTimeProvider(
+                new DateTimeOffset(2026, 5, 8, 15, 0, 0, TimeSpan.Zero));
+            services.AddSingleton<TimeProvider>(fakeTime);
         });
     }
 
