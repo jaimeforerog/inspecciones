@@ -254,15 +254,6 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** Fase 1 (antes de integración al host). Trazar con tcpdump o middleware de logging del request body el motivo exacto del 400.
 **Notas:** baja prioridad para el negocio porque la lógica de dominio está correcta (Domain.Tests + Application.Tests verdes). Alta prioridad para el contrato HTTP que el frontend consumirá.
 
-### #38 — Endpoints `GenerarOT` y `RechazarGenerarOT` retornan 500 en vez de 403 cuando falta capability `generar-ot` 🟢
-
-**Origen:** fix-FU-32 review hallazgo §4 — destrabe FU-32 expuso bug preexistente
-**Fecha:** 2026-05-11
-**Tipo:** bug · endpoint · capability handling
-**Descripción:** Tests `POST_generar_ot_sin_capability_generar_ot_responde_403_Forbidden_PRE_1` y `POST_rechazar_generar_ot_sin_capability_generar_ot_responde_403_Forbidden_PRE_1` fallan: el endpoint retorna `500 InternalServerError` en lugar del `403 Forbidden` documentado en la spec PRE-1. El test envía un request sin `X-Capabilities: generar-ot` (o capability ausente del claim mock) y el endpoint debería rechazar con 403; en cambio lanza una excepción no manejada que el middleware traduce a 500. Probable causa: el endpoint asume que el `ClaimsTecnico.TieneCapabilityGenerarOT` está siempre populado y hace una dereferencia null, o un `.First()` sobre lista vacía. Acción: auditar `GenerarOTEndpoint.cs` y `RechazarGenerarOTEndpoint.cs` en `Inspecciones.Api/Inspecciones/` para detectar el punto donde se evalúa la capability y agregar el guard explícito que retorne `Results.Forbid()` con cuerpo de error apropiado.
-**Disparador para abrir slice:** Fase 1. Antes de integración al host PWA real — los endpoints deben ser robustos a claims ausentes, no asumir presencia.
-**Notas:** vinculado al FU-11 (`CapabilityRequeridaException` dominio vs HTTP). Si se resuelve usando el patrón de excepción del dominio + middleware de mapeo, ambos followups pueden cerrarse en el mismo slice.
-
 ### #33 — Cambio cross-slice no documentado en `InspeccionAbiertaPorEquipoProjection.cs` durante slice 1k 🟢
 
 **Origen:** slice 1k green — modificación detectada en diff sobre archivo fuera del scope declarado del slice
@@ -273,6 +264,17 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Notas:** vinculado a followup #13 (migración a `MultiStreamProjection` inline). Si #13 se materializa, este cambio queda absorbido en el rediseño de la proyección. Si #13 sigue diferido, el cambio del slice 1k debe quedar documentado y testeado en aislamiento.
 
 ## Cerrados
+
+### #38 — Endpoints `GenerarOT` y `RechazarGenerarOT` retornan 500 en vez de 403 cuando falta capability `generar-ot` ✅
+
+**Origen:** fix-FU-32 review hallazgo §4 — destrabe FU-32 expuso bug preexistente
+**Fecha apertura \ cierre:** 2026-05-11 / 2026-05-11
+**Cierre:** commit `6cf1ead fix(FU-38): Results.Forbid -> Forbidden403 helper en endpoints`. Spec firmado: `slices/fix-FU-38/spec.md`.
+**Tipo:** bug · endpoint · capability handling
+**Causa raíz reclasificada:** la hipótesis original (dereferencia null en `ClaimsTecnico.TieneCapabilityGenerarOT`) era incorrecta. Causa real: `Results.Forbid()` requiere `IAuthenticationService` del pipeline ASP.NET Core auth, pero el módulo NO registra `AddAuthentication()` (ADR-002 — identidad 100% del host PWA). La llamada lanza `InvalidOperationException: Unable to find the required 'IAuthenticationService' service` que el `DeveloperExceptionPageMiddleware` traduce a HTTP 500.
+**Fix aplicado:** helper estático `Forbidden403(codigoError, mensaje)` que retorna `Results.Json(new { codigoError, mensaje }, statusCode: 403)`, sin depender del pipeline auth. Reemplaza las **6 ocurrencias** de `Results.Forbid()` en `InspeccionesEndpoints.cs` (2 con test rojo visible + 4 latentes en `IniciarInspeccion`, `IniciarInspeccionMonitoreo`, `FirmarInspeccion` x2).
+**Tests:** 26/32 → 28/32 passing en `Inspecciones.Api.Tests`. Domain.Tests sin regresión (197/197).
+**Notas:** vinculado al FU-11 (`CapabilityRequeridaException` dominio vs HTTP). FU-11 sigue abierto — trata de dónde vive la verificación de capability (dominio vs HTTP), ortogonal al mecanismo de respuesta HTTP 403 que cubrió este slice.
 
 ### #32 — Bug preexistente: `Api.Tests` rotos por `RunOaktonCommands(args)` que rompe `WebApplicationFactory<Program>` ✅
 
