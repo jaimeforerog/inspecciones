@@ -245,15 +245,6 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** cualquier doc-writer que toque `spec.md §8.1` o el modelo de dominio §15.12.6.
 **Notas:** no bloqueante. La proyección es funcionalmente correcta y ahora también documentada correctamente; solo la afirmación del spec es incorrecta.
 
-### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path 🟢
-
-**Origen:** fix-FU-32 review hallazgo §4 — destrabe FU-32 expuso bug preexistente
-**Fecha:** 2026-05-11
-**Tipo:** bug · endpoint · alta severidad
-**Descripción:** Tras el fix-FU-32 que destrabó `WebApplicationFactory<Program>`, dos tests del slice 1c (`RegistrarHallazgoEndpointTests`) fallan con `400 BadRequest` cuando se espera `201 Created`: `POST_inspecciones_id_hallazgos_happy_path_responde_201_Created` y `POST_inspecciones_id_hallazgos_replay_con_mismo_ClientCommandId_no_duplica_evento_ADR_008`. El body del request incluye `X-Client-Command-Id` y la siembra es correcta (inspección iniciada + equipo con parte 77). El endpoint rechaza algo del body o el header del request — necesita debug para identificar la validación que dispara el 400. La validación a nivel handler/dominio del slice 1c está cubierta por `Application.Tests` (que SÍ pasaron en su momento), por lo que el bug está en la capa de minimal API o en la deserialización del request body.
-**Disparador para abrir slice:** Fase 1 (antes de integración al host). Trazar con tcpdump o middleware de logging del request body el motivo exacto del 400.
-**Notas:** baja prioridad para el negocio porque la lógica de dominio está correcta (Domain.Tests + Application.Tests verdes). Alta prioridad para el contrato HTTP que el frontend consumirá.
-
 ### #33 — Cambio cross-slice no documentado en `InspeccionAbiertaPorEquipoProjection.cs` durante slice 1k 🟢
 
 **Origen:** slice 1k green — modificación detectada en diff sobre archivo fuera del scope declarado del slice
@@ -264,6 +255,18 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Notas:** vinculado a followup #13 (migración a `MultiStreamProjection` inline). Si #13 se materializa, este cambio queda absorbido en el rediseño de la proyección. Si #13 sigue diferido, el cambio del slice 1k debe quedar documentado y testeado en aislamiento.
 
 ## Cerrados
+
+### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path ✅
+
+**Origen:** fix-FU-32 review hallazgo §4 — destrabe FU-32 expuso bug preexistente
+**Fecha apertura \ cierre:** 2026-05-11 / 2026-05-11
+**Cierre:** commit `629ece0 fix(FU-36): JsonStringEnumConverter en Minimal APIs`. Spec firmado: `slices/fix-FU-36/spec.md`. Debug session: `.planning/debug/fu-36-registrar-hallazgo-400.md`.
+**Tipo:** bug · endpoint · alta severidad
+**Causa raíz:** `System.Text.Json` (serializer default de ASP.NET Core Minimal APIs) deserializa enums como `int` por default. `RegistrarHallazgoRequest` tiene campos `OrigenHallazgo` y `AccionRequerida` tipados como enums; el test envía strings (`"Manual"`, `"NoRequiereIntervencion"`) y el binding falla con `JsonException`. `RequestDelegateFactory` retorna 400 BadRequest antes de invocar el handler — el `try/catch` del endpoint nunca ve la excepción. El comentario en `Program.cs:28-30` ya reconocía explícitamente que esta configuración quedaba pendiente: "El detalle de configuración del serializer (System.Text.Json + casing + enum como string) se cierra en un slice posterior cuando emerja necesidad concreta." FU-36 fue ese momento.
+**Fix aplicado:** `builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()))` global en `Program.cs`. Cierra 2 tests rojos del slice 1c + 2 bugs latentes en `ActualizarHallazgo` (`AccionRequerida`) y `FirmarInspeccion` (`DictamenOperacion`) sin tests nuevos.
+**Scope ampliado aprobado por usuario:** armonización `CapturadoEn` del test happy path a `2026-05-08T15:00:00Z` (mismo patrón que FU-37 aplicó a slice 1k) + Skip del test ADR-008 replay (consistente con otros tests ADR-008 — Wolverine envelope dedup pendiente FU-15/FU-25).
+**Tests:** 28/32 → 29/32 passing + 3 skip + 0 failing en `Inspecciones.Api.Tests`. Domain.Tests sin regresión (197/197).
+**Notas:** los 3 skip restantes son todos ADR-008 idempotencia (depende de Wolverine envelope dedup, no de este fix). Los DTOs `GenerarOTRequest` y `RegistrarEvaluacionCualitativaRequest` que usan `string + Enum.TryParse` quedan como deuda separada (no rompen, son inconsistencia estilística).
 
 ### #38 — Endpoints `GenerarOT` y `RechazarGenerarOT` retornan 500 en vez de 403 cuando falta capability `generar-ot` ✅
 
