@@ -199,6 +199,22 @@ internal static class CasoDeUso
     }
 
     /// <summary>
+    /// Decisión <c>Descartar</c>. Slice 1n — DescartarNovedadPreop. Reconstruye
+    /// el aggregate desde el stream previo y delega al método de decisión del aggregate.
+    /// El motivo es autogenerado siguiendo la plantilla D-4 del spec (P-3):
+    /// "Cerrado por {usuario} el {fecha:yyyy-MM-dd HH:mm} UTC desde Inspecciones".
+    /// </summary>
+    public static IReadOnlyList<object> Descartar(
+        IReadOnlyList<object> dados,
+        DescartarNovedadPreop cmd,
+        DateTimeOffset descartadaEn)
+    {
+        var aggregate = Inspeccion.Reconstruir(dados);
+        var motivoDescarte = $"Cerrado por {cmd.DescartadaPor} el {descartadaEn:yyyy-MM-dd HH:mm} UTC desde Inspecciones";
+        return aggregate.Descartar(cmd, motivoDescarte, descartadaEn);
+    }
+
+    /// <summary>
     /// Decisión <c>IniciarMonitoreo</c>. Slice 1h — IniciarInspeccionMonitoreo.
     /// El aggregate se crea sobre stream vacío (PRE-7 I-I1 corto-circuita en el
     /// handler antes de llegar aquí). El handler pasa <paramref name="itemsSnapshot"/>

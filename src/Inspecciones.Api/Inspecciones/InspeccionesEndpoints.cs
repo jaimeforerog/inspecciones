@@ -1028,6 +1028,86 @@ public static class InspeccionesEndpoints
             })
            .WithName("CancelarInspeccion");
 
+        // ── Slice 1n — DescartarNovedadPreop ───────────────────────────────
+        // PRE-4 (capability "ejecutar-inspeccion") verificada vía header X-Sin-Capability-Ejecutar.
+        // Motivo autogenerado por el handler con plantilla D-4 (spec §13 D-4).
+        app.MapPost("/api/v1/inspecciones/{inspeccionId:guid}/novedades-preop/{novedadId:int}/descartar",
+            async (
+                Guid inspeccionId,
+                int novedadId,
+                DescartarNovedadPreopRequest request,
+                DescartarNovedadPreopHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // PRE-4 — capability "ejecutar-inspeccion" requerida (spec §4).
+                // El header X-Sin-Capability-Ejecutar se usa en tests para simular claims sin capability.
+                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Ejecutar");
+                if (sinCapabilityHeader)
+                {
+                    return Forbidden403("PRE-4", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                // Claims mock — ADR-002 tentativo.
+                // El TecnicoId se extrae del header X-Tecnico-Id en tests (simula JWT claims).
+                const string tecnicoIdDefault = "ana.gomez";
+                var tecnicoId = ctx.Request.Headers.TryGetValue("X-Tecnico-Id", out var tecnicoIdValues)
+                    && !string.IsNullOrWhiteSpace(tecnicoIdValues.ToString())
+                    ? tecnicoIdValues.ToString()
+                    : request.DescartadaPor ?? tecnicoIdDefault;
+
+                var cmd = new DescartarNovedadPreop(
+                    InspeccionId: inspeccionId,
+                    NovedadId: novedadId,
+                    DescartadaPor: tecnicoId);
+
+                try
+                {
+                    var resultado = await handler.Handle(cmd, ct);
+
+                    return Results.Ok(new
+                    {
+                        inspeccionId = resultado.InspeccionId,
+                        novedadId = resultado.NovedadId,
+                        motivoDescarte = resultado.MotivoDescarte,
+                        descartadaPor = resultado.DescartadaPor,
+                        descartadaEn = resultado.DescartadaEn
+                    });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-1", mensaje = ex.Message });
+                }
+                catch (InspeccionNoEnEjecucionException ex)
+                {
+                    return Results.UnprocessableEntity(new { codigoError = "PRE-2-ESTADO", mensaje = ex.Message });
+                }
+                catch (NovedadYaDescartadaException ex)
+                {
+                    return Results.UnprocessableEntity(new { codigoError = "PRE-5-DESCARTADA", mensaje = ex.Message });
+                }
+                catch (NovedadYaConvertidaEnHallazgoException ex)
+                {
+                    return Results.UnprocessableEntity(new { codigoError = "PRE-6-HALLAZGO", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    return Results.UnprocessableEntity(new { codigoError = "DOMINIO", mensaje = ex.Message });
+                }
+            })
+           .WithName("DescartarNovedadPreop");
+
         return app;
     }
 

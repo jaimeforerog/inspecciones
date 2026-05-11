@@ -252,3 +252,20 @@ public sealed class OTYaRechazadaException(string mensaje)
 /// HTTP 422 Unprocessable Entity.</summary>
 public sealed class MotivoCancelacionInvalidoException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1n — DescartarNovedadPreop ─────────────────────────────────────────
+
+/// <summary>PRE-5 / I4 / INV-ND1 (aggregate) — el aggregate ya tiene un
+/// <see cref="NovedadPreopDescartada_v1"/> con el mismo <c>NovedadId</c>.
+/// Una novedad solo puede descartarse una vez dentro de la inspección.
+/// HTTP 422 Unprocessable Entity.</summary>
+public sealed class NovedadYaDescartadaException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-6 / I4 / INV-ND1 (aggregate) — el aggregate tiene un
+/// <see cref="HallazgoRegistrado_v1"/> con <c>Origen=PreOperacional</c> y
+/// <c>NovedadPreopOrigenId == cmd.NovedadId</c>. Una novedad ya importada
+/// como hallazgo no puede descartarse simultáneamente.
+/// HTTP 422 Unprocessable Entity.</summary>
+public sealed class NovedadYaConvertidaEnHallazgoException(string mensaje)
+    : InspeccionDomainException(mensaje);

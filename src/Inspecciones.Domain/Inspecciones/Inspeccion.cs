@@ -76,6 +76,15 @@ public sealed class Inspeccion
     /// </summary>
     public string? MotivoCancelacion { get; private set; }
 
+    // ── Slice 1n — DescartarNovedadPreop ──────────────────────────────────────
+    /// <summary>
+    /// IDs de novedades preop descartadas en esta inspección (I4 / INV-ND1).
+    /// Poblado por <see cref="Apply(NovedadPreopDescartada_v1)"/>.
+    /// Usado en PRE-5 para detectar descarte doble.
+    /// </summary>
+    public IReadOnlySet<int> NovedadesDescartadas => _novedadesDescartadas;
+    private readonly HashSet<int> _novedadesDescartadas = [];
+
     /// <summary>Hallazgos registrados en esta inspección (I-H6: multiplicidad permitida).</summary>
     public IReadOnlyList<Hallazgo> Hallazgos => _hallazgos.AsReadOnly();
     private readonly List<Hallazgo> _hallazgos = [];
@@ -382,6 +391,10 @@ public sealed class Inspeccion
             case InspeccionCerradaSinOT_v1 e:
                 Apply(e);
                 break;
+            // Slice 1n — DescartarNovedadPreop
+            case NovedadPreopDescartada_v1 e:
+                Apply(e);
+                break;
             default:
                 throw new InvalidOperationException(
                     $"Evento no soportado por Inspeccion en este slice: {evento.GetType().Name}");
@@ -486,6 +499,63 @@ public sealed class Inspeccion
         }
 
         return [new InspeccionCancelada_v1(InspeccionId, motivo, canceladaPor, canceladaEn)];
+    }
+
+    // ── Slice 1n — DescartarNovedadPreop ─────────────────────────────────────
+
+    /// <summary>
+    /// Método de decisión del slice 1n. Valida las pre-condiciones PRE-2, PRE-5 y PRE-6
+    /// y emite <see cref="NovedadPreopDescartada_v1"/>. Apply es puro.
+    /// PRE-1 vive en capa HTTP; PRE-3/PRE-4 en el handler.
+    /// </summary>
+    public IReadOnlyList<object> Descartar(
+        DescartarNovedadPreop cmd,
+        string motivoDescarte,
+        DateTimeOffset descartadaEn)
+    {
+        // PRE-2: solo se puede descartar en estado EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
+        {
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección {InspeccionId} está en estado '{Estado}'. DescartarNovedadPreop solo aplica a inspecciones en estado 'EnEjecucion'.");
+        }
+
+        // PRE-5 / I4 / INV-ND1: la novedad no puede haber sido descartada previamente.
+        if (_novedadesDescartadas.Contains(cmd.NovedadId))
+        {
+            throw new NovedadYaDescartadaException(
+                $"La novedad {cmd.NovedadId} ya fue descartada en esta inspección.");
+        }
+
+        // PRE-6 / INV-ND1: la novedad no puede haber sido convertida en hallazgo.
+        var yaConvertida = _hallazgos.Any(h =>
+            h.Origen == OrigenHallazgo.PreOperacional &&
+            h.NovedadPreopOrigenId == cmd.NovedadId);
+
+        if (yaConvertida)
+        {
+            throw new NovedadYaConvertidaEnHallazgoException(
+                $"La novedad {cmd.NovedadId} ya fue importada como hallazgo en esta inspección; no se puede descartar.");
+        }
+
+        return [new NovedadPreopDescartada_v1(
+            InspeccionId: InspeccionId,
+            NovedadId: cmd.NovedadId,
+            MotivoDescarte: motivoDescarte,
+            DescartadaPor: cmd.DescartadaPor,
+            DescartadaEn: descartadaEn)];
+    }
+
+    /// <summary>
+    /// Aplicación pura del evento <see cref="NovedadPreopDescartada_v1"/>:
+    /// agrega el <c>NovedadId</c> al set de novedades descartadas y registra al técnico
+    /// como contribuyente. Sin validaciones — solo mutación de estado.
+    /// Las pre-condiciones viven en <see cref="Descartar"/>.
+    /// </summary>
+    public void Apply(NovedadPreopDescartada_v1 e)
+    {
+        _novedadesDescartadas.Add(e.NovedadId);
+        _contribuyentes.Add(e.DescartadaPor);
     }
 
     // ── Slice 1d — ActualizarHallazgo ────────────────────────────────────────

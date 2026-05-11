@@ -269,6 +269,25 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 
 **Notas:** Slice 1m verificado a nivel Domain (213/228 verde, cobertura 94.9% del aggregate) + Api (38/42 verde con `POSTGRES_TEST_CONNSTRING`). Application.Tests del slice 1m (`CancelarInspeccionHandlerTests`) compilan pero requieren Docker hasta cerrar este followup.
 
+### #40 — `RegistrarHallazgo` no verifica `_novedadesDescartadas` — INV-ND1 asimétrica 🟢
+
+**Origen:** slice 1n review hallazgo #1
+**Fecha:** 2026-05-11
+**Tipo:** deuda técnica · invariante · simetría
+**Descripción:** El slice 1n añadió `_novedadesDescartadas: HashSet<int>` al aggregate `Inspeccion` y PRE-6 en `Descartar` (bloquea descartar una novedad ya convertida en hallazgo). La invariante recíproca INV-ND1 propuesta en spec §5 dice "una novedad NO puede estar descartada Y convertida en hallazgo a la vez" — pero `RegistrarHallazgo` (slice 1c) no verifica `_novedadesDescartadas` antes de aceptar `Origen=PreOperacional`. Resultado: el flujo `Descartar(NovedadId=X) → RegistrarHallazgo(Origen=PreOperacional, NovedadPreopOrigenId=X)` no es rechazado por el backend (la UI lo previene pero el aggregate aceptaría). No es corrupción en producción inmediata pero rompe la simetría declarada de INV-ND1.
+**Disparador para abrir slice:** antes de cerrar Fase 1, o cuando emerja un test de integración cross-slice que ejercite el flujo inverso.
+**Acción:** añadir guardia en `Inspeccion.RegistrarHallazgo` cuando `cmd.Origen == OrigenHallazgo.PreOperacional && cmd.NovedadPreopOrigenId.HasValue` — si `_novedadesDescartadas.Contains(cmd.NovedadPreopOrigenId.Value)` → `NovedadYaDescartadaException` (o nueva excepción simétrica). Test correspondiente.
+**Notas:** vinculado a FU-41 (documentar INV-ND1 canónicamente en §15.3).
+
+### #41 — INV-ND1 sin entrada formal en `01-modelo-dominio.md §15.3` 🟢
+
+**Origen:** slice 1n review hallazgo #2
+**Fecha:** 2026-05-11
+**Tipo:** documentación · invariante · catálogo canónico
+**Descripción:** El spec 1n §5 propuso agregar INV-ND1 ("una novedad preop NO puede estar simultáneamente en `_novedadesDescartadas` y referenciada como `NovedadPreopOrigenId` por un `HallazgoRegistrado_v1` no eliminado") al catálogo de invariantes §15.3 del modelo de dominio. La invariante existe operacionalmente (PRE-6 del slice 1n la verifica en `Descartar`) pero no tiene entrada canónica en §15.3. Futuros tests no pueden referenciarla por código (`INV_ND1` en nombre de test) sin definición formal.
+**Disparador para cerrar:** PR de documentación junto con FU-40 (fix simetría) o antes del cierre de Fase 1.
+**Acción:** agregar entrada INV-ND1 a `Inspecciones/docs/01-modelo-dominio.md §15.3` con shape canónico de invariantes (enunciado, comandos que la enforcean, slices relacionados).
+
 ## Cerrados
 
 ### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path ✅
