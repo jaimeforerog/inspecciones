@@ -2,12 +2,12 @@ namespace Inspecciones.Domain.Inspecciones;
 
 /// <summary>
 /// Evento que marca la inspección como cancelada.
-/// Stub mínimo para que el slice 1c pueda reconstruir el estado
-/// <see cref="EstadoInspeccion.Cancelada"/> en los tests de PRE-3.
-/// La lógica completa se implementa en el slice de CancelarInspeccion.
+/// Shape canónico del slice 1m — CancelarInspeccion (spec §3.1).
+/// El orden de parámetros sigue la convención del modelo §2.1 corregida:
+/// Motivo y CanceladaPor primero, CanceladaEn como DateTimeOffset (D-3).
 /// </summary>
 public sealed record InspeccionCancelada_v1(
-    Guid InspeccionId,
-    DateTimeOffset CanceladaEn,
-    string CanceladoPor,
-    string? Motivo);
+    Guid           InspeccionId,
+    string         Motivo,
+    string         CanceladaPor,
+    DateTimeOffset CanceladaEn);

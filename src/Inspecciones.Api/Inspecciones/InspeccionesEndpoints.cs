@@ -948,6 +948,86 @@ public static class InspeccionesEndpoints
             })
            .WithName("RechazarGenerarOT");
 
+        // ── Slice 1m — CancelarInspeccion ──────────────────────────────────
+        // PRE-1 (capability "ejecutar-inspeccion") verificada vía header X-Sin-Capability-Ejecutar.
+        // La cancelación es síncrona (D-4: 200 OK).
+        app.MapPost("/api/v1/inspecciones/{id:guid}/cancelar", async (
+                Guid id,
+                CancelarInspeccionRequest request,
+                CancelarInspeccionHandler handler,
+                HttpContext ctx,
+                CancellationToken ct) =>
+            {
+                // Header X-Client-Command-Id requerido (ADR-008 §9.16).
+                if (!ctx.Request.Headers.TryGetValue("X-Client-Command-Id", out var clientCommandIdValues)
+                    || string.IsNullOrWhiteSpace(clientCommandIdValues.ToString()))
+                {
+                    return Results.BadRequest(new
+                    {
+                        codigoError = "HEADER-REQUERIDO",
+                        mensaje = "El header X-Client-Command-Id es requerido (ADR-008)."
+                    });
+                }
+
+                // PRE-1 — capability "ejecutar-inspeccion" requerida (spec §4, §6.4).
+                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
+                // El header X-Sin-Capability-Ejecutar se usa en tests para simular claims sin capability.
+                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Ejecutar");
+                if (sinCapabilityHeader)
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                // Claims mock — capability "ejecutar-inspeccion" hardcodeada hasta ADR-002.
+                // El TecnicoId se extrae del header X-Tecnico-Id en tests (simula JWT claims).
+                const string tecnicoIdDefault = "carlos.ruiz";
+                var tecnicoId = ctx.Request.Headers.TryGetValue("X-Tecnico-Id", out var tecnicoIdValues)
+                    && !string.IsNullOrWhiteSpace(tecnicoIdValues.ToString())
+                    ? tecnicoIdValues.ToString()
+                    : tecnicoIdDefault;
+
+                var cmd = new CancelarInspeccion(
+                    InspeccionId: id,
+                    Motivo: request.Motivo ?? string.Empty,
+                    CanceladaPor: tecnicoId);
+
+                try
+                {
+                    var resultado = await handler.Handle(cmd, ct);
+
+                    return Results.Ok(new
+                    {
+                        inspeccionId = resultado.InspeccionId,
+                        estado = resultado.Estado,
+                        canceladaEn = resultado.CanceladaEn,
+                        canceladaPor = resultado.CanceladaPor,
+                        motivo = resultado.Motivo
+                    });
+                }
+                catch (InspeccionNoEncontradaException ex)
+                {
+                    return Results.NotFound(new { codigoError = "PRE-2", mensaje = ex.Message });
+                }
+                catch (TecnicoNoContribuyenteException ex)
+                {
+                    return Forbidden403("I6-NO-CONTRIBUYENTE", ex.Message);
+                }
+                catch (InspeccionNoEnEjecucionException ex)
+                {
+                    return Results.Conflict(new { codigoError = "I6-ESTADO", mensaje = ex.Message });
+                }
+                catch (InspeccionDomainException ex)
+                {
+                    var codigoError = ex switch
+                    {
+                        MotivoCancelacionInvalidoException => "I6-MOTIVO",
+                        _                                  => "DOMINIO"
+                    };
+                    return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
+                }
+            })
+           .WithName("CancelarInspeccion");
+
         return app;
     }
 
@@ -960,4 +1040,5 @@ public static class InspeccionesEndpoints
         => Results.Json(new { codigoError, mensaje }, statusCode: 403);
 
     private const string MensajeCapabilityGenerarOT = "Capability 'generar-ot' requerida.";
+    private const string MensajeCapabilityEjecutarInspeccion = "Capability 'ejecutar-inspeccion' requerida.";
 }

@@ -254,6 +254,21 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** auditoría como parte del cierre de Fase 1, o cuando emerja un test de integración que verifique el shape completo de `InspeccionAbiertaPorEquipoView` tras el batch del slice 1k. Idealmente vinculado al slice de fix de FU-32 (mismo ciclo de saneamiento de la capa Api/proyecciones).
 **Notas:** vinculado a followup #13 (migración a `MultiStreamProjection` inline). Si #13 se materializa, este cambio queda absorbido en el rediseño de la proyección. Si #13 sigue diferido, el cambio del slice 1k debe quedar documentado y testeado en aislamiento.
 
+### #39 — `Application.Tests` requiere Docker — falta switch a Postgres local + tests con IDs hardcoded colisionan 🟢
+
+**Origen:** slice 1m — auditoría tras extender slice para correr Application.Tests local (decisión usuario revertida tras descubrir deuda mayor)
+**Fecha:** 2026-05-11
+**Tipo:** deuda técnica · test infra · cobertura
+**Descripción:** El fix-FU-32 introdujo el switch `POSTGRES_TEST_CONNSTRING` en `InspeccionesAppFactory` (Api.Tests), permitiendo correr esa suite sin Docker. La misma fixture `PostgresFixture.cs` de `Application.Tests` quedó con Testcontainers hardcoded — sin Docker los 43 tests fallan con `ArgumentException: Docker is either not running or misconfigured`. **Bug secundario descubierto al intentar ampliar el slice 1m:** al portar el switch, 5 tests de `RegistrarHallazgoHandlerTests` y `RegistrarMedicionHandlerTests` fallan con `DocumentAlreadyExistsException` por `InspeccionAbiertaPorEquipoView` con `EquipoId=4521`. Causa raíz: los tests del mismo archivo siembran el mismo `EquipoId` hardcoded sin reset entre tests; Testcontainers enmascaraba la colisión levantando container limpio por corrida, pero con DB persistente compartida los tests pelean. Adicionalmente, las corridas combinadas Application+Api contaminan la misma DB cuando comparten `inspecciones_test`.
+**Disparador para abrir slice:** antes de migrar el repo a CI sin Docker, o cuando emerja necesidad de iterar en `Application.Tests` localmente sin levantar Docker Desktop.
+**Acciones requeridas:**
+1. Replicar el patrón de `InspeccionesAppFactory` en `PostgresFixture.cs` (env var + `EnsureDatabaseExists` + `DROP SCHEMA inspecciones CASCADE`).
+2. Agregar `xunit.runner.json` con `maxParallelThreads: 1` en `Application.Tests` (igual que Api.Tests).
+3. Refactorizar los tests con IDs hardcoded para usar `Guid.NewGuid()` / IDs aleatorios per-test, o introducir reset de schema entre tests.
+4. Considerar DBs separadas (`inspecciones_test_api`, `inspecciones_test_application`) o limpieza más agresiva entre suites cuando corren combinadas.
+
+**Notas:** Slice 1m verificado a nivel Domain (213/228 verde, cobertura 94.9% del aggregate) + Api (38/42 verde con `POSTGRES_TEST_CONNSTRING`). Application.Tests del slice 1m (`CancelarInspeccionHandlerTests`) compilan pero requieren Docker hasta cerrar este followup.
+
 ## Cerrados
 
 ### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path ✅

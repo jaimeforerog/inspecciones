@@ -109,6 +109,7 @@ builder.Services.AddScoped<RegistrarEvaluacionCualitativaHandler>();
 builder.Services.AddScoped<OmitirItemMonitoreoHandler>();
 builder.Services.AddScoped<GenerarOTHandler>();
 builder.Services.AddScoped<RechazarGenerarOTHandler>();
+builder.Services.AddScoped<CancelarInspeccionHandler>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON serializer — Minimal APIs: enums como string en request y response bodies.

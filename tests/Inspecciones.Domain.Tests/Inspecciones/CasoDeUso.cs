@@ -167,6 +167,38 @@ internal static class CasoDeUso
     }
 
     /// <summary>
+    /// Decisión <c>Cancelar</c>. Slice 1m — CancelarInspeccion. Reconstruye
+    /// el aggregate desde el stream previo y delega al método de decisión del aggregate.
+    /// Los parámetros PRE-3 y PRE-4 (técnico contribuyente y motivo) son evaluados
+    /// en el handler o en el método de decisión según la capa definida en spec §4.
+    /// Para tests de dominio puro, el helper pasa directamente los valores; el handler
+    /// real aplica PRE-3 antes de llamar a Cancelar.
+    /// </summary>
+    public static IReadOnlyList<object> Cancelar(
+        IReadOnlyList<object> dados,
+        string motivo,
+        string canceladaPor,
+        DateTimeOffset canceladaEn)
+    {
+        var aggregate = Inspeccion.Reconstruir(dados);
+        // PRE-3 (técnico contribuyente) — el handler la valida; aquí la inlinamos para tests de dominio puro.
+        if (!aggregate.Contribuyentes.Contains(canceladaPor))
+        {
+            throw new TecnicoNoContribuyenteException(
+                $"El técnico '{canceladaPor}' no ha contribuido a la inspección {aggregate.InspeccionId}. Solo un técnico contribuyente puede cancelarla.");
+        }
+        // PRE-4 (motivo válido) — el handler la valida; aquí la inlinamos para tests de dominio puro.
+        if (motivo.Trim().Length < 10)
+        {
+            throw new MotivoCancelacionInvalidoException(
+                motivo.Trim().Length == 0
+                    ? "El motivo de cancelación no puede estar vacío."
+                    : $"El motivo de cancelación debe tener al menos 10 caracteres. Longitud actual (trimmed): {motivo.Trim().Length}.");
+        }
+        return aggregate.Cancelar(motivo, canceladaPor, canceladaEn);
+    }
+
+    /// <summary>
     /// Decisión <c>IniciarMonitoreo</c>. Slice 1h — IniciarInspeccionMonitoreo.
     /// El aggregate se crea sobre stream vacío (PRE-7 I-I1 corto-circuita en el
     /// handler antes de llegar aquí). El handler pasa <paramref name="itemsSnapshot"/>

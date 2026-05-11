@@ -64,7 +64,7 @@ internal static class HallazgoFixtures
     /// </summary>
     public static object[] StreamConInspeccionCancelada() =>
         [EventoInspeccionIniciada(),
-         new InspeccionCancelada_v1(InspeccionIdNueva, Ahora, "rmartinez", "Cancelada por el técnico")];
+         new InspeccionCancelada_v1(InspeccionIdNueva, "Cancelada por el técnico", "rmartinez", Ahora)];
 
     // ── Constructores de comandos ─────────────────────────────────────────
 

@@ -244,3 +244,11 @@ public sealed class MotivoRechazoInvalidoException(string mensaje)
 /// PRE-4 intercepta antes. HTTP 409 Conflict.</summary>
 public sealed class OTYaRechazadaException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1m — CancelarInspeccion ────────────────────────────────────────────
+
+/// <summary>PRE-4 / I6-MOTIVO (handler) — el motivo de cancelación está vacío,
+/// es solo whitespace, o tiene menos de 10 caracteres después de trim.
+/// HTTP 422 Unprocessable Entity.</summary>
+public sealed class MotivoCancelacionInvalidoException(string mensaje)
+    : InspeccionDomainException(mensaje);

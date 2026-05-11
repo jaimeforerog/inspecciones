@@ -69,6 +69,13 @@ public sealed class Inspeccion
     /// </summary>
     public string? MotivoRechazoOT { get; private set; }
 
+    // ── Slice 1m — CancelarInspeccion ─────────────────────────────────────────
+    /// <summary>
+    /// Motivo de la cancelación. Null hasta que se emita <see cref="InspeccionCancelada_v1"/>.
+    /// Persiste el motivo textual para trazabilidad/auditoría. (slice 1m)
+    /// </summary>
+    public string? MotivoCancelacion { get; private set; }
+
     /// <summary>Hallazgos registrados en esta inspección (I-H6: multiplicidad permitida).</summary>
     public IReadOnlyList<Hallazgo> Hallazgos => _hallazgos.AsReadOnly();
     private readonly List<Hallazgo> _hallazgos = [];
@@ -449,16 +456,36 @@ public sealed class Inspeccion
 
     /// <summary>
     /// Aplicación pura del evento <see cref="InspeccionCancelada_v1"/>: transiciona
-    /// el estado a <see cref="EstadoInspeccion.Cancelada"/>. Stub para soporte de
-    /// tests PRE-3 del slice 1c.
+    /// el estado a <see cref="EstadoInspeccion.Cancelada"/> y persiste el motivo.
+    /// Apply es puro — sin validaciones. Las pre-condiciones viven en <see cref="Cancelar"/>.
+    /// Slice 1m — CancelarInspeccion.
     /// </summary>
     public void Apply(InspeccionCancelada_v1 e)
     {
         Estado = EstadoInspeccion.Cancelada;
-        if (e.CanceladoPor is not null)
+        MotivoCancelacion = e.Motivo;
+        _contribuyentes.Add(e.CanceladaPor);
+    }
+
+    /// <summary>
+    /// Método de decisión del slice 1m. Valida PRE-5 (I6 + I-F1) y emite
+    /// <see cref="InspeccionCancelada_v1"/>. Las pre-condiciones PRE-2, PRE-3, PRE-4
+    /// viven en el handler. PRE-1 vive en la capa HTTP.
+    /// Apply es puro — las validaciones viven aquí, nunca en Apply.
+    /// </summary>
+    public IReadOnlyList<object> Cancelar(
+        string motivo,
+        string canceladaPor,
+        DateTimeOffset canceladaEn)
+    {
+        // PRE-5 (I6 + I-F1): solo se puede cancelar en estado EnEjecucion.
+        if (Estado != EstadoInspeccion.EnEjecucion)
         {
-            _contribuyentes.Add(e.CanceladoPor);
+            throw new InspeccionNoEnEjecucionException(
+                $"La inspección {InspeccionId} está en estado '{Estado}'. CancelarInspeccion solo aplica a inspecciones en estado 'EnEjecucion'.");
         }
+
+        return [new InspeccionCancelada_v1(InspeccionId, motivo, canceladaPor, canceladaEn)];
     }
 
     // ── Slice 1d — ActualizarHallazgo ────────────────────────────────────────
