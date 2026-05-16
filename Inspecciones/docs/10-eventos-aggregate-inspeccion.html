@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eventos del aggregate Inspeccion — diagramas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<style>
+:root {
+  --primary: #0D47A1;
+  --primary-dark: #062B66;
+  --primary-light: #E3F2FD;
+  --bg: #F5F7FA;
+  --surface: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #5F6368;
+  --text-muted: #9AA0A6;
+  --divider: #E0E4E9;
+
+  --cat-lifecycle: #FDE4CF;
+  --cat-lifecycle-border: #C97F48;
+  --cat-firma: #D4E6F1;
+  --cat-firma-border: #2874A6;
+  --cat-hallazgo: #FADBD8;
+  --cat-hallazgo-border: #B03A2E;
+  --cat-repuesto: #D5F5E3;
+  --cat-repuesto-border: #1E8449;
+  --cat-adjunto: #E8DAEF;
+  --cat-adjunto-border: #6C3483;
+  --cat-monitoreo: #FCF3CF;
+  --cat-monitoreo-border: #9A7D0A;
+  --cat-preop: #D6EAF8;
+  --cat-preop-border: #1B4F72;
+  --cat-saga: #F5CBA7;
+  --cat-saga-border: #A04000;
+
+  --ok: #C8E6C9;
+  --warn: #FFF8E1;
+  --err: #FFCDD2;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-2: 0 4px 8px rgba(0,0,0,.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #ECEFF1;
+  color: var(--text);
+  padding: 24px 16px 64px;
+  min-height: 100vh;
+  line-height: 1.55;
+}
+
+.page-header {
+  max-width: 1400px; margin: 0 auto 24px; text-align: center;
+  padding: 24px;
+  background: linear-gradient(135deg, var(--primary-light) 0%, #FFFFFF 100%);
+  border-radius: 12px;
+  box-shadow: var(--shadow-1);
+}
+.page-header h1 { font-weight: 500; font-size: 26px; color: #263238; margin-bottom: 6px; }
+.page-header p { color: var(--text-secondary); font-size: 14px; max-width: 900px; margin: 0 auto; }
+.page-header .meta {
+  display: inline-flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center;
+  font-size: 12px;
+}
+.page-header .meta span {
+  background: rgba(13,71,161,.08); padding: 4px 10px; border-radius: 12px; color: var(--primary-dark);
+}
+
+.toc {
+  max-width: 1400px; margin: 0 auto 24px;
+  background: var(--surface); border-radius: 8px; padding: 12px 20px;
+  box-shadow: var(--shadow-1);
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.toc strong { color: var(--text-secondary); font-size: 13px; margin-right: 8px; }
+.toc a {
+  text-decoration: none; color: var(--primary);
+  padding: 4px 10px; border-radius: 6px; font-size: 13px;
+  transition: background 0.15s;
+}
+.toc a:hover { background: var(--primary-light); }
+
+.section {
+  max-width: 1400px; margin: 0 auto 24px;
+  background: var(--surface); border-radius: 12px; padding: 24px 28px;
+  box-shadow: var(--shadow-1);
+}
+.section h2 {
+  font-weight: 500; font-size: 20px; color: var(--primary-dark);
+  border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; margin-bottom: 16px;
+}
+.section h3 {
+  font-weight: 500; font-size: 16px; color: var(--text);
+  margin: 18px 0 10px; padding-left: 10px; border-left: 4px solid var(--primary);
+}
+.section p { color: var(--text-secondary); font-size: 14px; margin-bottom: 10px; }
+.section ul, .section ol { margin-left: 24px; margin-bottom: 10px; color: var(--text-secondary); font-size: 14px; }
+.section li { margin-bottom: 4px; }
+.section code {
+  font-family: 'Roboto Mono', monospace; font-size: 12.5px;
+  background: #F1F5F9; padding: 1px 6px; border-radius: 3px; color: #1E40AF;
+}
+.section a { color: var(--primary); }
+
+.category-legend {
+  display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 20px;
+}
+.cat-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 16px; font-size: 12.5px;
+  border: 2px solid; font-weight: 500;
+}
+.cat-chip.lifecycle { background: var(--cat-lifecycle); border-color: var(--cat-lifecycle-border); color: var(--cat-lifecycle-border); }
+.cat-chip.firma { background: var(--cat-firma); border-color: var(--cat-firma-border); color: var(--cat-firma-border); }
+.cat-chip.hallazgo { background: var(--cat-hallazgo); border-color: var(--cat-hallazgo-border); color: var(--cat-hallazgo-border); }
+.cat-chip.repuesto { background: var(--cat-repuesto); border-color: var(--cat-repuesto-border); color: var(--cat-repuesto-border); }
+.cat-chip.adjunto { background: var(--cat-adjunto); border-color: var(--cat-adjunto-border); color: var(--cat-adjunto-border); }
+.cat-chip.monitoreo { background: var(--cat-monitoreo); border-color: var(--cat-monitoreo-border); color: var(--cat-monitoreo-border); }
+.cat-chip.preop { background: var(--cat-preop); border-color: var(--cat-preop-border); color: var(--cat-preop-border); }
+.cat-chip.saga { background: var(--cat-saga); border-color: var(--cat-saga-border); color: var(--cat-saga-border); }
+
+.diagram-wrapper {
+  background: #FAFBFC; border: 1px solid var(--divider); border-radius: 8px;
+  padding: 16px; margin: 16px 0; position: relative; overflow: hidden;
+}
+.diagram-wrapper .controls {
+  position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 10;
+}
+.diagram-wrapper .controls button {
+  background: var(--surface); border: 1px solid var(--divider);
+  width: 32px; height: 32px; border-radius: 6px; cursor: pointer;
+  font-size: 16px; color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-1);
+}
+.diagram-wrapper .controls button:hover { background: var(--primary-light); color: var(--primary); }
+.diagram-wrapper .mermaid { display: flex; justify-content: center; min-height: 320px; }
+.diagram-wrapper svg { max-width: 100%; height: auto !important; }
+
+table {
+  width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px;
+  background: var(--surface);
+}
+table th {
+  background: var(--primary-light); color: var(--primary-dark); text-align: left;
+  padding: 10px 12px; font-weight: 500; border-bottom: 2px solid var(--primary);
+}
+table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text);
+  vertical-align: top;
+}
+table tr:nth-child(even) td { background: #FAFBFC; }
+table code { font-size: 11.5px; }
+
+.callout {
+  background: var(--primary-light); border-left: 4px solid var(--primary);
+  padding: 12px 16px; border-radius: 4px; margin: 12px 0; font-size: 13px;
+}
+.callout.warn { background: var(--warn); border-color: #F57C00; }
+.callout.err { background: var(--err); border-color: var(--cat-hallazgo-border); }
+.callout.ok { background: var(--ok); border-color: #388E3C; }
+
+.event-card {
+  display: inline-block; padding: 4px 10px; margin: 2px 4px 2px 0; border-radius: 4px;
+  font-family: 'Roboto Mono', monospace; font-size: 11.5px; font-weight: 500;
+  border: 1px solid; white-space: nowrap;
+}
+.event-card.lifecycle { background: var(--cat-lifecycle); border-color: var(--cat-lifecycle-border); color: #6F3F1C; }
+.event-card.firma { background: var(--cat-firma); border-color: var(--cat-firma-border); color: #154058; }
+.event-card.hallazgo { background: var(--cat-hallazgo); border-color: var(--cat-hallazgo-border); color: #6F1F17; }
+.event-card.repuesto { background: var(--cat-repuesto); border-color: var(--cat-repuesto-border); color: #14552A; }
+.event-card.adjunto { background: var(--cat-adjunto); border-color: var(--cat-adjunto-border); color: #4A1F5A; }
+.event-card.monitoreo { background: var(--cat-monitoreo); border-color: var(--cat-monitoreo-border); color: #6B5705; }
+.event-card.preop { background: var(--cat-preop); border-color: var(--cat-preop-border); color: #103654; }
+.event-card.saga { background: var(--cat-saga); border-color: var(--cat-saga-border); color: #722B00; }
+.event-card.pending { background: #ECEFF1; border-color: #B0BEC5; color: #607D8B; font-style: italic; }
+
+footer {
+  max-width: 1400px; margin: 24px auto 0; padding: 16px 24px;
+  background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-1);
+  font-size: 12px; color: var(--text-muted); text-align: center;
+}
+footer a { color: var(--primary); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Eventos del aggregate <code style="background:rgba(13,71,161,.12);padding:2px 8px;border-radius:4px;font-family:Roboto Mono">Inspeccion</code></h1>
+  <p>Vista canónica de los 19 eventos del stream + las 6 estados del aggregate, agrupados por categoría y mapeados a los slices que los introdujeron. Fuente: <code>src/Inspecciones.Domain/Inspecciones/*_v1.cs</code> y métodos <code>Apply(...)</code> en <code>Inspeccion.cs</code>.</p>
+  <div class="meta">
+    <span>📦 19 eventos · 6 estados</span>
+    <span>📅 Última revisión: 2026-05-16</span>
+    <span>🔗 Modelo: §15 + §15.7</span>
+    <span>📂 main HEAD: slice 1o</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>📑 Secciones:</strong>
+  <a href="#resumen">Resumen</a>
+  <a href="#lifecycle">Lifecycle (estados)</a>
+  <a href="#taxonomia">Taxonomía por categoría</a>
+  <a href="#flujo-tecnica">Flujo técnica (secuencia)</a>
+  <a href="#flujo-monitoreo">Flujo monitoreo (secuencia)</a>
+  <a href="#atomicidad">Grupos atómicos</a>
+  <a href="#auto">Eventos auto-generados</a>
+  <a href="#catalogo">Catálogo completo</a>
+  <a href="#sin-emisor">Estados sin emisor</a>
+  <a href="#referencias">Referencias</a>
+</nav>
+
+<!-- =================== RESUMEN =================== -->
+<section class="section" id="resumen">
+  <h2>1. Resumen y leyenda de categorías</h2>
+  <p>El aggregate <code>Inspeccion</code> es un stream Marten identificado por <code>InspeccionId: Guid</code>. Se discrimina entre técnica y monitoreo con el campo <code>Tipo: TipoInspeccion ∈ {Tecnica, Monitoreo}</code> (decisión 2026-05-05). Los 19 eventos vigentes se reparten en 8 categorías visuales:</p>
+
+  <div class="category-legend">
+    <span class="cat-chip lifecycle">🔄 Lifecycle</span>
+    <span class="cat-chip firma">✍️ Firma (3 atómicos)</span>
+    <span class="cat-chip hallazgo">🚩 Hallazgos</span>
+    <span class="cat-chip repuesto">🔧 Repuestos</span>
+    <span class="cat-chip adjunto">📎 Adjuntos</span>
+    <span class="cat-chip monitoreo">📊 Monitoreo</span>
+    <span class="cat-chip preop">📋 PreOp</span>
+    <span class="cat-chip saga">⚙️ Saga OT</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Métrica</th><th>Valor</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Eventos vigentes (records <code>*_v1.cs</code>)</td><td>19</td></tr>
+      <tr><td>Estados del enum <code>EstadoInspeccion</code></td><td>6 (EnEjecucion, Firmada, Cerrada, CerradaSinOT, Cancelada, RechazadaPorAprobador)</td></tr>
+      <tr><td>Estados terminales con emisor real</td><td>3 (EnEjecucion → {Firmada, Cancelada}; Firmada → CerradaSinOT)</td></tr>
+      <tr><td>Estados sin emisor (enum existe, slice pendiente)</td><td>2 (Cerrada, RechazadaPorAprobador)</td></tr>
+      <tr><td>Eventos que transicionan estado</td><td>5 (Iniciada, Firmada, Cancelada, CerradaSinOT, + Firmada self-loop por OTSolicitada)</td></tr>
+      <tr><td>Eventos sin cambio de estado (cuerpo del aggregate)</td><td>14</td></tr>
+      <tr><td>Grupos atómicos (≥2 eventos en mismo <code>SaveChangesAsync</code>)</td><td>4 (firma 3×, rechazo OT 2×, medición fuera de rango 2×, evaluación Malo 2×)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================== LIFECYCLE =================== -->
+<section class="section" id="lifecycle">
+  <h2>2. Lifecycle del aggregate (estados y transiciones)</h2>
+  <p>Diagrama de estados con las 5 transiciones reales emitidas hoy en <code>main</code>. Los eventos que no transicionan están listados en la nota lateral.</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('lifecycle', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('lifecycle', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('lifecycle')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('lifecycle')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="lifecycle">
+stateDiagram-v2
+    direction TB
+    [*] --> EnEjecucion : InspeccionIniciada_v1
+
+    EnEjecucion --> Firmada : DiagnosticoEmitido_v1 ⟶\nDictamenEstablecido_v1 ⟶\nInspeccionFirmada_v1\n(3 atómicos · 1 SaveChangesAsync)
+    EnEjecucion --> Cancelada : InspeccionCancelada_v1
+
+    Firmada --> Firmada : OTSolicitada_v1\n(no transiciona — saga pendiente)
+    Firmada --> CerradaSinOT : GeneracionOTRechazada_v1 ⟶\nInspeccionCerradaSinOT_v1\n(2 atómicos)
+
+    Cancelada --> [*]
+    CerradaSinOT --> [*]
+
+    note right of EnEjecucion
+        Eventos que NO transicionan (cuerpo del aggregate):
+        ──── Hallazgos ────
+        • HallazgoRegistrado_v1
+        • HallazgoActualizado_v1
+        • HallazgoEliminado_v1
+        ──── Repuestos ────
+        • RepuestoEstimado_v1
+        • RepuestoActualizado_v1
+        ──── Adjuntos ────
+        • AdjuntoSubido_v1
+        • AdjuntoEliminado_v1
+        ──── PreOp ────
+        • NovedadPreopDescartada_v1
+        ──── Monitoreo (Tipo=Monitoreo) ────
+        • MedicionRegistrada_v1
+        • EvaluacionCualitativaRegistrada_v1
+        • ItemMonitoreoOmitido_v1
+    end note
+
+    note left of Firmada
+        Estados Cerrada y RechazadaPorAprobador
+        existen en el enum EstadoInspeccion
+        pero aún NO hay evento que transicione
+        a ellos. La saga EjecutarOTSaga (futura)
+        emitiría InspeccionCerrada_v1 cuando
+        el ERP confirme la OT via M-1.
+    end note
+    </div>
+  </div>
+
+  <div class="callout warn"><strong>Apply puro respetado:</strong> los métodos <code>Apply(Evt)</code> en <code>Inspeccion.cs</code> son mutaciones puras sin validaciones. Las pre-condiciones viven en los métodos de decisión que producen los eventos. Re-validar en <code>Apply</code> rompe el rebuild desde stream (regla dura <code>CLAUDE.md</code>).</div>
+</section>
+
+<!-- =================== TAXONOMÍA =================== -->
+<section class="section" id="taxonomia">
+  <h2>3. Taxonomía de los 19 eventos por categoría</h2>
+  <p>Agrupados por concepto del dominio. Las flechas punteadas dentro de Monitoreo marcan eventos que disparan <strong>auto-creación de hallazgos</strong> en el mismo <code>SaveChangesAsync</code>.</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('taxonomia', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('taxonomia', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('taxonomia')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('taxonomia')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="taxonomia">
+flowchart TB
+    classDef lifecycle fill:#FDE4CF,stroke:#C97F48,color:#000
+    classDef firma fill:#D4E6F1,stroke:#2874A6,color:#000
+    classDef hallazgo fill:#FADBD8,stroke:#B03A2E,color:#000
+    classDef repuesto fill:#D5F5E3,stroke:#1E8449,color:#000
+    classDef adjunto fill:#E8DAEF,stroke:#6C3483,color:#000
+    classDef monitoreo fill:#FCF3CF,stroke:#9A7D0A,color:#000
+    classDef preop fill:#D6EAF8,stroke:#1B4F72,color:#000
+    classDef saga fill:#F5CBA7,stroke:#A04000,color:#000
+    classDef pending fill:#ECEFF1,stroke:#B0BEC5,color:#607D8B,stroke-dasharray:5 5
+
+    subgraph LF["🔄 Lifecycle — transicionan estado"]
+        direction LR
+        LF1["InspeccionIniciada_v1<br/>(slice 1a/1b/1h)"]:::lifecycle
+        LF2["InspeccionCancelada_v1<br/>(slice 1m)"]:::lifecycle
+        LF3["InspeccionCerradaSinOT_v1<br/>(slice 1l)"]:::lifecycle
+    end
+
+    subgraph FI["✍️ Firma — 3 atómicos en orden causal"]
+        direction LR
+        FI1["DiagnosticoEmitido_v1"]:::firma
+        FI2["DictamenEstablecido_v1"]:::firma
+        FI3["InspeccionFirmada_v1<br/>(slice 1g)"]:::firma
+        FI1 --> FI2 --> FI3
+    end
+
+    subgraph HA["🚩 Hallazgos — técnica + monitoreo"]
+        direction LR
+        HA1["HallazgoRegistrado_v1<br/>(slice 1c)"]:::hallazgo
+        HA2["HallazgoActualizado_v1<br/>(slice 1d)"]:::hallazgo
+        HA3["HallazgoEliminado_v1<br/>(slice 1e)"]:::hallazgo
+    end
+
+    subgraph RE["🔧 Repuestos — mutación VO"]
+        direction LR
+        RE1["RepuestoEstimado_v1<br/>(slice 1f)"]:::repuesto
+        RE2["RepuestoActualizado_v1<br/>(slice 1o)"]:::repuesto
+        RE3["RemoverRepuesto_v1<br/>(no implementado)"]:::pending
+    end
+
+    subgraph AD["📎 Adjuntos"]
+        direction LR
+        AD1["AdjuntoSubido_v1"]:::adjunto
+        AD2["AdjuntoEliminado_v1"]:::adjunto
+    end
+
+    subgraph MO["📊 Monitoreo — Tipo=Monitoreo"]
+        direction LR
+        MO1["MedicionRegistrada_v1<br/>(slice 1i)"]:::monitoreo
+        MO2["EvaluacionCualitativaRegistrada_v1<br/>(slice 1i')"]:::monitoreo
+        MO3["ItemMonitoreoOmitido_v1<br/>(slice 1j)"]:::monitoreo
+    end
+
+    subgraph PR["📋 PreOperacional"]
+        direction LR
+        PR1["NovedadPreopDescartada_v1<br/>(slice 1n)"]:::preop
+    end
+
+    subgraph SG["⚙️ Saga OT — capability gate ADR-007"]
+        direction LR
+        SG1["OTSolicitada_v1<br/>(slice 1k)"]:::saga
+        SG2["GeneracionOTRechazada_v1<br/>(slice 1l)"]:::saga
+    end
+
+    MO1 -.->|si FueraDeRango| HA1
+    MO2 -.->|si Malo| HA1
+    SG2 -->|atómico con| LF3
+    FI3 -->|habilita| SG1
+    FI3 -->|habilita| SG2
+    </div>
+  </div>
+</section>
+
+<!-- =================== FLUJO TÉCNICA =================== -->
+<section class="section" id="flujo-tecnica">
+  <h2>4. Flujo de inspección técnica (eventos en orden temporal)</h2>
+  <p>Secuencia happy-path de una inspección técnica completa: técnico la ejecuta, supervisor decide OT. Cada paso muestra el comando HTTP y el/los evento(s) emitido(s). Los pasos opcionales o alternativos están marcados con <code>opt</code> y <code>alt</code>.</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('seq-tecnica', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('seq-tecnica', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('seq-tecnica')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('seq-tecnica')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="seq-tecnica">
+sequenceDiagram
+    autonumber
+    actor T as 👤 Técnico
+    actor S as 👤 Supervisor
+    participant API as 🔧 Backend (Inspecciones.Api)
+    participant AGG as 📦 Aggregate Inspeccion<br/>(stream Marten)
+
+    rect rgba(253,228,207,0.35)
+        Note over T,AGG: 🔄 Inicio (Estado → EnEjecucion)
+        T->>API: POST /api/v1/inspecciones<br/>(equipoCodigo, rutinaTecnicaId, gps, fecha, medidores?)
+        API->>AGG: IniciarInspeccion
+        AGG-->>AGG: InspeccionIniciada_v1<br/>Tipo=Tecnica
+    end
+
+    rect rgba(250,219,216,0.35)
+        Note over T,AGG: 🚩 Loop libre de hallazgos (decisión del técnico)
+        loop por cada hallazgo
+            T->>API: POST /hallazgos<br/>(parte, novedadTecnica, accionRequerida, tipoFalla?, causaFalla?)
+            API->>AGG: RegistrarHallazgo
+            AGG-->>AGG: HallazgoRegistrado_v1
+
+            opt RequiereIntervencion → asigna repuesto(s)
+                T->>API: POST /hallazgos/{hid}/repuestos<br/>(sku, cantidad, justificacion)
+                API->>AGG: AsignarRepuesto
+                AGG-->>AGG: RepuestoEstimado_v1
+                opt actualizar repuesto
+                    T->>API: PATCH /hallazgos/{hid}/repuestos/{rid}
+                    AGG-->>AGG: RepuestoActualizado_v1
+                end
+            end
+
+            opt corregir hallazgo
+                T->>API: PATCH /hallazgos/{hid}
+                AGG-->>AGG: HallazgoActualizado_v1
+            end
+
+            opt eliminar hallazgo (soft delete)
+                T->>API: DELETE /hallazgos/{hid}
+                AGG-->>AGG: HallazgoEliminado_v1
+            end
+        end
+    end
+
+    opt descarte rápido de novedad preop (inline)
+        T->>API: POST /novedades-preop/{nid}/descartar
+        AGG-->>AGG: NovedadPreopDescartada_v1
+    end
+
+    Note over T,AGG: ⚠️ Cierre: firma o cancelación
+    alt el técnico firma
+        rect rgba(212,230,241,0.5)
+            T->>API: POST /firmar<br/>(diagnostico, dictamen, firma, gps)
+            API->>AGG: FirmarInspeccion
+            AGG-->>AGG: DiagnosticoEmitido_v1 ⟶<br/>DictamenEstablecido_v1 ⟶<br/>InspeccionFirmada_v1<br/>(3 eventos atómicos · 1 SaveChangesAsync)
+            Note over AGG: Estado → Firmada
+        end
+    else el técnico cancela
+        T->>API: POST /cancelar (motivo)
+        AGG-->>AGG: InspeccionCancelada_v1
+        Note over AGG: Estado → Cancelada (terminal)
+    end
+
+    rect rgba(245,203,167,0.35)
+        Note over S,AGG: ⚙️ Capability gate "generar-ot" (ADR-007 · post-firma)
+        alt aprobador genera OT
+            S->>API: POST /ot<br/>(prioridad, observaciones, comentarioJefe?)
+            API->>AGG: GenerarOT
+            AGG-->>AGG: OTSolicitada_v1
+            Note over AGG: Estado se mantiene Firmada<br/>(saga EjecutarOTSaga futura → POST a MYE M-1)
+        else aprobador rechaza
+            S->>API: POST /rechazar-generar-ot (motivo)
+            API->>AGG: RechazarGenerarOT
+            AGG-->>AGG: GeneracionOTRechazada_v1 ⟶<br/>InspeccionCerradaSinOT_v1<br/>(2 atómicos)
+            Note over AGG: Estado → CerradaSinOT (terminal)
+        end
+    end
+    </div>
+  </div>
+
+  <div class="callout"><strong>Decisiones humanas en este flujo:</strong> elegir equipo + rutina al iniciar, redactar <code>NovedadTecnica</code> y <code>AccionCorrectiva</code> por hallazgo, elegir <code>TipoFalla</code>/<code>CausaFalla</code> de catálogo, asignar repuestos con cantidad y justificación, escribir el <code>Diagnostico</code> final y elegir <code>Dictamen</code> al firmar. Todo el resto es plumbing.</div>
+</section>
+
+<!-- =================== FLUJO MONITOREO =================== -->
+<section class="section" id="flujo-monitoreo">
+  <h2>5. Flujo de inspección de monitoreo (eventos en orden temporal)</h2>
+  <p>Secuencia happy-path de una inspección de monitoreo. La diferencia clave con técnica: la rutina trae un <strong>snapshot inmutable de items</strong> al iniciar, y por cada item el técnico mide / califica / omite. Si la medición sale del rango o la calificación es <code>Malo</code>, el sistema <strong>auto-genera un hallazgo</strong> en el mismo <code>SaveChangesAsync</code> (patrón "agentic determinístico").</p>
+
+  <div class="diagram-wrapper">
+    <div class="controls">
+      <button onclick="zoomDiagram('seq-monitoreo', 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram('seq-monitoreo', 0.8)" title="Zoom out">−</button>
+      <button onclick="resetZoom('seq-monitoreo')" title="Reset">⟲</button>
+      <button onclick="fullscreenDiagram('seq-monitoreo')" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="mermaid" id="seq-monitoreo">
+sequenceDiagram
+    autonumber
+    actor T as 👤 Técnico
+    actor S as 👤 Supervisor
+    participant API as 🔧 Backend (Inspecciones.Api)
+    participant AGG as 📦 Aggregate Inspeccion<br/>(stream Marten · Tipo=Monitoreo)
+
+    rect rgba(253,228,207,0.35)
+        Note over T,AGG: 🔄 Inicio (Estado → EnEjecucion · construye ItemsSnapshot)
+        T->>API: POST /api/v1/inspecciones/monitoreo<br/>(equipoCodigo, rutinaMonitoreoId, gps, fecha)
+        API->>API: Filtra items activos de la rutina<br/>(asignación por grupoMantenimiento)
+        API->>API: Ordena items por Orden<br/>(snapshot inmutable)
+        API->>AGG: IniciarInspeccionMonitoreo
+        AGG-->>AGG: InspeccionIniciada_v1<br/>Tipo=Monitoreo +<br/>RutinaMonitoreoSeleccionadaId +<br/>ItemsSnapshot[]
+    end
+
+    rect rgba(252,243,207,0.4)
+        Note over T,AGG: 📊 Loop por item del snapshot (medición / evaluación / omisión)
+        loop por cada item del snapshot
+            alt item NUMÉRICO (EvaluacionEsperada = Medicion)
+                T->>API: POST /items/{itemId}/medicion<br/>(valor, observacion?)
+                API->>AGG: RegistrarMedicion
+                alt valor ∈ [valorMin, valorMax] ✅
+                    AGG-->>AGG: MedicionRegistrada_v1
+                else valor &lt; min OR &gt; max ❌
+                    AGG-->>AGG: MedicionRegistrada_v1 +<br/>HallazgoRegistrado_v1<br/>(2 atómicos · Origen=Monitoreo)
+                    Note over AGG: Auto-hallazgo:<br/>NovedadTecnica autogenerada<br/>"{Magnitud} {valor}{unidad}<br/>fuera de rango [min, max]"<br/>AccionRequerida=RequiereSeguimiento
+                end
+            else item CUALITATIVO (EvaluacionEsperada = Cualitativa)
+                T->>API: POST /items/{itemId}/evaluacion<br/>(calificacion ∈ {Bueno, Regular, Malo})
+                API->>AGG: RegistrarEvaluacionCualitativa
+                alt calificación = Bueno ✅ o Regular 🟡
+                    AGG-->>AGG: EvaluacionCualitativaRegistrada_v1
+                else calificación = Malo ❌
+                    AGG-->>AGG: EvaluacionCualitativaRegistrada_v1 +<br/>HallazgoRegistrado_v1<br/>(2 atómicos · Origen=Monitoreo)
+                end
+            else técnico decide OMITIR el item
+                T->>API: POST /items/{itemId}/omitir (motivo ≥ 10 chars)
+                API->>AGG: OmitirItemMonitoreo
+                AGG-->>AGG: ItemMonitoreoOmitido_v1
+                Note over AGG: Item entra a ItemsOmitidos.<br/>Ya no puede medirse después<br/>(I-M3 · I-M7..M9)
+            end
+        end
+    end
+
+    Note over T,AGG: Igual al flujo técnica desde acá ↓
+
+    alt el técnico firma
+        rect rgba(212,230,241,0.5)
+            T->>API: POST /firmar<br/>(diagnostico, dictamen, firma, gps)
+            API->>AGG: FirmarInspeccion
+            AGG-->>AGG: DiagnosticoEmitido_v1 ⟶<br/>DictamenEstablecido_v1 ⟶<br/>InspeccionFirmada_v1<br/>(3 atómicos)
+            Note over AGG: Estado → Firmada
+        end
+    else el técnico cancela
+        T->>API: POST /cancelar (motivo)
+        AGG-->>AGG: InspeccionCancelada_v1
+        Note over AGG: Estado → Cancelada (terminal)
+    end
+
+    rect rgba(245,203,167,0.35)
+        Note over S,AGG: ⚙️ Capability gate "generar-ot" (idéntico a técnica)
+        alt aprobador genera OT
+            S->>API: POST /ot
+            AGG-->>AGG: OTSolicitada_v1
+        else aprobador rechaza
+            S->>API: POST /rechazar-generar-ot
+            AGG-->>AGG: GeneracionOTRechazada_v1 +<br/>InspeccionCerradaSinOT_v1
+            Note over AGG: Estado → CerradaSinOT
+        end
+    end
+    </div>
+  </div>
+
+  <div class="callout warn"><strong>Diferencias clave vs técnica:</strong> (1) la rutina trae items pre-definidos — el técnico no decide qué inspeccionar, ejecuta el snapshot; (2) el sistema auto-genera hallazgos cuando hay anomalía (no requiere acción del técnico para crear el hallazgo); (3) <code>NovedadTecnica</code> del auto-hallazgo se compone server-side, no se escribe a mano; (4) puede convivir en el stream con hallazgos manuales (mismo evento <code>HallazgoRegistrado_v1</code>, distinto <code>Origen</code>); (5) el item omitido es terminal — no se reabre dentro de la misma inspección.</div>
+
+  <div class="callout"><strong>Decisiones humanas en este flujo:</strong> elegir rutina al iniciar (entre las del grupo del equipo), tipear el valor numérico medido, elegir la calificación cualitativa, escribir el motivo de omisión, escribir el <code>Diagnostico</code> al firmar. Los hallazgos automáticos no requieren input — pero el técnico puede editarlos después con <code>ActualizarHallazgo</code> antes de firmar.</div>
+</section>
+
+<!-- =================== ATOMICIDAD =================== -->
+<section class="section" id="atomicidad">
+  <h2>6. Grupos atómicos (1 <code>SaveChangesAsync</code>)</h2>
+  <p>Por regla dura del módulo (<code>CLAUDE.md</code>), múltiples eventos al mismo stream emitidos por un handler son atómicos por construcción. El orden de emisión = orden causal. Hoy hay 4 grupos:</p>
+
+  <table>
+    <thead>
+      <tr><th>Trigger (comando)</th><th>Slice</th><th>Eventos emitidos juntos</th><th>Por qué juntos</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>FirmarInspeccion</code></td>
+        <td>1g</td>
+        <td>
+          <span class="event-card firma">DiagnosticoEmitido_v1</span> →
+          <span class="event-card firma">DictamenEstablecido_v1</span> →
+          <span class="event-card firma">InspeccionFirmada_v1</span>
+        </td>
+        <td>Una firma sin diagnóstico o sin dictamen rompe invariantes V-F1..V-F8. La atomicidad garantiza que el stream nunca queda en estado intermedio inválido</td>
+      </tr>
+      <tr>
+        <td><code>RechazarGenerarOT</code></td>
+        <td>1l</td>
+        <td>
+          <span class="event-card saga">GeneracionOTRechazada_v1</span> →
+          <span class="event-card lifecycle">InspeccionCerradaSinOT_v1</span>
+        </td>
+        <td>El rechazo del aprobador cierra la inspección inmediatamente — sin saga asíncrona. Decisión D-4 del spec 1l: endpoint síncrono 200 OK</td>
+      </tr>
+      <tr>
+        <td><code>RegistrarMedicion</code> con valor fuera de [min, max]</td>
+        <td>1i</td>
+        <td>
+          <span class="event-card monitoreo">MedicionRegistrada_v1</span> +
+          <span class="event-card hallazgo">HallazgoRegistrado_v1</span>
+        </td>
+        <td>El hallazgo se crea con <code>Origen=Monitoreo</code> + <code>MedicionOrigenId=ItemId</code> y <code>NovedadTecnica</code> auto-generada. <strong>Reglas-based "agentic"</strong></td>
+      </tr>
+      <tr>
+        <td><code>RegistrarEvaluacionCualitativa</code> con calificación = Malo</td>
+        <td>1i'</td>
+        <td>
+          <span class="event-card monitoreo">EvaluacionCualitativaRegistrada_v1</span> +
+          <span class="event-card hallazgo">HallazgoRegistrado_v1</span>
+        </td>
+        <td>Mismo patrón: calificación negativa abre hallazgo automáticamente con <code>Origen=Monitoreo</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout"><strong>Regla:</strong> nunca partir un comando en dos <code>SaveChangesAsync</code>. Si un slice futuro necesita coordinar dos streams distintos, eso va por saga + outbox (ADR-006), no por dos transacciones consecutivas.</div>
+</section>
+
+<!-- =================== AUTO-GENERADOS =================== -->
+<section class="section" id="auto">
+  <h2>7. Eventos auto-generados por reglas determinísticas</h2>
+  <p>El módulo ya implementa <strong>generación automática de hallazgos</strong> en monitoreo cuando se cumplen reglas del negocio. Es el precedente arquitectural sobre el cual se construirá la asistencia con IA (ver propuesta IA-0..IA-3 en sesión 2026-05-16).</p>
+
+  <table>
+    <thead>
+      <tr><th>Condición</th><th>Evento auto-generado</th><th>Origen</th><th>AccionRequerida default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>MedicionRegistrada_v1</code> con valor &lt; <code>ridValorMin</code> o &gt; <code>ridValorMax</code></td>
+        <td><span class="event-card hallazgo">HallazgoRegistrado_v1</span></td>
+        <td><code>Origen = Monitoreo</code><br/><code>MedicionOrigenId = ItemId</code></td>
+        <td><code>RequiereSeguimiento</code></td>
+      </tr>
+      <tr>
+        <td><code>EvaluacionCualitativaRegistrada_v1</code> con <code>Calificacion = Malo</code></td>
+        <td><span class="event-card hallazgo">HallazgoRegistrado_v1</span></td>
+        <td><code>Origen = Monitoreo</code></td>
+        <td><code>RequiereSeguimiento</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>El campo <code>NovedadTecnica</code> del hallazgo se autogenera server-side con plantilla del estilo <code>"{Magnitud} {valor}{unidad} fuera de rango [{min}, {max}]"</code>. El técnico no escribe nada en esos hallazgos.</p>
+</section>
+
+<!-- =================== CATÁLOGO =================== -->
+<section class="section" id="catalogo">
+  <h2>8. Catálogo completo de eventos (los 19 en main)</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Evento</th>
+        <th>Categoría</th>
+        <th>Slice</th>
+        <th>Trigger (comando)</th>
+        <th>Transiciona estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>InspeccionIniciada_v1</code></td><td><span class="cat-chip lifecycle">Lifecycle</span></td><td>1a / 1b / 1h</td><td><code>IniciarInspeccion</code> + <code>IniciarInspeccionMonitoreo</code></td><td>∅ → EnEjecucion</td></tr>
+      <tr><td><code>HallazgoRegistrado_v1</code></td><td><span class="cat-chip hallazgo">Hallazgo</span></td><td>1c</td><td><code>RegistrarHallazgo</code> + auto en monitoreo</td><td>—</td></tr>
+      <tr><td><code>HallazgoActualizado_v1</code></td><td><span class="cat-chip hallazgo">Hallazgo</span></td><td>1d</td><td><code>ActualizarHallazgo</code></td><td>—</td></tr>
+      <tr><td><code>HallazgoEliminado_v1</code></td><td><span class="cat-chip hallazgo">Hallazgo</span></td><td>1e</td><td><code>EliminarHallazgo</code> (soft delete)</td><td>—</td></tr>
+      <tr><td><code>RepuestoEstimado_v1</code></td><td><span class="cat-chip repuesto">Repuesto</span></td><td>1f</td><td><code>AsignarRepuesto</code></td><td>—</td></tr>
+      <tr><td><code>RepuestoActualizado_v1</code></td><td><span class="cat-chip repuesto">Repuesto</span></td><td>1o</td><td><code>ActualizarRepuesto</code></td><td>—</td></tr>
+      <tr><td><code>DiagnosticoEmitido_v1</code></td><td><span class="cat-chip firma">Firma</span></td><td>1g</td><td><code>FirmarInspeccion</code> (1 de 3)</td><td>—</td></tr>
+      <tr><td><code>DictamenEstablecido_v1</code></td><td><span class="cat-chip firma">Firma</span></td><td>1g</td><td><code>FirmarInspeccion</code> (2 de 3)</td><td>—</td></tr>
+      <tr><td><code>InspeccionFirmada_v1</code></td><td><span class="cat-chip firma">Firma</span></td><td>1g</td><td><code>FirmarInspeccion</code> (3 de 3)</td><td>EnEjecucion → Firmada</td></tr>
+      <tr><td><code>InspeccionCancelada_v1</code></td><td><span class="cat-chip lifecycle">Lifecycle</span></td><td>1m</td><td><code>CancelarInspeccion</code></td><td>EnEjecucion → Cancelada</td></tr>
+      <tr><td><code>NovedadPreopDescartada_v1</code></td><td><span class="cat-chip preop">PreOp</span></td><td>1n</td><td><code>DescartarNovedadPreop</code></td><td>—</td></tr>
+      <tr><td><code>MedicionRegistrada_v1</code></td><td><span class="cat-chip monitoreo">Monitoreo</span></td><td>1i</td><td><code>RegistrarMedicion</code></td><td>—</td></tr>
+      <tr><td><code>EvaluacionCualitativaRegistrada_v1</code></td><td><span class="cat-chip monitoreo">Monitoreo</span></td><td>1i'</td><td><code>RegistrarEvaluacionCualitativa</code></td><td>—</td></tr>
+      <tr><td><code>ItemMonitoreoOmitido_v1</code></td><td><span class="cat-chip monitoreo">Monitoreo</span></td><td>1j</td><td><code>OmitirItemMonitoreo</code></td><td>—</td></tr>
+      <tr><td><code>OTSolicitada_v1</code></td><td><span class="cat-chip saga">Saga OT</span></td><td>1k</td><td><code>GenerarOT</code></td><td>Firmada → Firmada (self-loop)</td></tr>
+      <tr><td><code>GeneracionOTRechazada_v1</code></td><td><span class="cat-chip saga">Saga OT</span></td><td>1l</td><td><code>RechazarGenerarOT</code></td><td>—</td></tr>
+      <tr><td><code>InspeccionCerradaSinOT_v1</code></td><td><span class="cat-chip lifecycle">Lifecycle</span></td><td>1l</td><td><code>RechazarGenerarOT</code> (atómico con anterior)</td><td>Firmada → CerradaSinOT</td></tr>
+      <tr><td><code>AdjuntoSubido_v1</code></td><td><span class="cat-chip adjunto">Adjunto</span></td><td>(definido en 1g como stub — no hay handler aún)</td><td><em>pendiente</em></td><td>—</td></tr>
+      <tr><td><code>AdjuntoEliminado_v1</code></td><td><span class="cat-chip adjunto">Adjunto</span></td><td>(definido en 1g como stub — no hay handler aún)</td><td><em>pendiente</em></td><td>—</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================== SIN EMISOR =================== -->
+<section class="section" id="sin-emisor">
+  <h2>9. Estados del enum sin emisor todavía</h2>
+  <p>Dos estados están definidos en <code>EstadoInspeccion</code> pero ningún evento emitido en <code>main</code> los alcanza. Los slices futuros que los habiliten:</p>
+
+  <table>
+    <thead>
+      <tr><th>Estado</th><th>Cómo se alcanzaría</th><th>Slice esperado</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>Cerrada</code></td>
+        <td>Saga <code>EjecutarOTSaga</code> emite <code>InspeccionCerrada_v1</code> tras éxito del POST a MYE M-1. Transición Firmada → Cerrada</td>
+        <td>Pendiente. Bloqueado por <strong>M-1 no existe en <code>Maquinaria API v1</code></strong> (ver <code>06-contrato §0</code> R-API-7)</td>
+      </tr>
+      <tr>
+        <td><code>RechazadaPorAprobador</code></td>
+        <td>Sin slice asignado. Posiblemente para un flujo de revisión post-firma con observaciones de auditoría</td>
+        <td>No definido — preguntar a Jaime si sigue siendo necesario o se elimina del enum</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn"><strong>Implicación:</strong> los slices <code>1k GenerarOT</code> y <code>1l RechazarGenerarOT</code> ya están cerrados en <code>main</code>, pero <code>1k</code> emite <code>OTSolicitada_v1</code> sin que exista la saga que la consuma ni el endpoint M-1 en el ERP. El stream queda en <code>Firmada</code> indefinidamente. Ver <code>06-contrato §0</code> y la recalibración 2026-05-16.</div>
+</section>
+
+<!-- =================== REFERENCIAS =================== -->
+<section class="section" id="referencias">
+  <h2>10. Referencias cruzadas</h2>
+  <ul>
+    <li><code>src/Inspecciones.Domain/Inspecciones/Inspeccion.cs</code> — fuente de verdad de los <code>Apply(...)</code>.</li>
+    <li><code>src/Inspecciones.Domain/Inspecciones/*_v1.cs</code> — records de los 19 eventos.</li>
+    <li><code>01-modelo-dominio.md §15</code> — modelo formal e invariantes I-*.</li>
+    <li><code>01-modelo-dominio.md §15.7</code> — estados y transiciones permitidas.</li>
+    <li><code>01-modelo-dominio.md §12.11.5</code> — modelo específico de monitoreo.</li>
+    <li><code>06-contrato-apis-erp.md §0</code> — verificación contra <code>Maquinaria API v1</code> (2026-05-16).</li>
+    <li><code>05-catalogo-eventos.md</code> — fichas detalladas por evento.</li>
+    <li><a href="02i-workflow-tecnica-nodos.html">02i — workflow nodos técnica (HTML)</a></li>
+    <li><a href="02j-workflow-monitoreo-nodos.html">02j — workflow nodos monitoreo (HTML)</a></li>
+    <li><a href="09-adr-008-offline-cliente.html">09 — ADR-008 offline cliente (HTML)</a></li>
+    <li><code>slices/1a..1o/spec.md</code> — specs originales por slice.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>📄 Generado 2026-05-16 desde código vigente en <code>main</code> (HEAD <code>e708d39</code>) · Mermaid v10 + svg-pan-zoom</p>
+</footer>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    fontFamily: 'Roboto, sans-serif',
+    fontSize: '13px',
+    primaryColor: '#E3F2FD',
+    primaryTextColor: '#1A1A1A',
+    primaryBorderColor: '#1976D2',
+    lineColor: '#5F6368',
+  },
+  flowchart: {
+    htmlLabels: true,
+    useMaxWidth: false,
+    nodeSpacing: 35,
+    rankSpacing: 50,
+  }
+});
+
+let panZoomInstances = {};
+
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.querySelectorAll('.mermaid').forEach(el => {
+      const svg = el.querySelector('svg');
+      if (svg) {
+        try {
+          panZoomInstances[el.id] = svgPanZoom(svg, {
+            zoomEnabled: true, controlIconsEnabled: false,
+            fit: true, center: true, minZoom: 0.3, maxZoom: 5
+          });
+        } catch (e) { console.warn('Pan-zoom failed for', el.id, e); }
+      }
+    });
+  }, 800);
+});
+
+function zoomDiagram(id, factor) {
+  if (panZoomInstances[id]) panZoomInstances[id].zoomBy(factor);
+}
+function resetZoom(id) {
+  if (panZoomInstances[id]) { panZoomInstances[id].resetZoom(); panZoomInstances[id].fit(); panZoomInstances[id].center(); }
+}
+function fullscreenDiagram(id) {
+  const wrapper = document.getElementById(id).closest('.diagram-wrapper');
+  if (wrapper.requestFullscreen) wrapper.requestFullscreen();
+}
+</script>
+
+</body>
+</html>
