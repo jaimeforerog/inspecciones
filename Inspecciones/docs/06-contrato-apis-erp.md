@@ -8,10 +8,100 @@
 
 A partir de la fecha de este documento, los slices del módulo deben referenciar **este archivo** como contrato. Los anteriores quedan como histórico.
 
-**Última revisión:** 2026-04-30
-**Estado del contrato:** propuesta del módulo, **pendiente de firma cross-team con cada equipo Sinco**.
+**Última revisión:** 2026-05-16 (verificación contra `Maquinaria API v1` — ver §0)
+**Estado del contrato:** propuesta del módulo, **pendiente de firma cross-team con cada equipo Sinco**. Verificación parcial 2026-05-16 reveló gaps materiales — ver §0.
 
 > **Convención de naming "obra" vs "proyecto" (decisión 2026-04-30, followup #4 cerrado):** el módulo de Inspecciones usa internamente el término **`Proyecto`** en su modelo de dominio (`ProyectoId`, `ProyectoLocal`, etc.). El ERP Sinco mantiene **`Obra`** en sus URLs y DTOs (`/api/v1/catalogos/obras`, query param `?obra=`, claim `sinco_obras`). El **adapter del módulo traduce `Proyecto` ↔ `Obra`** al hablar con MYE. Este documento conserva los nombres del ERP (obra) tal como están porque define el contrato del lado ERP. Los nombres del módulo (proyecto) viven en `01-modelo-dominio.md`. Si en el futuro Sinco corporativo estandariza a "proyecto" en sus URLs/DTOs (pregunta abierta para David en doc 07), este documento se actualizará y el adapter eliminará la traducción.
+
+---
+
+## 0. ⚠️ Verificación contra `Maquinaria API v1` (2026-05-16)
+
+> **Origen:** el 2026-05-16 se inspeccionó el swagger en vivo de la API real publicada por David en `http://localhost:5289/api/v4/Maquinaria/swagger/v1/swagger.json` (title `Maquinaria API v1`, description "APIs de integración con el módulo SincoMyE del ERP SincoErp"). El análisis reveló que **el contrato propuesto en este documento (§1..§8) divergió de la implementación real** en aspectos materiales. Esta sección consolida los gaps, sin reescribir las secciones detalladas — esas siguen siendo "lo que el módulo necesita". Esta sección dice "lo que el ERP ofrece hoy".
+
+### 0.1 Inventario de lo que la API real expone (11 endpoints)
+
+| Método | Path real (`Maquinaria API v1`) | Notas |
+|---|---|---|
+| GET | `/api/equipos?filtro=` | Lista equipos visibles por obras del usuario, tope 5000, ETag diario, sentinel `-1` |
+| PUT | `/api/equipos/{codigo}/dictamen-vigente` | **Slice 11** del ERP. Acepta dictamen `0=opera, 1=restricción, 2=no opera`. Last-write-wins |
+| GET | `/api/partes-equipos?idEquipo=` | Lista partes filtradas, ETag diario, sentinel `-1` |
+| GET | `/api/causas-falla?texto=` | Catálogo global `EQV4.FallaCausa`, ETag diario |
+| GET | `/api/tipos-falla?texto=` | Catálogo global con `prioridad`, ETag diario |
+| GET | `/api/productos?texto=` | Catálogo `EQV4.Productos` con `unidadContable`, ETag diario |
+| GET | `/api/rutinas-monitoreo?equipoId=` | Rutinas activas asignadas al equipo (modelo **per-equipo server-side**). **Slice 10** del ERP |
+| GET | `/api/rutinas-monitoreo/items?equipoId=&rutinaId=` | Items de una rutina concreta para un equipo. Sin ETag. **Slice 12** del ERP |
+| POST | `/api/rutinas-monitoreo/migrar` | Bulk import desde Excel (admin). Soporta `Idempotency-Key` |
+| GET | `/api/preoperacional-fallas?desde=&hasta=&equipoId=&texto=` | Lista fallas preop visibles |
+| POST | `/api/preoperacional-fallas/cerrar` | Bulk close (`PODIds[]` + `observaciones`). **Slice 9** del ERP |
+
+**Total: 11 endpoints** vs **25 contratados** en §4. Cobertura ~44%, con divergencias semánticas adicionales.
+
+### 0.2 Mapping vs contrato §3
+
+| Endpoint contratado (§3) | Equivalente en API real | Veredicto |
+|---|---|---|
+| **M-1** `POST /mye/ot-correctivas` | ❌ **No existe** | 🔴 **Bloqueador crítico ADR-007/ADR-003.** Sin endpoint, las sagas de los slices 1k/1l (`GenerarOT`/`RechazarGenerarOT`) emiten `OTSolicitada_v1` sin destino real |
+| **M-1b** `POST /mye/ot-correctivas/{id}/adjuntos` | ❌ **No existe** | 🔴 Dependiente de M-1 — sin M-1 no aplica |
+| **M-2** `GET /mye/ot-correctivas?inspeccionId=` (fallback) | ❌ **No existe** | 🔴 Fallback inútil sin M-1 |
+| **M-W-1** `PUT /equipos/{equipoCodigo}/dictamen-vigente` | ✅ `PUT /api/equipos/{codigo}/dictamen-vigente` | 🟢 **Match exacto** — reclasificar de 🚧 a 🟢. Detalle de divergencia: el path real es `/api/...` (sin `/v1`); el `codigo` es `int32` no string (el contrato asumía string del catálogo MYE) |
+| **M-3** `GET /equipos?q=&page=&size=` (selector liviano paginado) | ⚠️ `GET /api/equipos?filtro=` (sin paginación, tope 5000) | 🟡 Trae todo bajo el tope; sin paginación REST estándar. Query param es `filtro`, no `q`. Sentinel `-1` para "trae todo" |
+| **M-3b** `GET /equipos/{equipoCodigo}` (detalle consolidado con `partes[]`, `rutinaTecnicaId`, `grupoMantenimientoId`) | ⚠️ Fragmentado: `GET /api/equipos` (lista solamente) + `GET /api/partes-equipos?idEquipo={n}` (separado) | 🟡 **El cliente debe componer 2-3 llamadas.** Y crítico: `EquipoDto` **no trae `rutinaTecnicaId`** — solo `rutinaMantenimientoId` (entidad distinta, ver §0.4 abajo). `grupoMantenimientoId` sí presente ✅ |
+| **M-10** `GET /catalogos/causas-falla` | ✅ `GET /api/causas-falla?texto=` | 🟢 Match. Path sin `/catalogos/` |
+| **M-11** `GET /catalogos/tipos-falla` | ✅ `GET /api/tipos-falla?texto=` | 🟢 Match. `TipoFallaDto` agrega campo `prioridad: string?` no anticipado |
+| **M-13** `GET /catalogos/obras` | ❌ **No existe** | 🔴 No hay endpoint de obras. Implicación: el sync de `ProyectoLocal` (§3.4 M-13) no puede ejecutarse. La visibilidad ya filtra server-side por obras del usuario en cada GET — quizá no se necesita el catálogo plano si las inspecciones derivan `ProyectoId` desde el equipo (FU a explorar). **Notar también:** este endpoint fue marcado como "candidato a eliminar del MVP" en commit `0ffaa8a` (docs M-13). |
+| **M-16** `GET /catalogos/rutinas-monitoreo` (catálogo global + cliente filtra por `grupoMantenimientoId`) | ⚠️ `GET /api/rutinas-monitoreo?equipoId=` + `GET /api/rutinas-monitoreo/items?equipoId=&rutinaId=` | 🟡 **Modelo arquitectural distinto.** Maquinaria expone "consulta per-equipo, server resuelve asignación"; el contrato (decisión 2026-05-05) asumía "catálogo global + filtro client-side por grupo". **No existe endpoint que devuelva el catálogo plano con `grupoMantenimientoId` por rutina.** La decisión 2026-05-05 de "asignación derivada por grupo client-side" **no es viable contra esta API tal cual está hoy**. Hay tres opciones: (a) pedir a David un endpoint catálogo plano, (b) cambiar el módulo para consultar online por equipo, (c) cliente itera `GET /rutinas-monitoreo?equipoId=` por cada equipo del usuario y compone catálogo local |
+| **M-17** `GET /catalogos/rutinas` (rutinas técnicas — crítico MVP) | ❌ **No existe** | 🔴 **Bloqueador.** El handler `IniciarInspeccion` (slice 1b) no puede resolver `Equipo.RutinaTecnicaId` contra una proyección local — porque ni el campo viene en `EquipoDto` ni hay catálogo de rutinas técnicas. Decisión 2026-05-04 ADR-004 sobre rutinas técnicas queda en el aire |
+| **M-8, M-9, M-12, M-14, M-15** | ❌ No existen (estaban ⏸ diferidos) | Esperado — diferidos a post-MVP |
+| **P-6** `POST /preop/novedades/descartar` (bulk-first 1..N) | ⚠️ `POST /api/preoperacional-fallas/cerrar` (`PODIds[]` bulk) | 🟡 **Granularidad desalineada.** El slice 1n `DescartarNovedadPreop` descarta una sola a la vez por aggregate; la API solo expone bulk. Saga puede invocar bulk de 1 (correcto pero subóptimo) o agrupar |
+| **P-1** `GET /preop/novedades?...` (lista para verificar/importar) | ⚠️ `GET /api/preoperacional-fallas?desde=&hasta=&equipoId=&texto=` | 🟡 Existe equivalente con filtros distintos. `PreoperacionalFallaDto` lleva `arbolDescripcion` + `actividadDescripcion` desnormalizadas pero **no `ActividadId`** — bloquea la correlación con catálogo de actividades. Solo queda `id: int` (PODId) para reabrir/correlacionar |
+| **P-2..P-5** (resto de preop) | ❌ No existen en el swagger Maquinaria | 🟠 **Posible que vivan en otra API.** Maquinaria expone solo *consulta y cierre bulk*. La creación de novedad preop (P-1 si es POST), update (P-2), upload de adjuntos (P-3), verificación inline (P-5) no aparecen. Confirmar con David si esos endpoints están en otra API o en otra ruta |
+| **I-1, I-2** (Inventario / SKUs) | ❌ No existen en el swagger Maquinaria | 🟠 Probablemente en una API separada del equipo de Inventario. `GET /api/productos` cubre el caso de productos pero no se documentó como SKU/insumo en el contrato |
+| **U-1, U-2** | N/A — eliminados 2026-05-05 | ✅ Identidad heredada del host PWA confirmada (la API filtra por `EQV4.UsuariosObra` del JWT) |
+
+### 0.3 Convenciones globales — divergencias
+
+| Convención §1 | Realidad `Maquinaria API v1` | Acción |
+|---|---|---|
+| §1.1 Prefix `/api/v1/...` obligatorio | Prefix real: `/api/...` (sin `/v1`). El swagger está en `/api/v4/Maquinaria/` pero los endpoints debajo de él son `/api/{recurso}` | Actualizar §1.1 o pedirle a David si va a versionar `/v1`. Hoy el adapter debe usar `/api/{recurso}` |
+| §1.3 Paginación con `page`/`size` + headers `X-Total-Count`/`Link` | ❌ No hay paginación. Sentinel `-1` para "trae todo", tope hardcoded 5000 | Cuando un cliente exceda 5000, no hay forma de paginar. Vincula con FU-9 (prefetch-by-proyecto). **Hablar con David sobre paginación real** antes del primer cliente con >5000 equipos |
+| §1.4 Idempotencia header `Idempotency-Key` | ✅ Maquinaria usa `Idempotency-Key` (POST migrar) | Match. **Pero**: ADR-008 del módulo usa `X-Client-Command-Id` en el cliente PWA. Decisión: el adapter HTTP traduce `X-Client-Command-Id` → `Idempotency-Key` al cruzar al ERP |
+| §1.5 Error envelope `{code, message, details, traceId}` | ⚠️ Real: `{codigo, mensaje}` (sin `details` ni `traceId`) | Adapter debe tolerar envelope minimal. Updateable en §1.5 o pedirle a David que extienda |
+| §1.6 Cache ETag | ✅ 5/11 endpoints (los catálogos) lo soportan con revalidación diaria | Match. Endpoints sin ETag: `PUT dictamen`, `POST cerrar`, `POST migrar`, `GET preoperacional-fallas`, `GET rutinas-monitoreo/items` — esperado (writes + endpoints "online puros") |
+| §1.7 IDs inmutables | Asumido pero no verificado contra esta API | Pendiente |
+
+### 0.4 Discrepancias semánticas críticas (más allá de paths)
+
+1. **`equipoCodigo` vs `equipoId`.** El contrato usa `<X>Codigo: string` para URLs y `<X>Id: int` para PKs (§1.7). `Maquinaria API v1` colapsa: `equipoId: int32` aparece tanto en queries como en path params (`PUT /api/equipos/{codigo}/dictamen-vigente` toma `codigo: int32`, no string). **La convención de §15.4 del modelo (`<X>Codigo: string`) no aplica a esta API.**
+2. **`EquipoDto` rico pero falta `rutinaTecnicaId`.** 17 campos incluyen placa, M1/M2 lecturas, sucursal, obraEquipo vs obraProyecto, `grupoMantenimientoId` ✅, `rutinaMantenimientoId`. **No hay `rutinaTecnicaId`**, y `rutinaMantenimientoId` NO es lo mismo que rutina técnica de inspección — riesgo de confusión semántica.
+3. **`ItemRutinaMonitoreoDto` sin discriminador `tipoEvaluacion`.** El modelo Inspecciones (§12.11.5) espera `EvaluacionEsperada ∈ {Medicion(min,max,UM), Cualitativa(calificaciones[])}`. El DTO real trae `ridValorMin/Max` (nullable), `ridUM`, `ridAplicaEstado: bool`, `riCodigoCalidad`. **El cliente debe inferir el tipo** del shape devuelto (¿`ridValorMin/Max` no nulos → Medicion?, ¿`ridAplicaEstado=true` → Cualitativa?). No es trivial.
+4. **`PreoperacionalFallaDto` sin `ActividadId`.** Solo trae `actividadDescripcion: string` desnormalizado. Para reabrir/correlacionar contra catálogo de actividades, hay que parsear strings o usar solo `id: int` (PODId).
+5. **`RutinaMonitoreoDto` mínimo** (solo `codigo: int32 + descripcion`) cuando el contrato esperaba items embebidos por rutina. Para obtener items hay que hacer una segunda llamada a `/api/rutinas-monitoreo/items?equipoId=&rutinaId=`.
+
+### 0.5 Hallazgo positivo
+
+`PUT /api/equipos/{codigo}/dictamen-vigente` (M-W-1 del contrato) **existe y funciona**. Esto desbloquea un slice de integración de bajo riesgo: **saga `PublicarDictamenAlERP` reactiva a `InspeccionFirmada_v1`**. Cierra el loop firma → ERP sin esperar a la saga OT. Es candidato natural al próximo slice del módulo, antes de seguir cerrando comandos del aggregate.
+
+### 0.6 Resumen de gaps por severidad
+
+| Severidad | Cuenta | Endpoints/conceptos |
+|---|---|---|
+| 🔴 Bloqueante | 4 | M-1 (OT), M-1b (adjuntos OT), M-2 (fallback OT), M-17 (rutinas técnicas) |
+| 🟠 Probable-vive-en-otra-API | 6 | P-2..P-5, I-1, I-2 |
+| 🟡 Existe con divergencia material | 6 | M-3, M-3b, M-16, P-1, P-6, M-13 |
+| 🟢 Match limpio | 4 | M-W-1, M-10, M-11, identidad heredada |
+| ✅ Diferidos correctamente | 7 | M-5..M-9, M-12, M-14, M-15 |
+
+### 0.7 Decisiones a destrabar con David (urgente — antes del próximo slice de integración)
+
+1. **¿Dónde se crean las OTs correctivas?** No están en `Maquinaria API v1`. ¿Otra API del MYE núcleo? ¿Está planeada? Sin esta respuesta, ADR-007 es ficción.
+2. **¿Cómo obtiene el módulo las rutinas técnicas asignadas al equipo?** `EquipoDto` no las trae y M-17 no existe. Sin endpoint, el flujo técnico (§12.11.1, slices 1a-1g en main) no puede arrancar rutina automáticamente.
+3. **¿Se puede agregar `rutinaTecnicaId` al `EquipoDto`, o exponer un detalle por equipo?** El `GET /api/equipos` actual lista; falta el detalle (M-3b).
+4. **Rutinas-monitoreo: ¿modelo per-equipo (Maquinaria) o catálogo plano (decisión Inspecciones 2026-05-05)?** Son dos arquitecturas client-side incompatibles. Si queda como Maquinaria, el sync on-app-open de `RutinaMonitoreoLocal` no aplica — pasa a ser online por equipo, y `ItemsSnapshot` se construye desde respuesta runtime.
+5. **¿P-2..P-5 (creación/update/adjuntos/verificación de novedad preop) viven en otra API o no existen?** Sin ellos, el flujo preop del módulo se queda en "consulta y cierre bulk".
+6. **¿I-1/I-2 (Inventario/SKUs) viven en otra API?** `GET /api/productos` cubre productos pero no se documentó como SKU/insumo del contrato.
+7. **¿Versionado `/v1` planeado o se queda `/api/{recurso}`?** Define qué prefix codifica el adapter.
+8. **¿Paginación REST estándar planeada antes de exceder 5000 equipos/registros?** Hoy hay tope hardcoded.
 
 ---
 
@@ -873,6 +963,10 @@ Este archivo unifica versiones contradictorias previas:
 | R-API-4 | Catálogos cambian IDs en Sinco rompiendo audit histórico | Reglas operativas vinculantes (ADR-004): IDs inmutables, descontinuar = `activo=false` |
 | R-API-5 | Latencia de I-1 (búsqueda de insumos) >500ms degrada UX del wizard | Catálogo local sincronizado on-app-open (ADR-004 canonical 2026-05-05) + búsqueda local; on-demand solo si miss |
 | ~~R-API-6~~ | ❌ Cerrado 2026-05-05 — U-1/U-2 eliminados del contrato. Identidad viene del host PWA, sin sync de usuarios | — |
+| R-API-7 | **Descubierto 2026-05-16:** los endpoints de OT correctiva (M-1/M-1b/M-2) no existen en `Maquinaria API v1`. Los slices 1k/1l cerrados en `main` emiten `OTSolicitada_v1` sin destino real. ADR-007 queda en el aire | Pregunta urgente a David — ¿OTs en otra API del MYE núcleo? ¿planeadas? Mientras tanto, las sagas `EjecutarOTSaga` no pueden codearse |
+| R-API-8 | **Descubierto 2026-05-16:** M-17 (rutinas técnicas) no existe; `EquipoDto` no trae `rutinaTecnicaId`. El handler `IniciarInspeccion` (slice 1b) no puede resolver la rutina contra proyección local | Pregunta urgente a David — exponer `rutinaTecnicaId` en `EquipoDto` o crear endpoint `GET /api/rutinas-tecnicas`. Mientras tanto, el módulo trabaja contra stub local |
+| R-API-9 | **Descubierto 2026-05-16:** M-16 expone modelo per-equipo (`/api/rutinas-monitoreo?equipoId=`), incompatible con decisión 2026-05-05 de filtrado client-side por `grupoMantenimientoId`. `RutinaMonitoreoDto` mínimo no incluye items embebidos | Decidir: (a) pedir endpoint catálogo plano, (b) cambiar módulo a consulta online por equipo, (c) iterar per-equipo y componer local. Bloquea el ADR-004 sync on-app-open de `RutinaMonitoreoLocal` |
+| R-API-10 | **Descubierto 2026-05-16:** convenciones globales del contrato divergen de la API real (prefix `/api/` sin `/v1`, sin paginación REST, error envelope minimal `{codigo, mensaje}`, header de idempotencia `Idempotency-Key` vs `X-Client-Command-Id` del ADR-008) | El adapter del módulo absorbe las diferencias (traduce header, tolera envelope minimal, hardcodea prefix). Documentar en `Inspecciones.Erp.Clientes` cuando se cree |
 
 ---
 
@@ -893,6 +987,7 @@ Este archivo unifica versiones contradictorias previas:
 | 2026-05-05 | U-1, U-2 eliminados (sección 3.6 marcada NO APLICA). Equipo Seguridad/IT sale del cross-team. Total: 27 → 25 endpoints; condicionales: 3 → 1. R-API-6 cerrado | Decisión Jaime 2026-05-05: el módulo no maneja identidad — toda la auth/identidad viene del host PWA. Sin sync de usuarios, sin catálogo local, sin app registration propio |
 | 2026-05-05 | ADR-004 sync on-app-open canonical (sin cron nocturno). Catálogos M-10/M-11/M-13/M-16/M-17/I-2 cambian "Diario nocturno" → "On-app-open" en sus notas | Decisión Jaime 2026-05-05: el cliente PWA dispara sync delta cada apertura con `If-None-Match`. Persistencia IndexedDB. Sin scheduler en backend. Sin red al abrir → último cached (modo degradado). Botón admin "refrescar ahora" promovido a v1.0 |
 | 2026-05-04 | M-17 (catálogo `/catalogos/rutinas`) creado como crítico MVP. Cierra gap detectado en revisión por flujos: el modelo asumía sync que el contrato no tenía | Hallazgo 1 de la revisión por flujos del 2026-05-04 |
+| 2026-05-16 | **Sección §0 agregada — verificación contra `Maquinaria API v1`.** Mapping completo de 11 endpoints reales vs 25 contratados. Reclasificaciones: M-W-1 🚧→🟢 (existe), M-13 🚧→❌ (no existe). Cinco riesgos nuevos R-API-7..10. Ocho preguntas urgentes a David. Cobertura real ~44% del contrato | Inspección del swagger en vivo `http://localhost:5289/api/v4/Maquinaria/swagger/v1/swagger.json` el 2026-05-16. Detectó 4 bloqueadores (M-1/M-1b/M-2/M-17), 6 endpoints "probablemente en otra API" (P-2..P-5, I-1, I-2), 6 endpoints con divergencias materiales y 4 matches limpios |
 
 ---
 
@@ -917,6 +1012,18 @@ Lista de cosas que faltan acordar con cada equipo Sinco antes de implementar:
 - [x] ~~**Seguridad/IT**: confirmar si U-1/U-2 son necesarios o el host PWA ya propaga lo requerido.~~ **Cerrado 2026-05-05** — decisión Jaime: identidad 100% del host PWA, sin U-1/U-2.
 - [ ] **Todos**: convenciones de paginación y error envelope unificadas (§1.3, §1.5).
 - [ ] **Todos**: shape del `Authorization` header y formato del JWT (cierre ADR-002).
+
+### Nuevos pendientes — verificación 2026-05-16 (ver §0.7)
+
+- [ ] **David / MYE — bloqueante:** ¿dónde se crean las OTs correctivas? `Maquinaria API v1` no las expone (M-1/M-1b/M-2 ausentes). ¿Otra API? ¿Planeada? Sin respuesta, ADR-007 y los slices 1k/1l quedan sin destino real (R-API-7).
+- [ ] **David / MYE — bloqueante:** ¿cómo obtiene el módulo la rutina técnica asignada a un equipo? `EquipoDto` no trae `rutinaTecnicaId` y M-17 (catálogo rutinas técnicas) no existe. Opciones: (a) agregar `rutinaTecnicaId` al `EquipoDto`, (b) crear `GET /api/rutinas-tecnicas`, (c) exponer endpoint detalle `GET /api/equipos/{id}` (R-API-8).
+- [ ] **David / MYE — bloqueante:** modelo de rutinas-monitoreo. Maquinaria expone `/api/rutinas-monitoreo?equipoId=` (per-equipo server-side) + `/items?equipoId=&rutinaId=`. El contrato (decisión 2026-05-05) asume catálogo plano + filtro client-side por `grupoMantenimientoId`. **Son incompatibles.** Decidir cuál arquitectura queda (R-API-9).
+- [ ] **David / MYE:** ¿se versionará `/v1` o se queda `/api/{recurso}` sin versión? `Maquinaria API v1` hoy expone sin `/v1`.
+- [ ] **David / MYE:** ¿paginación REST estándar planeada antes de exceder 5000 registros/equipos/catálogos? Hoy hay tope hardcoded + sentinel `-1`.
+- [ ] **David / MYE:** confirmar que el error envelope evolucionará a `{code, message, details, traceId}` (§1.5) o se queda en el `{codigo, mensaje}` actual. El adapter del módulo necesita saber qué tolerar.
+- [ ] **David / Preop:** ¿P-2..P-5 (creación/update/adjuntos/verificación de novedad preop) viven en otra API o no existen? `Maquinaria API v1` solo expone *consulta y cierre bulk* de fallas preop.
+- [ ] **David / Inventario:** ¿I-1/I-2 (búsqueda de insumos/SKUs) viven en otra API? `GET /api/productos` cubre productos pero no se documentó como SKU/insumo del contrato.
+- [ ] **Módulo:** reclasificar inline los estados de los endpoints en §3.2/§3.3/§3.4 según hallazgos §0 (M-W-1 🚧→🟢, M-13 🚧→❌, etc.). Pendiente de un slice de cleanup del contrato cuando se confirmen las preguntas a David — antes de eso, mantener doble fuente (§3 = lo contratado, §0 = lo real).
 
 ---
 
