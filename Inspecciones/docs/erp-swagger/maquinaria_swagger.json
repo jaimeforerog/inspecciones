@@ -1,0 +1,1199 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Maquinaria API",
+    "description": "APIs de integración con el módulo SincoMyE del ERP SincoErp.",
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "/api/v4/Maquinaria",
+      "description": "Ruta base del servicio Maquinaria"
+    }
+  ],
+  "paths": {
+    "/api/causas-falla": {
+      "get": {
+        "tags": [
+          "CausasFalla"
+        ],
+        "summary": "Lista causas de falla del catálogo global",
+        "description": "Devuelve las causas de falla del catálogo global EQV4.FallaCausa. Filtro por texto en descripción. Sentinel '-1' trae todo el catálogo. Tope de 5000 causas por respuesta. Revalidación de caché via ETag diario.",
+        "operationId": "ListarCausasFalla",
+        "parameters": [
+          {
+            "name": "texto",
+            "in": "query",
+            "description": "Texto de búsqueda obligatorio. Usá '-1' para traer todo el catálogo.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.CausasFalla.Listar.ListarCausasFallaResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          }
+        }
+      }
+    },
+    "/api/equipos": {
+      "get": {
+        "tags": [
+          "Equipos"
+        ],
+        "summary": "Lista equipos del usuario",
+        "description": "Devuelve los equipos visibles para el usuario según sus obras asignadas en EQV4.UsuariosObra. Soporta filtro de búsqueda por descripción, placa o ID. Tope de 5000 equipos por respuesta. Revalidación de caché via ETag diario.",
+        "operationId": "ListarEquipos",
+        "parameters": [
+          {
+            "name": "filtro",
+            "in": "query",
+            "description": "Filtro de búsqueda (opcional). Vacío o -1 devuelve todos. Máximo 100 caracteres.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.Equipos.Listar.ListarEquiposResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          }
+        }
+      }
+    },
+    "/api/equipos/{codigo}/dictamen-vigente": {
+      "put": {
+        "tags": [
+          "Equipos"
+        ],
+        "summary": "Actualiza el dictamen vigente de un equipo",
+        "description": "Actualiza el dictamen operativo de un equipo (0=puede operar, 1=con restricción, 2=no puede operar). Idempotencia last-write-wins. Slice 11.",
+        "operationId": "ActualizarDictamenEquipo",
+        "parameters": [
+          {
+            "name": "codigo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.Equipos.ActualizarDictamen.ActualizarDictamenEquipoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/partes-equipos": {
+      "get": {
+        "tags": [
+          "PartesEquipos"
+        ],
+        "summary": "Lista partes de equipos del usuario",
+        "description": "Devuelve las partes visibles para el usuario según sus obras asignadas en EQV4.UsuariosObra. Soporta filtro por EquipoId (-1 para todas las partes). Tope de 5000 partes por respuesta. Revalidación de caché via ETag diario.",
+        "operationId": "ListarPartesEquipos",
+        "parameters": [
+          {
+            "name": "idEquipo",
+            "in": "query",
+            "description": "ID del equipo (-1 para todas las partes visibles, o entero positivo para filtrar por equipo). Obligatorio.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.PartesEquipos.Listar.ListarPartesEquiposResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          }
+        }
+      }
+    },
+    "/api/preoperacional-fallas": {
+      "get": {
+        "tags": [
+          "PreoperacionalFallas"
+        ],
+        "summary": "Lista fallas preoperacionales visibles para el usuario",
+        "description": "Devuelve las fallas preoperacionales de EQV4.PreoperacionalFallas, filtradas por rango de fechas, equipo y texto. Visibilidad limitada a obras del usuario. Sin caché HTTP (ETag no emitido).",
+        "operationId": "ListarPreoperacionalFallas",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "equipoId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "texto",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.PreoperacionalFallas.Listar.ListarPreoperacionalFallasResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preoperacional-fallas/cerrar": {
+      "post": {
+        "tags": [
+          "PreoperacionalFallas"
+        ],
+        "summary": "Cierra (bulk) fallas preoperacionales abiertas",
+        "description": "Recibe una lista de PODIds y un texto de observaciones; cierra (transición abierta→cerrada) las fallas visibles para el usuario actual. Idempotencia natural (no Idempotency-Key). Slice 9.",
+        "operationId": "CerrarPreoperacionalFallas",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.CerrarPreoperacionalFallasCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.CerrarPreoperacionalFallasResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.ValidationErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/productos": {
+      "get": {
+        "tags": [
+          "Productos"
+        ],
+        "summary": "Lista productos del catálogo global",
+        "description": "Devuelve los productos del catálogo global EQV4.Productos. Filtro por texto en ProCod (cast a string) o ProDesc. Sentinel '-1' trae todo el catálogo. Tope de 5000 productos por respuesta. Revalidación de caché via ETag diario.",
+        "operationId": "ListarProductos",
+        "parameters": [
+          {
+            "name": "texto",
+            "in": "query",
+            "description": "Texto de búsqueda obligatorio. Usá '-1' para traer todo el catálogo.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.Productos.Listar.ListarProductosResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          }
+        }
+      }
+    },
+    "/api/rutinas-monitoreo/migrar": {
+      "post": {
+        "tags": [
+          "RutinasMonitoreo"
+        ],
+        "summary": "Migra rutinas de monitoreo desde Excel",
+        "description": "Recibe un archivo .xlsx con la hoja 'Inspeccion Rutina de monitoreo' y persiste las rutinas e inspecciones en EQV4. La autorización la gestiona el host SincoMyE upstream. Soporta idempotencia via header Idempotency-Key.",
+        "operationId": "MigrarRutinaMonitoreo",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.Migrar.MigrarRutinasMonitoreoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.Migrar.ValidationErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rutinas-monitoreo": {
+      "get": {
+        "tags": [
+          "RutinasMonitoreo"
+        ],
+        "summary": "Lista rutinas de monitoreo asignadas a un equipo",
+        "description": "Devuelve las rutinas de monitoreo activas asignadas al equipo indicado vía EQV4.RutinasMonitoreoEquipos, filtradas por visibilidad de obras del usuario. Slice 10.",
+        "operationId": "ListarRutinasMonitoreoPorEquipo",
+        "parameters": [
+          {
+            "name": "equipoId",
+            "in": "query",
+            "description": "ID del equipo cuyas rutinas se quieren listar (entero positivo, obligatorio).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.ListarPorEquipo.ListarRutinasMonitoreoPorEquipoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          }
+        }
+      }
+    },
+    "/api/rutinas-monitoreo/items": {
+      "get": {
+        "tags": [
+          "RutinasMonitoreo"
+        ],
+        "summary": "Lista items de una rutina de monitoreo para un equipo",
+        "description": "Devuelve los items / checks de una rutina concreta asignada a un equipo. Ambos parámetros son obligatorios. Sin ETag — endpoint puramente online. Slice 12.",
+        "operationId": "ListarItemsRutinaMonitoreo",
+        "parameters": [
+          {
+            "name": "equipoId",
+            "in": "query",
+            "description": "ID del equipo (entero positivo, obligatorio).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rutinaId",
+            "in": "query",
+            "description": "ID de la rutina de monitoreo (entero positivo, obligatorio).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.ListarItems.ListarItemsRutinaMonitoreoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tipos-falla": {
+      "get": {
+        "tags": [
+          "TiposFalla"
+        ],
+        "summary": "Lista tipos de falla del catálogo global",
+        "description": "Devuelve los tipos de falla del catálogo global EQV4.TipoFalla. Filtro por texto en descripción. Sentinel '-1' trae todo el catálogo. Tope de 5000 tipos por respuesta. Revalidación de caché via ETag diario.",
+        "operationId": "ListarTiposFalla",
+        "parameters": [
+          {
+            "name": "texto",
+            "in": "query",
+            "description": "Texto de búsqueda obligatorio. Usá '-1' para traer todo el catálogo.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.TiposFalla.Listar.ListarTiposFallaResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Maquinaria.Core.Application.ErrorResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Maquinaria.Core.Application.CausasFalla.Listar.CausaFallaDto": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.CausasFalla.Listar.ListarCausasFallaResponse": {
+        "type": "object",
+        "properties": {
+          "causas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.CausasFalla.Listar.CausaFallaDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.Equipos.ActualizarDictamen.ActualizarDictamenEquipoResponse": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estado": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estadoUsuario": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estadoFecha": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.Equipos.Listar.EquipoDto": {
+        "type": "object",
+        "properties": {
+          "equipoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "placa": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "ubicacionId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "grupoMantenimientoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "grupoMantenimientoDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "obraEquipo": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "sucursalEquipo": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "sucursalProyecto": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "obraProyecto": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ubicacionDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "uM1": {
+            "type": "string",
+            "nullable": true
+          },
+          "m1Actual": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "uM2": {
+            "type": "string",
+            "nullable": true
+          },
+          "m2Actual": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "rutinaMantenimientoId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "rutinaMantenimientoDescripcion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.Equipos.Listar.ListarEquiposResponse": {
+        "type": "object",
+        "properties": {
+          "equipos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.Equipos.Listar.EquipoDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "nullable": true
+          },
+          "mensaje": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PartesEquipos.Listar.ListarPartesEquiposResponse": {
+        "type": "object",
+        "properties": {
+          "partes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.PartesEquipos.Listar.ParteEquipoDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PartesEquipos.Listar.ParteEquipoDto": {
+        "type": "object",
+        "properties": {
+          "parteId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "parteDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "rutinaMantenimientoDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "equipoId": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.CerrarPreoperacionalFallasCommand": {
+        "type": "object",
+        "properties": {
+          "podIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "observaciones": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.CerrarPreoperacionalFallasResponse": {
+        "type": "object",
+        "properties": {
+          "cerradasAhora": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "yaCerradas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "podIdsCerradosAhora": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.ValidationErrorDto": {
+        "type": "object",
+        "properties": {
+          "podId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "codigo": {
+            "type": "string",
+            "nullable": true
+          },
+          "mensaje": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "mensaje": {
+            "type": "string",
+            "nullable": true
+          },
+          "errores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.PreoperacionalFallas.Cerrar.ValidationErrorDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PreoperacionalFallas.Listar.ListarPreoperacionalFallasResponse": {
+        "type": "object",
+        "properties": {
+          "fallas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.PreoperacionalFallas.Listar.PreoperacionalFallaDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.PreoperacionalFallas.Listar.PreoperacionalFallaDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "registroPreoperacionalId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "equipoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "actividadId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "arbolDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "actividadDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "observacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.Productos.Listar.ListarProductosResponse": {
+        "type": "object",
+        "properties": {
+          "productos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.Productos.Listar.ProductoDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.Productos.Listar.ProductoDto": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "unidadContable": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.ListarItems.ItemRutinaMonitoreoDto": {
+        "type": "object",
+        "properties": {
+          "ridId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "riId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "riDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "riRutinaMantenimientoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "riEstado": {
+            "type": "boolean"
+          },
+          "riCodigoCalidad": {
+            "type": "string",
+            "nullable": true
+          },
+          "rideParteId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "arbolPRutina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ridDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "ridUM": {
+            "type": "string",
+            "nullable": true
+          },
+          "ridValorMax": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "ridValorMin": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "ridAplicaEstado": {
+            "type": "boolean"
+          },
+          "reEquipoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reRutinaMonitoreoId": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.ListarItems.ListarItemsRutinaMonitoreoResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.ListarItems.ItemRutinaMonitoreoDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.ListarPorEquipo.ListarRutinasMonitoreoPorEquipoResponse": {
+        "type": "object",
+        "properties": {
+          "rutinas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.ListarPorEquipo.RutinaMonitoreoDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.ListarPorEquipo.RutinaMonitoreoDto": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.Migrar.MigrarRutinasMonitoreoResponse": {
+        "type": "object",
+        "properties": {
+          "rutinasCreadas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "detallesCreados": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rutinas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.Migrar.RutinaMonitoreoCreadaDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.Migrar.RutinaMonitoreoCreadaDto": {
+        "type": "object",
+        "properties": {
+          "riId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigoCalidad": {
+            "type": "string",
+            "nullable": true
+          },
+          "grupoMantenimientoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rutinaMantenimientoId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "detalleIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.Migrar.ValidationErrorDto": {
+        "type": "object",
+        "properties": {
+          "numeroFilaExcel": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "campo": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigo": {
+            "type": "string",
+            "nullable": true
+          },
+          "mensaje": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.RutinasMonitoreo.Migrar.ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "mensaje": {
+            "type": "string",
+            "nullable": true
+          },
+          "errores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.RutinasMonitoreo.Migrar.ValidationErrorDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.TiposFalla.Listar.ListarTiposFallaResponse": {
+        "type": "object",
+        "properties": {
+          "tiposFalla": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Maquinaria.Core.Application.TiposFalla.Listar.TipoFallaDto"
+            },
+            "nullable": true
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Maquinaria.Core.Application.TiposFalla.Listar.TipoFallaDto": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "prioridad": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "Por favor ingrese el token JWT con el prefijo 'Bearer '",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": [ ]
+    }
+  ]
+}
