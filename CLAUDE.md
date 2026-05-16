@@ -4,12 +4,37 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 
 ## Estado del proyecto
 
-- **Fase actual:** Fase 1 (slice 1a-1f cerrados). API HTTP funcional para `IniciarInspeccion`, `RegistrarHallazgo`, `ActualizarHallazgo`, `AsignarRepuesto`, `EliminarHallazgo`.
-- **Próximo trabajo:** continuar con la rama de firma/dictamen + sagas OT, o avanzar a inspección de monitoreo (comando hermano `IniciarInspeccionMonitoreo`).
+- **Fase actual:** Fase 1 en curso. **15 slices cerrados** en `main` (1a-1o) + 4 fixes de followups (FU-32/36/37/38). HEAD: `36062e0 feat(slice-1o): ActualizarRepuesto` (2026-05-11).
+- **Slices cerrados (1a..1o):**
+  - **Lifecycle inspección técnica:** `1a` aggregate, `1b` handler+projection, `1g` `FirmarInspeccion` (3 eventos atómicos: `DiagnosticoEmitido_v1` → `DictamenEstablecido_v1` → `InspeccionFirmada_v1`), `1m` `CancelarInspeccion`.
+  - **Hallazgos:** `1c` Registrar, `1d` Actualizar, `1e` Eliminar.
+  - **Repuestos (mutación del VO):** `1f` `RepuestoEstimado_v1`, `1o` `ActualizarRepuesto`. Falta `RemoverRepuesto` para cerrar la tripleta.
+  - **Monitoreo (aggregate unificado `Inspeccion` con `Tipo: TipoInspeccion`):** `1h` `IniciarInspeccionMonitoreo`, `1i` `RegistrarMedicion` + `RegistrarEvaluacionCualitativa`, `1j` `OmitirItemMonitoreo`.
+  - **Saga OT (capability gate manual ADR-007):** `1k` `GenerarOT` (camino feliz → `OTSolicitada_v1`), `1l` `RechazarGenerarOT` (`GeneracionOTRechazada_v1` + `InspeccionCerradaSinOT_v1`).
+  - **Preop:** `1n` `DescartarNovedadPreop` (flujo "descarte rápido inline" — sin hallazgo, motivo autogenerado server-side).
+- **Próximo trabajo:** decidir slice siguiente con Jaime. Candidatos naturales:
+  - `RemoverRepuesto` (cierra tripleta del VO `Repuesto`, par natural con 1f/1o).
+  - Saga real de `OTSolicitada_v1` → `POST` al MYE on-prem (M-1) — primer adapter ERP, primer test contra WireMock/SQL Server.
+  - `ConvertirNovedadPreopEnHallazgo` (camino largo de §15.9 que complementa 1n).
+  - Adjuntos: anclaje xor `HallazgoId`/`ItemId` (§12.11.5 punto 12).
+
+### 🟡 Salud del repo (revisión 2026-05-11)
+
+Estado factual al cierre del slice 1o (verificado local sin Docker):
+
+- **Build:** limpio en los 8 proyectos. `TreatWarningsAsErrors=true` vigente.
+- **Tests dominio:** `Domain.Tests` 246/265 pass + 19 skip esperados. Cobertura ramas aggregate `Inspeccion`: 94.44% (regla CLAUDE.md ≥ 85%).
+- **Tests API HTTP:** `Api.Tests` 57/63 pass + 6 skip — los 6 skip son tests de header `X-Client-Command-Id` (ADR-008) que requieren `POSTGRES_TEST_CONNSTRING` exportada. `fix-FU-32` destrabó la suite (estaba en 0/32 desde el merge del slice 1g) ajustando lifecycle `TestServer`/Oakton + switch local Postgres en `InspeccionesAppFactory` + paralelismo xUnit forzado a 1.
+- **Tests Application:** `Application.Tests` requiere Docker (Testcontainers). `FU-39` abierto para replicar el switch de Postgres local que ya tiene `Api.Tests`.
+- **Bugs preexistentes detectados durante 1g..1l y cerrados:** `FU-36` (`RegistrarHallazgo` retornaba 400 — faltaba `JsonStringEnumConverter` en Minimal APIs), `FU-37` (`GenerarOT`/`RechazarGenerarOT` usaban `DateTime.UtcNow` violando regla CLAUDE.md — reemplazados por `FakeTimeProvider` en factory), `FU-38` (`Results.Forbid` devolvía 500 en vez de 403 — reemplazado por helper `Forbidden403`).
+- **Followups vivos relevantes:** `FU-39`/`FU-43` (colisión de `EquipoIds` hardcoded entre slices en tests de integración — bandera que tarde o temprano va a romper la suite cuando se acaben los rangos disponibles), `FU-13` (migrar `InspeccionAbiertaPorEquipoView` a `MultiStreamProjection` puro — bloqueado en decisión de añadir `EquipoId` a `InspeccionFirmada_v1`/`InspeccionCancelada_v1`), `FU-14` (claims reales del JWT del host pendiente de ADR-002), `FU-22` (confirmar con David que M-16 expone `Activo`/`Orden`/`ParteEquipoId`).
+- **DevEx local:** `docker compose up -d` falla silenciosamente cuando hay un PostgreSQL nativo en el puerto 5432 (caso real de la máquina del PO — dos instalaciones nativas, 5432 y 5433). Para arrancar portable: container en puerto alto (p. ej. 55432) y env var `ConnectionStrings__Postgres` override.
+
+**Implicación metodológica:** la safety-net de integración existe y está en verde para `Api.Tests`. Antes de abrir slices grandes (sagas reales contra ERP), tratar `FU-39` para que `Application.Tests` también corra sin Docker — sin eso, cualquier handler nuevo con dependencia Marten queda con cobertura de integración huérfana.
 
 ### Embargo de docs — LEVANTADO 2026-05-07
 
-**Estado:** **levantado** por Jaime el 2026-05-07 (disparador implícito ya cumplido — 6 slices cerrados: 1a, 1b, 1c, 1d, 1e, 1f).
+**Estado:** **levantado** por Jaime el 2026-05-07 (disparador implícito ya cumplido — 6 slices cerrados al momento de la decisión: 1a..1f; hoy son 15).
 
 **Histórico (vigente entre 2026-05-05 y 2026-05-07):** se prohibieron edits no-triviales a `Inspecciones/docs/*` para evitar amplificar el costo de cambios mientras los slices iniciales evidenciaban qué partes del modelo/ADRs eran load-bearing. Razón documentada en commit `30a0e71 docs(metodología): embargo de docs hasta cerrar 4 slices`.
 
