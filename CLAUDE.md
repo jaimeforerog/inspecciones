@@ -4,33 +4,48 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 
 ## Estado del proyecto
 
-- **Fase actual:** Fase 1 en curso. **15 slices cerrados** en `main` (1a-1o) + 4 fixes de followups (FU-32/36/37/38). HEAD: `36062e0 feat(slice-1o): ActualizarRepuesto` (2026-05-11).
-- **Slices cerrados (1a..1o):**
+- **Última actualización:** 2026-05-19
+- **Fase actual:** Fase 1 ampliamente avanzada. **15 slices cerrados** del aggregate `Inspeccion` (1a..1o) + 4 fixes de followups (FU-32/36/37/38), más **sub-track de acople ERP a Maquinaria_V4 cerrado** (slices `erp-1..erp-4`). HEAD del sub-track aggregate: `36062e0 feat(slice-1o): ActualizarRepuesto` (2026-05-11). HEAD del sub-track ERP: ver §"Acople ERP Maquinaria_V4" abajo.
+- **Slices cerrados del aggregate (1a..1o):**
   - **Lifecycle inspección técnica:** `1a` aggregate, `1b` handler+projection, `1g` `FirmarInspeccion` (3 eventos atómicos: `DiagnosticoEmitido_v1` → `DictamenEstablecido_v1` → `InspeccionFirmada_v1`), `1m` `CancelarInspeccion`.
   - **Hallazgos:** `1c` Registrar, `1d` Actualizar, `1e` Eliminar.
   - **Repuestos (mutación del VO):** `1f` `RepuestoEstimado_v1`, `1o` `ActualizarRepuesto`. Falta `RemoverRepuesto` para cerrar la tripleta.
   - **Monitoreo (aggregate unificado `Inspeccion` con `Tipo: TipoInspeccion`):** `1h` `IniciarInspeccionMonitoreo`, `1i` `RegistrarMedicion` + `RegistrarEvaluacionCualitativa`, `1j` `OmitirItemMonitoreo`.
   - **Saga OT (capability gate manual ADR-007):** `1k` `GenerarOT` (camino feliz → `OTSolicitada_v1`), `1l` `RechazarGenerarOT` (`GeneracionOTRechazada_v1` + `InspeccionCerradaSinOT_v1`).
   - **Preop:** `1n` `DescartarNovedadPreop` (flujo "descarte rápido inline" — sin hallazgo, motivo autogenerado server-side).
-- **Próximo trabajo:** decidir slice siguiente con Jaime. Candidatos naturales:
+- **API HTTP funcional para:** `IniciarInspeccion`, `RegistrarHallazgo`, `ActualizarHallazgo`, `EliminarHallazgo`, `AsignarRepuesto`, `ActualizarRepuesto`, `FirmarInspeccion`, `IniciarInspeccionMonitoreo`, `RegistrarMedicion`, `RegistrarEvaluacionCualitativa`, `OmitirItemMonitoreo`, `GenerarOT`, `RechazarGenerarOT`, `CancelarInspeccion`, `DescartarNovedadPreop`. Sync de 3 catálogos vía `POST /api/v1/catalogos/sync` (ETag + `If-None-Match`).
+- **Próximo trabajo:** adjuntos (3.11 — pattern SAS upload), sagas `CerrarInspeccionSaga` / `EjecutarOTSaga` (3.24..3.27), aggregate `SeguimientoHallazgo` (3.C), y candidatos del aggregate `Inspeccion` aún abiertos:
   - `RemoverRepuesto` (cierra tripleta del VO `Repuesto`, par natural con 1f/1o).
-  - Saga real de `OTSolicitada_v1` → `POST` al MYE on-prem (M-1) — primer adapter ERP, primer test contra WireMock/SQL Server.
+  - Saga real de `OTSolicitada_v1` → `POST` al MYE on-prem (M-1) — **bloqueada por DDL DBA del slice 8 de Maquinaria_V4**.
   - `ConvertirNovedadPreopEnHallazgo` (camino largo de §15.9 que complementa 1n).
   - Adjuntos: anclaje xor `HallazgoId`/`ItemId` (§12.11.5 punto 12).
 
-### 🟡 Salud del repo (revisión 2026-05-11)
+### Acople ERP Maquinaria_V4 (sub-track 2026-05-19)
 
-Estado factual al cierre del slice 1o (verificado local sin Docker):
+Cerrado en 4 slices contra el microservicio hermano `Maquinaria_V4`:
+
+- **slice-erp-1** (commit `4c2ef4e`): adapter HTTP tipado `IMaquinariaErpClient` en `src/Inspecciones.Infrastructure/Erp/` con 11 DTOs espejo, soporte `If-None-Match`/`ETag`/`304`, 11 endpoints admin en `CatalogosEndpoints.cs`, 14 tests WireMock.
+- **slice-erp-2** (commit `63082fa`): listener Wolverine `DescartarNovedadPreopErpListener` reactivo a `NovedadPreopDescartada_v1` → `POST /api/preoperacional-fallas/cerrar` (P-6). Idempotencia natural por `PodId` (`200 yaCerradas` / `409 YA_CERRADO` = éxito silencioso). Política ADR-006: 5xx con retry 5s→30s→2m→10m, 4xx + `ArgumentException` → dead-letter inmediato. 11 tests.
+- **slice-erp-3** (commit `28de25b`): listener `SincronizarDictamenVigenteListener` reactivo a `InspeccionFirmada_v1` → `PUT /equipos/{id}/dictamen-vigente` (M-W-1). Mapeo `PuedeOperar→0`, `ConRestriccion→1`, `NoPuedeOperar→2`. Nuevo puerto `IInspeccionReader` + `MartenInspeccionReader` (`AggregateStreamAsync`). 11 tests con `FakeInspeccionReader`.
+- **slice-erp-4** (commit `fb44741`): endpoint `POST /api/v1/catalogos/sync` (ADR-004 canonical, sin cron). Wipe-and-replace de 3 catálogos globales puros: `causas-falla`, `tipos-falla`, `productos`. ETag por catálogo en document Marten `CatalogoSyncState`. `If-None-Match` → cache local intacto si `304`. Body vacío → `"vaciado-sospechoso"`, cache intacto. Partial-failure por catálogo. Atomicidad cross-catálogo via `LightweightSession` propia por catálogo (`MartenCatalogoSyncRepository` recibe `IDocumentStore`, no `IDocumentSession`). 23 tests con `FakeCatalogoSyncRepository`. Records dominio nuevos: `CausaFallaCatalogo`, `TipoFallaCatalogo` (§12.9.6 del modelo).
+- **docs `8c3cb62`**: `Inspecciones/docs/06-contrato-apis-erp.md §0.B` espeja la reconciliación bilateral 2026-05-13 — mapa de estado real de los 21 endpoints contra Maquinaria_V4 (9 acoplables, 8 NO-aplica, 3 descartados bilateral, 1 bloqueante real M-1, 1 sintetizado M-17). Complementa la §0.A (verificación swagger 2026-05-16).
+
+Suite tests final: `Inspecciones.Infrastructure.Tests` 59/59 verde (14 adapter + 11 erp-2 + 11 erp-3 + 23 erp-4). `Inspecciones.Domain.Tests` 246/0/19 skip (sin regresión). `Inspecciones.Application.Tests` fallos por Docker no corriendo (FU-47 preexistente, no regresión).
+
+### 🟡 Salud del repo (revisión 2026-05-11, vigente al 2026-05-19)
+
+Estado factual al cierre del slice 1o (verificado local sin Docker), aún vigente tras los slices erp-1..erp-4:
 
 - **Build:** limpio en los 8 proyectos. `TreatWarningsAsErrors=true` vigente.
 - **Tests dominio:** `Domain.Tests` 246/265 pass + 19 skip esperados. Cobertura ramas aggregate `Inspeccion`: 94.44% (regla CLAUDE.md ≥ 85%).
 - **Tests API HTTP:** `Api.Tests` 57/63 pass + 6 skip — los 6 skip son tests de header `X-Client-Command-Id` (ADR-008) que requieren `POSTGRES_TEST_CONNSTRING` exportada. `fix-FU-32` destrabó la suite (estaba en 0/32 desde el merge del slice 1g) ajustando lifecycle `TestServer`/Oakton + switch local Postgres en `InspeccionesAppFactory` + paralelismo xUnit forzado a 1.
 - **Tests Application:** `Application.Tests` requiere Docker (Testcontainers). `FU-39` abierto para replicar el switch de Postgres local que ya tiene `Api.Tests`.
+- **Tests Infrastructure:** `Infrastructure.Tests` 59/59 verde (slices erp-1..erp-4). Patrón "puerto + fake" (`IInspeccionReader` + `FakeInspeccionReader`; `ICatalogoSyncRepository` + `FakeCatalogoSyncRepository`) usado para evitar Testcontainers en este proyecto.
 - **Bugs preexistentes detectados durante 1g..1l y cerrados:** `FU-36` (`RegistrarHallazgo` retornaba 400 — faltaba `JsonStringEnumConverter` en Minimal APIs), `FU-37` (`GenerarOT`/`RechazarGenerarOT` usaban `DateTime.UtcNow` violando regla CLAUDE.md — reemplazados por `FakeTimeProvider` en factory), `FU-38` (`Results.Forbid` devolvía 500 en vez de 403 — reemplazado por helper `Forbidden403`).
-- **Followups vivos relevantes:** `FU-39`/`FU-43` (colisión de `EquipoIds` hardcoded entre slices en tests de integración — bandera que tarde o temprano va a romper la suite cuando se acaben los rangos disponibles), `FU-13` (migrar `InspeccionAbiertaPorEquipoView` a `MultiStreamProjection` puro — bloqueado en decisión de añadir `EquipoId` a `InspeccionFirmada_v1`/`InspeccionCancelada_v1`), `FU-14` (claims reales del JWT del host pendiente de ADR-002), `FU-22` (confirmar con David que M-16 expone `Activo`/`Orden`/`ParteEquipoId`).
+- **Followups vivos relevantes:** `FU-39`/`FU-43` (colisión de `EquipoIds` hardcoded entre slices en tests de integración), `FU-13` (migrar `InspeccionAbiertaPorEquipoView` a `MultiStreamProjection` puro — bloqueado en decisión de añadir `EquipoId` a `InspeccionFirmada_v1`/`InspeccionCancelada_v1`), `FU-14` (claims reales del JWT del host pendiente de ADR-002), `FU-22` (confirmar con David que M-16 expone `Activo`/`Orden`/`ParteEquipoId`), `FU-44..FU-52` (nuevos del sub-track ERP — ver `FOLLOWUPS.md`).
 - **DevEx local:** `docker compose up -d` falla silenciosamente cuando hay un PostgreSQL nativo en el puerto 5432 (caso real de la máquina del PO — dos instalaciones nativas, 5432 y 5433). Para arrancar portable: container en puerto alto (p. ej. 55432) y env var `ConnectionStrings__Postgres` override.
 
-**Implicación metodológica:** la safety-net de integración existe y está en verde para `Api.Tests`. Antes de abrir slices grandes (sagas reales contra ERP), tratar `FU-39` para que `Application.Tests` también corra sin Docker — sin eso, cualquier handler nuevo con dependencia Marten queda con cobertura de integración huérfana.
+**Implicación metodológica:** la safety-net de integración existe y está en verde para `Api.Tests` e `Infrastructure.Tests`. Antes de abrir slices grandes (sagas reales contra ERP con Postgres real), tratar `FU-39` para que `Application.Tests` también corra sin Docker — sin eso, cualquier handler nuevo con dependencia Marten queda con cobertura de integración huérfana.
 
 ### Embargo de docs — LEVANTADO 2026-05-07
 
