@@ -80,6 +80,8 @@ public sealed partial class DescartarNovedadPreopErpListener
         try
         {
             await _erp.CerrarPreoperacionalFallasAsync(request, ct).ConfigureAwait(false);
+            // MT4-INV-3 / D-MT4-4: métrica de éxito por tenant.
+            InspeccionesMeters.RegistrarLlamadaErp(tenantId, "preoperacional-fallas-cerrar", "exito");
         }
         catch (MaquinariaErpException ex)
             when (ex.StatusCode == HttpStatusCode.Conflict
@@ -87,6 +89,7 @@ public sealed partial class DescartarNovedadPreopErpListener
         {
             // D-1: 409 YA_CERRADO es idempotencia natural del ERP — tratado como éxito silencioso.
             // No relanzar; el outbox se marcará como completado.
+            InspeccionesMeters.RegistrarLlamadaErp(tenantId, "preoperacional-fallas-cerrar", "exito");
             return;
         }
         catch (MaquinariaErpException ex)
@@ -102,6 +105,8 @@ public sealed partial class DescartarNovedadPreopErpListener
                 ex.CodigoErp,
                 esReintentable,
                 ex);
+            // MT4-INV-3 / D-MT4-4: métrica de fallo por tenant.
+            InspeccionesMeters.RegistrarLlamadaErp(tenantId, "preoperacional-fallas-cerrar", "fallo");
             throw;
         }
     }

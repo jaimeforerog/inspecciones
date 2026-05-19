@@ -63,16 +63,16 @@ public sealed partial class SincronizarDictamenVigenteListener
         using var _ = new AmbientBearerTokenAccessor().SetForCurrentScope(jwtEnvelope);
 
         var aggregate = await _inspeccionReader.LeerAsync(evento.InspeccionId, tenantId, ct).ConfigureAwait(false);
-        await DespacharAsync(evento, aggregate, ct).ConfigureAwait(false);
+        await DespacharAsync(evento, aggregate, tenantId, ct).ConfigureAwait(false);
     }
 
     public async Task HandleAsync(InspeccionFirmada_v1 evento, CancellationToken ct = default)
     {
         var aggregate = await _inspeccionReader.LeerAsync(evento.InspeccionId, ct).ConfigureAwait(false);
-        await DespacharAsync(evento, aggregate, ct).ConfigureAwait(false);
+        await DespacharAsync(evento, aggregate, tenantId: null, ct).ConfigureAwait(false);
     }
 
-    private async Task DespacharAsync(InspeccionFirmada_v1 evento, Inspeccion? aggregate, CancellationToken ct)
+    private async Task DespacharAsync(InspeccionFirmada_v1 evento, Inspeccion? aggregate, string? tenantId, CancellationToken ct)
     {
         if (aggregate is null)
         {
@@ -98,6 +98,8 @@ public sealed partial class SincronizarDictamenVigenteListener
         try
         {
             await _erp.ActualizarDictamenEquipoAsync(aggregate.EquipoId, request, ct).ConfigureAwait(false);
+            // MT4-INV-3 / D-MT4-4: métrica de éxito por tenant.
+            InspeccionesMeters.RegistrarLlamadaErp(tenantId, "dictamen-vigente", "exito");
         }
         catch (MaquinariaErpException ex)
         {
@@ -107,11 +109,14 @@ public sealed partial class SincronizarDictamenVigenteListener
                 evento.InspeccionId,
                 aggregate.EquipoId,
                 aggregate.Dictamen.Value.ToString(),
+                tenantId,
                 intentosAgotados: 1,
                 ultimoError: ex.StatusCode.HasValue
                     ? $"{(int)ex.StatusCode.Value} {ex.StatusCode.Value}"
                     : ex.Message,
                 ex);
+            // MT4-INV-3 / D-MT4-4: métrica de fallo por tenant.
+            InspeccionesMeters.RegistrarLlamadaErp(tenantId, "dictamen-vigente", "fallo");
             throw;
         }
     }
@@ -136,11 +141,12 @@ public sealed partial class SincronizarDictamenVigenteListener
         EventId = 2001,
         Level = LogLevel.Error,
         Message = "DictamenVigenteErpSyncFallida_v1 | InspeccionId={InspeccionId} EquipoId={EquipoId} " +
-                  "Dictamen={Dictamen} IntentosAgotados={IntentosAgotados} UltimoError={UltimoError}")]
+                  "Dictamen={Dictamen} TenantId={TenantId} IntentosAgotados={IntentosAgotados} UltimoError={UltimoError}")]
     private partial void LogSyncFallida(
         Guid inspeccionId,
         int equipoId,
         string? dictamen,
+        string? tenantId,
         int intentosAgotados,
         string ultimoError,
         Exception ex);

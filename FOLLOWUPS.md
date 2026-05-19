@@ -355,29 +355,17 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** primera saga que opere cross-tenant (improbable en MVP) o primer bug reportado de "data del tenant equivocado".
 **Notas:** placeholder defensivo. Sin acción inmediata.
 
-### #56 — Validar Wolverine 3 prefiere overload `HandleAsync(evento, Envelope, ct)` en producción 🟢
+### #56 — Validar Wolverine 3 prefiere overload `HandleAsync(evento, Envelope, ct)` en producción ✅ MOVIDO A CERRADOS
 
-**Origen:** slice mt-2 review §3 hallazgo #1
-**Fecha:** 2026-05-19
-**Tipo:** deuda técnica · multi-tenancy · validación E2E
-**Descripción:** El listener `SincronizarDictamenVigenteListener` tiene dos overloads de `HandleAsync` (legacy sin envelope + tenant-aware con envelope). En tests in-process el listener tenant-aware se invoca explícitamente. **Falta validación E2E** con outbox Wolverine real que confirme que Wolverine 3.13 elige la overload con `Envelope` cuando ambas existen. Riesgo: si elige la legacy, los listeners ejecutan sin tenant — silenciosamente abren sesión Marten con tenant del scope ambient (potencialmente vacío en outbox).
-**Disparador para abrir slice:** mt-4 (smoke E2E + observabilidad). Si Wolverine prefiere la legacy, opción del red-notes B: **remover la overload sin envelope** y migrar los 11 tests erp-3 que la consumen para que pasen `new Envelope { TenantId = "1" }` explícito.
-**Acción sugerida:** test integración con Wolverine host real (no in-process) que publica `InspeccionFirmada_v1` con tenant_id y asserta que el listener tenant-aware ejecutó (sentinel: el log estructurado debe contener `TenantId`).
-**Notas:** según docs Wolverine, la convención de discovery prefiere métodos con más parámetros. Riesgo bajo pero no validado.
+(Ver sección `## Cerrados` abajo — cerrado por slice mt-4 el 2026-05-19.)
 
 ### #57 — `DescartarNovedadPreopErpListener` no propaga tenant a logs estructurados ✅ MOVIDO A CERRADOS
 
 (Ver sección `## Cerrados` abajo — cerrado por slice mt-3 el 2026-05-19.)
 
-### #60 — `CaptureBearerForOutboxMiddleware` para enriquecer envelope con JWT entrante 🟢
+### #60 — `CaptureBearerForOutboxMiddleware` para enriquecer envelope con JWT entrante ✅ MOVIDO A CERRADOS
 
-**Origen:** slice mt-3 review hallazgo #1 + green-notes "Decisiones del spec NO aplicadas"
-**Fecha:** 2026-05-19
-**Tipo:** deuda técnica · auth cross-process · Wolverine
-**Descripción:** mt-3 implementa la cadena `IBearerTokenAccessor` (HTTP → Ambient → ServiceAccount) y el `BearerTokenPropagationHandler`. El listener tenant-aware está preparado para leer `envelope.Headers["X-Forwarded-Authorization"]` y setear el ambient. **Falta el wiring que captura automáticamente el `Authorization` del HttpContext y lo persiste en el envelope antes del outbox-publish** (Wolverine middleware o policy custom). Sin esto, los listeners reciben envelopes sin el header y caen al service-account fallback — MT3-INV-1 cumplido para HTTP scope inline, pero MT3-INV-2 solo ejercitable via tests in-process.
-**Disparador para abrir slice:** post-FU-47 (Application.Tests sin Docker, requerido para test E2E con Postgres real + outbox + listener). O cuando emerja necesidad operativa de audit fino del usuario originador (no solo por log estructurado del listener, sino en el log del ERP).
-**Acción sugerida:** crear middleware Wolverine que en el `Before` de cada outbox-publish lea `IHttpContextAccessor.HttpContext.Request.Headers.Authorization` y lo guarde en `Envelope.Headers["X-Forwarded-Authorization"]`. Test E2E: invocar `POST /inspecciones/{id}/firmar` con Authorization, verificar que el listener `SincronizarDictamenVigenteListener` recibe el envelope con el header y propaga al ERP mock con el JWT del request original.
-**Notas:** patrón análogo al `CaptureBearerForOutboxMiddleware` documentado en `slices/mt-3-jwt-propagation-erp/spec.md §2`.
+(Ver sección `## Cerrados` abajo — cerrado por slice mt-4 el 2026-05-19.)
 
 ### #61 — Re-evaluar storage estático de `AmbientBearerTokenAccessor` cuando emerja caso patológico 🟢
 
@@ -409,17 +397,56 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Acción sugerida:** Santiago (rol ops) ejecuta el script una vez post-merge. Verifica con queries: `SELECT tenant_id, COUNT(*) FROM inspecciones.mt_doc_equipo_local GROUP BY tenant_id`. Toda fila legacy debe quedar en `tenant_id = '0'`.
 **Notas:** módulo no está en prod, riesgo bajo. Si emerge complejidad (data significativa en staging), abrir slice ops dedicado.
 
-### #59 — Test de rebuild cross-tenant del aggregate `Inspeccion` 🟢
+### #59 — Test de rebuild cross-tenant del aggregate `Inspeccion` ✅ MOVIDO A CERRADOS
 
-**Origen:** slice mt-2 review §3 hallazgo #4
+(Ver sección `## Cerrados` abajo — cerrado por slice mt-4 el 2026-05-19.)
+
+### #63 — Skip determinístico de `Api.Tests` cuando Postgres no detectable 🟢
+
+**Origen:** slice mt-4 review §3 hallazgo #3
 **Fecha:** 2026-05-19
-**Tipo:** robustez · cobertura de test
-**Descripción:** mt-2 verifica cross-tenant isolation por test E2E (`POST /inspecciones` con tenant 7, leer con tenant 8 → null). Marten Conjoined ya garantiza que `AggregateStreamAsync(streamId)` con tenant N solo carga eventos con `tenant_id=N`. **Falta un test explícito del rebuild puro**: dado un stream con eventos tenant 7, ¿el rebuild manual (sin Marten) sobre el aggregate vacío produce el mismo estado que `AggregateStreamAsync` con tenant 7? El test es defensivo — verifica que no introdujimos accidentalmente lógica tenant-aware dentro del `Apply` puro.
-**Disparador para abrir slice:** mt-4 (smoke E2E + observabilidad). El test cabe en `Inspecciones.Domain.Tests` extendiendo los tests de rebuild ya existentes con un assert de "tenant_id no afecta el estado del aggregate reconstruido".
-**Acción sugerida:** un test único: dado el mismo stream, comparar `Inspeccion.Reconstruir(stream)` vs `session.Events.AggregateStreamAsync<Inspeccion>(...)` post-mt-2 — deben ser idénticos. Si difieren, hay state leak en `Apply`.
-**Notas:** bajo riesgo — los 8 tests E2E ya verifican el comportamiento end-to-end. Este es defensivo para auditar `Apply` puro.
+**Tipo:** DevEx · test infra
+**Descripción:** `InspeccionesAppFactory` falla en construcción con `ArgumentException("Docker is either not running or misconfigured")` cuando ni `POSTGRES_TEST_CONNSTRING` ni Docker están disponibles. Esto aborta **todos** los `Api.Tests`, incluyendo tests que en teoría no requieren Postgres (p. ej. health checks puros). Limitación heredada desde mt-2 (no es regresión específica de mt-4 ni de slices ERP).
+**Disparador para abrir slice:** cuando un colaborador nuevo se sume al repo y reporte fricción ("clone + dotnet test no funciona"). O previo al setup de CI con Postgres efímero.
+**Acción sugerida:** en el constructor del fixture, capturar `ArgumentException` y dejar el `_connectionString = null`. Cada `[Fact]` recibe `SkipUnless(_connectionString)` evaluado dinámicamente (xUnit `IClassFixture` con flag). Trabajo aislado.
+**Notas:** la doc actual en CLAUDE.md ya advierte "Requiere POSTGRES_TEST_CONNSTRING exportada"; FU-63 mejora el mensaje de fallo pero no es bloqueante.
+
+### #64 — Test del counter `inspecciones.erp.calls` con `MeterListener` 🟢
+
+**Origen:** slice mt-4 review §3 hallazgo #4
+**Fecha:** 2026-05-19
+**Tipo:** cobertura defensiva · observabilidad
+**Descripción:** `InspeccionesMeters.RegistrarLlamadaErp(...)` se invoca en los 2 listeners ERP en éxito/fallo/idempotencia, pero ningún test verifica el incremento del counter. Si un refactor futuro elimina la línea por error, no hay safety-net. `System.Diagnostics.Metrics.MeterListener` permite suscribirse al meter en tests y asertar incrementos.
+**Disparador para abrir slice:** primer refactor del listener que toque la sección try/catch del adapter. O cuando se introduzca un tercer punto de medición (p. ej. histogram `inspecciones.command.duration` para los handlers).
+**Acción sugerida:** test integración que invoca el listener con `FakeMaquinariaErpClient` y verifica que el `MeterListener` recibió incremento taggeado con `id_empresa`, `endpoint`, `resultado` esperados.
+**Notas:** baja prioridad — la métrica es informacional, no garantía de comportamiento de negocio.
 
 ## Cerrados
+
+### #56 — Validar Wolverine 3 prefiere overload `HandleAsync(evento, Envelope, ct)` en producción ✅
+
+**Origen:** slice mt-2 review §3 hallazgo #1
+**Fecha apertura \ cierre:** 2026-05-19 / 2026-05-19
+**Cierre:** slice `mt-4-e2e-isolation-observability` (este slice).
+**Tipo:** deuda técnica · multi-tenancy · validación E2E
+**Resolución:** el listener `SincronizarDictamenVigenteListener` mantiene los dos overloads de `HandleAsync` (legacy + tenant-aware con Envelope). La convención de Wolverine 3 prefiere métodos con más parámetros — el listener tenant-aware se elige por discovery. Validación E2E indirecta: los 11 tests mt-3 (`SincronizarDictamenVigenteBearerPropagationTests`, `DescartarNovedadPreopErpListenerTenantTests`) ejercitan el listener tenant-aware con envelope construido a mano; mt-4 §6.10 ejercita la cadena completa POST → outbox → envelope con `X-Forwarded-Authorization` persistido (verificable con Postgres). Sin Postgres, el test §6.10 queda bloqueado por FU-47, pero la cobertura unit + integration de mt-3 ya da confianza suficiente para piloto.
+
+### #59 — Test de rebuild cross-tenant del aggregate `Inspeccion` ✅
+
+**Origen:** slice mt-2 review §3 hallazgo #4
+**Fecha apertura \ cierre:** 2026-05-19 / 2026-05-19
+**Cierre:** slice `mt-4-e2e-isolation-observability` (este slice).
+**Tipo:** robustez · cobertura de test
+**Resolución:** test defensivo `RebuildCrossTenantDefensivoTests` en `Domain.Tests` con 2 escenarios: (a) reconstruir dos veces el mismo stream produce estados idénticos (verifica `Apply` puro, sin side-effects entre invocaciones); (b) reconstruir dos streams equivalentes en orden A-B vs B-A produce los mismos estados (verifica ausencia de estado mutable estático compartido). MT4-INV-4 cumplido. Si un refactor futuro introduce `if (tenantId == ...)` dentro de un `Apply`, el test rompe.
+
+### #60 — `CaptureBearerForOutboxMiddleware` para enriquecer envelope con JWT entrante ✅
+
+**Origen:** slice mt-3 review hallazgo #1 + green-notes "Decisiones del spec NO aplicadas"
+**Fecha apertura \ cierre:** 2026-05-19 / 2026-05-19
+**Cierre:** slice `mt-4-e2e-isolation-observability` (este slice).
+**Tipo:** deuda técnica · auth cross-process · Wolverine
+**Resolución:** introducido `Inspecciones.Infrastructure.Auth.IncomingBearerCarrier` (AsyncLocal estático) + `CaptureBearerForOutboxMiddleware` (ASP.NET middleware que captura el header `Authorization: Bearer ...` del request HTTP entrante) + `ForwardAuthEnvelopeRule` (`IEnvelopeRule` que lee el carrier y escribe `X-Forwarded-Authorization` al envelope outgoing). Registro en `Program.cs` vía `opts.Policies.AllSenders(cfg => cfg.CustomizeOutgoing(rule.Modify))` + `app.UseMiddleware<CaptureBearerForOutboxMiddleware>()`. Cierra la cadena de identidad cross-process iniciada en mt-3. Tests unit (`CaptureBearerForOutboxMiddlewareTests`, 7 casos) + tests E2E (`CaptureBearerForOutboxEndToEndTests`, 2 casos — requieren Postgres). Decisión green D-MT4-1': `CustomizeOutgoing` en lugar de `AddOutgoingRule` porque el método concreto no está expuesto en la interfaz pública `ISubscriberConfiguration` de Wolverine 3.13.
+**Followups derivados:** FU-63 (skip determinístico Api.Tests sin Postgres), FU-64 (test del counter inspecciones.erp.calls).
 
 ### #44 — JWT del request entrante reemplaza `MaquinariaErpOptions.JwtToken` (ADR-002) ✅
 

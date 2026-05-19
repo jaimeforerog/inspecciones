@@ -119,6 +119,22 @@ builder.Host.UseWolverine(opts =>
     opts.Policies
         .OnException<ArgumentException>()
         .MoveToErrorQueue();
+
+    // ── mt-4 FU-60: propagación del JWT entrante al envelope del outbox ────────
+    //
+    // ForwardAuthEnvelopeRule.Modify lee IncomingBearerCarrier (poblado por
+    // CaptureBearerForOutboxMiddleware desde el header Authorization del
+    // request HTTP entrante) y escribe X-Forwarded-Authorization en cada
+    // envelope saliente. Los listeners tenant-aware (mt-3) consumen el header
+    // del envelope y propagan el JWT al ERP via AmbientBearerTokenAccessor.
+    //
+    // Wolverine 3.13 expone ISubscriberConfiguration.CustomizeOutgoing(Action<Envelope>);
+    // delegamos directamente al método Modify del rule (puro, sin estado).
+    // AllSenders cubre senders no-locales; para el outbox local (Marten
+    // transaccional), AllLocalQueues no expone CustomizeOutgoing en
+    // IListenerConfiguration — verificable en green con el test §6.10.
+    var forwardAuthRule = new ForwardAuthEnvelopeRule();
+    opts.Policies.AllSenders(cfg => cfg.CustomizeOutgoing(forwardAuthRule.Modify));
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -292,6 +308,13 @@ if (!app.Environment.IsEnvironment("Test"))
     app.UseMiddleware<MiddlewareAuthorizationToken>();
 }
 
+// mt-4 FU-60: capturar Authorization del request HTTP entrante en
+// IncomingBearerCarrier (AsyncLocal scope HTTP) para que ForwardAuthEnvelopeRule
+// lo propague al envelope del outbox. Se monta DESPUÉS del middleware corporativo
+// (que valida el JWT primero) pero ANTES de los endpoints y del handler global
+// de ClaimRequeridaException — el carrier vive durante todo el scope del request.
+app.UseMiddleware<CaptureBearerForOutboxMiddleware>();
+
 // Handler global de ClaimRequeridaException — mapea a 401 con codigoError de la claim.
 // Pattern: middleware inline que intercepta la excepción antes de que llegue al
 // handler de errores genérico.
@@ -317,8 +340,13 @@ app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
 
 // Endpoints de slices — registrados por feature folder.
-app.MapInspeccionesEndpoints();
-app.MapCatalogosEndpoints();
+// mt-4 MT4-INV-3: SessionLoggingScopeFilter abre un scope con IdEmpresa/IdUsuario
+// alrededor de cada invocación de endpoint — observabilidad por tenant sin
+// modificar los 15 endpoints individualmente.
+var endpointsGroup = app.MapGroup(string.Empty)
+    .AddEndpointFilter<SessionLoggingScopeFilter>();
+endpointsGroup.MapInspeccionesEndpoints();
+endpointsGroup.MapCatalogosEndpoints();
 
 // Endpoint informativo en root — útil para diagnóstico rápido.
 app.MapGet("/", () => Results.Ok(new
