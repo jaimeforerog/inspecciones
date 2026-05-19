@@ -1,7 +1,10 @@
+using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
+using Inspecciones.Api.Catalogos;
 using Inspecciones.Api.Inspecciones;
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
+using Inspecciones.Infrastructure.Erp;
 using Marten;
 using Oakton;
 using Scalar.AspNetCore;
@@ -114,6 +117,37 @@ builder.Services.AddScoped<DescartarNovedadPreopHandler>();
 builder.Services.AddScoped<ActualizarRepuestoHandler>();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Maquinaria_V4 — adapter HTTP de lectura para sembrar el catálogo local
+// (EquipoLocal, RutinaTecnicaLocal, ParteEquipoLocal) desde el ERP SincoMyE.
+// ─────────────────────────────────────────────────────────────────────────────
+builder.Services.Configure<MaquinariaErpOptions>(
+    builder.Configuration.GetSection(MaquinariaErpOptions.SectionName));
+
+builder.Services.AddHttpClient<IMaquinariaErpClient, MaquinariaErpClient>((sp, http) =>
+{
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MaquinariaErpOptions>>().Value;
+    if (string.IsNullOrWhiteSpace(opts.BaseUrl))
+    {
+        throw new InvalidOperationException(
+            "Falta configurar 'Maquinaria:BaseUrl' (apuntando a http://host:puerto/api/v4/Maquinaria).");
+    }
+
+    var baseUrl = opts.BaseUrl.EndsWith('/') ? opts.BaseUrl : opts.BaseUrl + "/";
+    http.BaseAddress = new Uri(baseUrl);
+
+    // Timeout consistente con ADR-006: hasta 30s antes de fallar al outbox.
+    http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSegundos > 0 ? opts.TimeoutSegundos : 30);
+
+    if (!string.IsNullOrWhiteSpace(opts.JwtToken))
+    {
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", opts.JwtToken);
+    }
+});
+
+builder.Services.AddScoped<SincronizarEquipoDesdeErpHandler>();
+builder.Services.AddScoped<SeedManualCatalogoHandler>();
+
+// ─────────────────────────────────────────────────────────────────────────────
 // JSON serializer — Minimal APIs: enums como string en request y response bodies.
 // ─────────────────────────────────────────────────────────────────────────────
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -134,6 +168,7 @@ app.MapHealthChecks("/health/ready");
 
 // Endpoints de slices — registrados por feature folder.
 app.MapInspeccionesEndpoints();
+app.MapCatalogosEndpoints();
 
 // Endpoint informativo en root — útil para diagnóstico rápido.
 app.MapGet("/", () => Results.Ok(new

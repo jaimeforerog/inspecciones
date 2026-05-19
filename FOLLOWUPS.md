@@ -437,6 +437,46 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Tipo:** deuda técnica · infraestructura de tests
 **Descripción:** Los EquipoIds de siembra del slice 1o originalmente asignados (80001-80010) colisionaron con slices 1m/1n. El orquestador los renombró a 100001-100010. La causa raíz es FU-39: IDs hardcoded en tests de integración sin aislamiento por colección. Cada nuevo slice requiere elegir rangos manualmente. Solución: cuando el número de suites haga inviable la asignación manual, implementar generación dinámica de IDs de siembra (`Guid.NewGuid()` para streams Marten, o rangos con offset generado por colección) para eliminar la necesidad de coordinación manual.
 
+### #44 — JWT del request entrante reemplaza `MaquinariaErpOptions.JwtToken` (ADR-002) 🟢
+
+**Origen:** slice erp-1 acople Maquinaria_V4 (2026-05-19)
+**Fecha:** 2026-05-19
+**Tipo:** seguridad · ADR-002 · adapter
+**Descripción:** El `MaquinariaErpClient` actual usa un JWT fijo desde `appsettings.Maquinaria:JwtToken` configurado al startup. La identidad real del módulo es 100% del host PWA (decisión 2026-05-05) — el JWT que valida Maquinaria_V4 debe ser **el mismo** que entrega el host en la request entrante. Solución: agregar `IHttpContextAccessor` al cliente y propagar `HttpContext.Request.Headers["Authorization"]` en cada llamada (DelegatingHandler con `TypedHttpClientFactory`), reemplazando el `DefaultRequestHeaders.Authorization` fijo.
+**Disparador para abrir slice:** cierre de ADR-002 (mecanismo de identidad del host PWA) o primer slice de saga que invoque Maquinaria_V4 fuera del request-scope (ej. `SincronizarDictamenVigenteSaga` desde Wolverine outbox — ese caso requiere otra estrategia: token de servicio dedicado o "service principal").
+**Notas:** vinculado a FU-14. Mientras tanto el adapter sirve para QA, smoke testing y endpoints `/admin/*` con token configurado manualmente.
+
+### #45 — Adapters de catálogo: cache de ETag cliente-side + persistencia en Marten (ADR-004) 🟢
+
+**Origen:** slice erp-1 acople Maquinaria_V4 (2026-05-19)
+**Fecha:** 2026-05-19
+**Tipo:** infra · ADR-004
+**Descripción:** El `MaquinariaErpClient` ya soporta `If-None-Match` / `304 Not Modified` (verificado por test). Pero la cadena completa "GET catálogo → cache ETag → persistir en Marten → emitir cuando staleness > N" todavía no existe. Necesita: (a) tabla/documento Marten `CatalogoMetadataLocal { Codigo, EtagUltimoSync, UltimoSyncEn }` por catálogo; (b) job de sync que lea el ETag, llame al adapter con `If-None-Match`, y si responde 304 solo actualice `UltimoSyncEn`; si responde 200, upserte los documentos individuales (`CausaFallaLocal`, `TipoFallaLocal`, `RepuestoLocal`, etc.) y actualice el ETag; (c) endpoint admin `/api/v1/admin/sincronizar-catalogos` que dispare todos los syncs en paralelo; (d) modo degradado: si la última sync es >7 días, bloquear arranque de inspección con error claro.
+**Disparador para abrir slice:** cuando se integre la PWA cliente y se confirme el flujo de sync on-app-open (ADR-004 canonical 2026-05-05). Ahora bloquea: la PWA puede consumir directamente los endpoints `/admin/*-erp` para QA, sin cache.
+**Notas:** el shape de `RepuestoLocal` (campo `ParteIdsCompatibles: IReadOnlyList<int>`) NO viene del endpoint `/api/productos` de Maquinaria_V4 (que solo expone Codigo/Descripcion/UnidadContable). La compatibilidad parte ↔ producto vive en otro punto del ERP — confirmar con David antes del slice.
+
+### #46 — Endpoints de Inspecciones que aún no acoplan a Maquinaria_V4 (sagas + comandos de escritura) 🟢
+
+**Origen:** slice erp-1 acople Maquinaria_V4 (2026-05-19)
+**Fecha:** 2026-05-19
+**Tipo:** integración · sagas ADR-006
+**Descripción:** El adapter HTTP está completo para los 8 endpoints expuestos por Maquinaria_V4 (M-3 equipos, M-5 partes, M-7 causas-falla, M-8 tipos-falla, M-W-1 dictamen-vigente, P-6 cerrar-preop, M-16 rutinas-monitoreo por equipo, M-4 productos). Falta el cableado **dentro** de los handlers/sagas existentes para que invoquen al adapter:
+- `DescartarNovedadPreop` (slice 1n) NO invoca `CerrarPreoperacionalFallasAsync` — hoy solo emite el evento local. Pendiente: handler outbox que llame a Maquinaria_V4 con `PodIds=[NovedadId]`.
+- `FirmarInspeccion` (slice 1g) NO invoca `ActualizarDictamenEquipoAsync` (M-W-1). Pendiente: `SincronizarDictamenVigenteSaga`.
+- `GenerarOT` (slice 1k) NO invoca POST `/api/ordenes-trabajo` — el endpoint **no existe** en Maquinaria_V4 (slice 8 Maquinaria pausado por DDL DBA). Bloqueante real ❌.
+- Catálogos: no hay sync periódico cliente-side hoy. Cada PWA-open debe disparar sync de Causas/Tipos/Productos/Rutinas-Monitoreo/Equipos/Partes con If-None-Match. Ver FU-45.
+**Disparador para abrir slice:** decidido por orquestador caso a caso. La integración mínima de `DescartarNovedadPreop`→P-6 es de bajo riesgo y desbloquea piloto. La saga M-W-1 es el siguiente paso natural tras `FirmarInspeccion`.
+**Notas:** Cada acople es un slice nuevo `feat(slice-erp-{X})` con TDD ceremonial completo (domain-modeler opcional si no extiende dominio, red→green→refactor→reviewer). El adapter ya está testeado — los nuevos slices solo cubren handler/saga + integración outbox.
+
+### #47 — Application.Tests requiere Docker (Testcontainers Postgres) 🟢
+
+**Origen:** validación de regresión slice erp-1 (2026-05-19)
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · tests infraestructura
+**Descripción:** `tests/Inspecciones.Application.Tests/Inspecciones/PostgresFixture.cs` levanta Postgres con `Testcontainers.PostgreSql`. Sin Docker corriendo, los 40 tests fallan inmediatamente. Api.Tests ya tiene fallback a Postgres local vía env var `POSTGRES_TEST_CONNSTRING` (fix FU-32 commit `48b8575`) — Application.Tests no se beneficia. Replicar el mismo fallback acá permite correr en estaciones sin Docker. **No bloquea** slices ni el adapter ERP — Domain.Tests (246) y Infrastructure.Tests (14) cubren sin Postgres.
+**Disparador para abrir slice:** primera vez que un desarrollador con Postgres local pero sin Docker necesite iterar en Application.Tests.
+**Notas:** copy/paste del patrón de `InspeccionesAppFactory` a `PostgresFixture` — bajo riesgo, baja prioridad mientras CI tenga Docker disponible.
+
 ---
 
 ## Plantilla de entry
