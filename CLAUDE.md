@@ -5,7 +5,7 @@ Este archivo orienta a Claude Code para trabajar en el repo. Las reglas duras de
 ## Estado del proyecto
 
 - **Última actualización:** 2026-05-19
-- **Fase actual:** Fase 1 ampliamente avanzada. **15 slices cerrados** del aggregate `Inspeccion` (1a..1o) + 4 fixes de followups (FU-32/36/37/38), más **sub-track de acople ERP a Maquinaria_V4 cerrado** (slices `erp-1..erp-4`). HEAD del sub-track aggregate: `36062e0 feat(slice-1o): ActualizarRepuesto` (2026-05-11). HEAD del sub-track ERP: ver §"Acople ERP Maquinaria_V4" abajo.
+- **Fase actual:** Fase 1 ampliamente avanzada. **15 slices cerrados** del aggregate `Inspeccion` (1a..1o) + 4 fixes de followups (FU-32/36/37/38), más **sub-track de acople ERP a Maquinaria_V4 cerrado** (slices `erp-1..erp-4`), más **slice mt-1 del sub-track multi-tenancy cerrado** (JWT claims pipeline, 2026-05-19). HEAD del sub-track aggregate: `36062e0 feat(slice-1o): ActualizarRepuesto` (2026-05-11). HEAD del sub-track ERP + multi-tenancy: ver §§"Acople ERP Maquinaria_V4" y "Multi-tenancy (sub-track 2026-05-19)" abajo.
 - **Slices cerrados del aggregate (1a..1o):**
   - **Lifecycle inspección técnica:** `1a` aggregate, `1b` handler+projection, `1g` `FirmarInspeccion` (3 eventos atómicos: `DiagnosticoEmitido_v1` → `DictamenEstablecido_v1` → `InspeccionFirmada_v1`), `1m` `CancelarInspeccion`.
   - **Hallazgos:** `1c` Registrar, `1d` Actualizar, `1e` Eliminar.
@@ -31,6 +31,15 @@ Cerrado en 4 slices contra el microservicio hermano `Maquinaria_V4`:
 - **docs `8c3cb62`**: `Inspecciones/docs/06-contrato-apis-erp.md §0.B` espeja la reconciliación bilateral 2026-05-13 — mapa de estado real de los 21 endpoints contra Maquinaria_V4 (9 acoplables, 8 NO-aplica, 3 descartados bilateral, 1 bloqueante real M-1, 1 sintetizado M-17). Complementa la §0.A (verificación swagger 2026-05-16).
 
 Suite tests final: `Inspecciones.Infrastructure.Tests` 59/59 verde (14 adapter + 11 erp-2 + 11 erp-3 + 23 erp-4). `Inspecciones.Domain.Tests` 246/0/19 skip (sin regresión). `Inspecciones.Application.Tests` fallos por Docker no corriendo (FU-47 preexistente, no regresión).
+
+### Multi-tenancy (sub-track 2026-05-19)
+
+Sub-track introducido el 2026-05-19 para introducir tenancy real por `IdEmpresa` en el módulo. 4 slices planeados:
+
+- **slice-mt-1** (cerrado 2026-05-19, commit `feat(slice-mt-1): JWT claims pipeline + ISessionService`): pipeline de identidad del host PWA. Nuevos en `src/Inspecciones.Infrastructure/Auth/`: puerto `ISessionService` con los 5 claims canónicos (`IdEmpresa`, `IdUsuario`, `NomUsuario`, `IdSucursal`, `IdProyecto`) + `Capabilities`, `ClaimRequeridaException`, `SincoMiddlewareSessionService` (real, lee `MiddlewareAuthorizationToken.SessionVariables()` del paquete corporativo `SincoSoft.MYE.Common 1.5.1`). En `tests/Inspecciones.Api.Tests/Auth/`: `FakeSessionService` + `TestHeaderAwareSessionService` (backward-compat con tests legacy). `Program.cs` monta middleware corporativo en envs no-Test + handler global de `ClaimRequeridaException` → 401 con `codigoError = "CLAIM-{NOMBRE}-AUSENTE"`. 15 endpoints HTTP refactorizados: `tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture)`, capabilities desde `session.Capabilities`. `POST /api/v1/catalogos/sync` gana capability check (`ejecutar-inspeccion` o `administrar-catalogos`) — cierre FU-52. Headers de tests (`X-Sin-Capability-*`, `X-Tecnico-Id`) eliminados de endpoints de producción. ADR-002 cerrado (de tentativa a aceptada) + ADR-009 creado (multi-tenancy Marten conjoined). Cierra FU-14 y FU-52. Suite final Api.Tests: 65/0/7 skip (8 tests nuevos del slice + 57 legacy sin regresión).
+- **slice-mt-2** ⏳ pendiente: Marten `Conjoined` multi-tenancy. `IDocumentSessionFactory` wired al `ISessionService` para que cada `LightweightSession()` reciba `tenantId = session.IdEmpresa`. `StoreOptions.AllDocumentsAreMultiTenanted()`. Migración de schema (`tenant_id` column + index). Tests E2E cross-tenant isolation. Reset del schema en dev, backfill en staging (D4 firmada).
+- **slice-mt-3** ⏳ pendiente: propagación JWT entrante a `MaquinariaErpClient` y a las sagas que disparan llamadas al ERP (cierre FU-44). Estrategia para sagas fuera de scope HTTP (token de servicio dedicado vs. capturar JWT en envelope Wolverine).
+- **slice-mt-4** ⏳ pendiente: tests E2E con 2 tenants concurrentes, asserts de no-leak, métricas App Insights por `IdEmpresa`. Baseline antes del piloto.
 
 ### 🟡 Salud del repo (revisión 2026-05-11, vigente al 2026-05-19)
 
@@ -110,6 +119,7 @@ Estado factual al cierre del slice 1o (verificado local sin Docker), aún vigent
 - `UbicacionGps(Latitud, Longitud, PrecisionMetros, CapturadoEn)` para coordenadas — prohibido `double` pelado.
 - `BlobUri` para adjuntos — el dominio nunca firma SAS (ADR-005, pattern SAS upload).
 - Identidad: el handler recibe claims por parámetro; el dominio nunca conoce JWTs.
+- **Identidad HTTP (regla nueva mt-1):** todo endpoint HTTP lee identidad vía `ISessionService` (`Inspecciones.Infrastructure.Auth`). **Prohibido leer `HttpContext.User` o claims directamente en endpoints o handlers.** El `TecnicoId` del comando se construye como `session.IdUsuario.ToString(CultureInfo.InvariantCulture)` — string opaco que el dominio recibe sin conocer su origen. Las capabilities se validan en el endpoint con `if (!session.Capabilities.Contains("xxx")) return Forbidden403("PRE-1", ...);` antes de despachar al handler. Ver ADR-002 §9.14 + ADR-009 §9.17.
 - Cobertura de ramas del agregado afectado **≥ 85 %** por slice.
 - Eventos versionados con sufijo `_v1`, `_v2` cuando emerja segunda versión.
 - Soft delete: hallazgos y repuestos emiten `*Eliminado`; nunca borran del stream.

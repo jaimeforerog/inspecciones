@@ -5,11 +5,13 @@ using Inspecciones.Api.Catalogos;
 using Inspecciones.Api.Inspecciones;
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
+using Inspecciones.Infrastructure.Auth;
 using Inspecciones.Infrastructure.Erp;
 using Inspecciones.Infrastructure.Erp.Listeners;
 using Marten;
 using Oakton;
 using Scalar.AspNetCore;
+using SincoSoft.MYE.Common.Middleware;
 using Wolverine;
 using Wolverine.ErrorHandling;
 using Wolverine.Marten;
@@ -200,6 +202,28 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Identidad del host PWA (ADR-002 cerrado / ADR-009, spec slice mt-1).
+//
+// Env Test: registramos un fake que combina header-aware (backward-compat con
+// tests legacy pre-mt-1) — los tests del slice mt-1 lo overridean vía
+// InspeccionesAppFactory.WithSessionService(fake) para inyectar instancias
+// específicas.
+//
+// Env Development/Production: SincoMiddlewareSessionService real que lee de
+// MiddlewareAuthorizationToken.SessionVariables() del paquete corporativo.
+// El middleware ASP.NET se registra abajo (UseMiddleware<MiddlewareAuthorizationToken>())
+// para validar el JWT antes de que el endpoint acceda al puerto.
+// ─────────────────────────────────────────────────────────────────────────────
+builder.Services.AddHttpContextAccessor();
+
+if (!builder.Environment.IsEnvironment("Test"))
+{
+    builder.Services.AddScoped<ISessionService, SincoMiddlewareSessionService>();
+}
+// En env Test la fixture (InspeccionesAppFactory) registra la implementación
+// (TestHeaderAwareSessionService por default, FakeSessionService override por test).
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -207,6 +231,45 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pipeline de autenticación / identidad (ADR-002 cerrado, spec mt-1 §4 PRE-AUTH-*).
+//
+// Env Test: no se registra el middleware corporativo (el fake suple las claims
+// sin necesidad de validar JWT — paridad con el proyecto Attachment).
+//
+// Env Development/Production: se monta MiddlewareAuthorizationToken antes de
+// que cualquier endpoint acceda a ISessionService. El middleware valida el
+// JWT (firma/issuer/exp) y popula SessionVariables() que el puerto lee.
+//
+// El handler global mapea ClaimRequeridaException → 401 con codigoError
+// específico (PRE-AUTH-3, PRE-AUTH-4).
+// ─────────────────────────────────────────────────────────────────────────────
+if (!app.Environment.IsEnvironment("Test"))
+{
+    app.UseMiddleware<MiddlewareAuthorizationToken>();
+}
+
+// Handler global de ClaimRequeridaException — mapea a 401 con codigoError de la claim.
+// Pattern: middleware inline que intercepta la excepción antes de que llegue al
+// handler de errores genérico.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (ClaimRequeridaException ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            codigoError = ex.CodigoError,
+            mensaje = ex.Message
+        });
+    }
+});
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");

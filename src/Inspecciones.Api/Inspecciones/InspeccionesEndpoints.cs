@@ -1,5 +1,7 @@
+using System.Globalization;
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Inspecciones;
+using Inspecciones.Infrastructure.Auth;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
@@ -17,6 +19,7 @@ public static class InspeccionesEndpoints
         app.MapPost("/api/v1/inspecciones", async (
                 IniciarInspeccionRequest request,
                 IniciarInspeccionHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -31,11 +34,25 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en
-                // el JWT; por ahora usamos un mock fijo compatible con los tests E2E del slice 1b.
-                // Cuando el módulo se integre al host, este bloque se reemplaza por extracción del JWT.
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1 §9.5).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                // PRE-AUTH-3 — fuerza lectura de IdEmpresa para enforcement temprano del
+                // claim crítico. Si está ausente, el getter lanza ClaimRequeridaException
+                // que el middleware global mapea a 401. En mt-2 este valor se usa como
+                // tenant_id de Marten (conjoined).
+                _ = session.IdEmpresa;
+
+                // Claims derivadas del JWT del host (ADR-002 cerrado por spec mt-1, D-MT1-5/6).
+                // TecnicoIniciador = IdUsuario.ToString() — string opaco para el dominio.
+                // ProyectosAsignados: mt-1 preserva el comportamiento mock (always-allow) — el
+                // enforcement cross-proyecto se difiere a mt-2 (decisión spec §12.A.3 firmada).
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
                 var claims = new ClaimsTecnico(
-                    TecnicoIniciador: "rmartinez",
+                    TecnicoIniciador: tecnicoId,
                     ProyectosAsignados: new HashSet<int> { request.ProyectoId },
                     TieneCapabilityEjecutarInspeccion: true);
 
@@ -98,6 +115,7 @@ public static class InspeccionesEndpoints
         app.MapPost("/api/v1/inspecciones/monitoreo", async (
                 IniciarInspeccionMonitoreoRequest request,
                 IniciarInspeccionMonitoreoHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -111,9 +129,15 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — followup #14 (claims reales desde JWT cuando ADR-002 se resuelva).
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
                 var claims = new ClaimsTecnico(
-                    TecnicoIniciador: "rmartinez",
+                    TecnicoIniciador: tecnicoId,
                     ProyectosAsignados: new HashSet<int> { request.ProyectoId },
                     TieneCapabilityEjecutarInspeccion: true);
 
@@ -127,7 +151,7 @@ public static class InspeccionesEndpoints
                     FechaReportada: request.FechaReportada,
                     LecturaMedidorPrimario: request.LecturaMedidorPrimario,
                     LecturaMedidorSecundario: request.LecturaMedidorSecundario,
-                    Capabilities: Array.Empty<string>());
+                    Capabilities: session.Capabilities);
 
                 try
                 {
@@ -178,6 +202,7 @@ public static class InspeccionesEndpoints
                 Guid id,
                 RegistrarHallazgoRequest request,
                 RegistrarHallazgoHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -192,8 +217,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new RegistrarHallazgo(
                     InspeccionId: id,
@@ -255,6 +285,7 @@ public static class InspeccionesEndpoints
                 Guid hallazgoId,
                 ActualizarHallazgoRequest request,
                 ActualizarHallazgoHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -269,8 +300,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new ActualizarHallazgo(
                     InspeccionId: inspeccionId,
@@ -327,6 +363,7 @@ public static class InspeccionesEndpoints
                 Guid hallazgoId,
                 AsignarRepuestoRequest request,
                 AsignarRepuestoHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -341,8 +378,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new AsignarRepuesto(
                     InspeccionId: inspeccionId,
@@ -401,6 +443,7 @@ public static class InspeccionesEndpoints
                 Guid id,
                 FirmarInspeccionRequest request,
                 FirmarInspeccionHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -415,8 +458,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
                 var claims = new ClaimsTecnico(
                     TecnicoIniciador: tecnicoId,
                     ProyectosAsignados: new HashSet<int>(),
@@ -482,6 +530,7 @@ public static class InspeccionesEndpoints
                 Guid hallazgoId,
                 [FromBody] EliminarHallazgoRequest request,
                 EliminarHallazgoHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -496,8 +545,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new EliminarHallazgo(
                     InspeccionId: inspeccionId,
@@ -539,6 +593,7 @@ public static class InspeccionesEndpoints
                 int itemId,
                 RegistrarMedicionRequest request,
                 RegistrarMedicionHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -553,8 +608,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new RegistrarMedicion(
                     InspeccionId: inspeccionId,
@@ -563,7 +623,7 @@ public static class InspeccionesEndpoints
                     ValorMedido: request.ValorMedido,
                     Observacion: request.Observacion,
                     EmitidoPor: tecnicoId,
-                    Capabilities: Array.Empty<string>());
+                    Capabilities: session.Capabilities);
 
                 try
                 {
@@ -610,6 +670,7 @@ public static class InspeccionesEndpoints
                 int itemId,
                 RegistrarEvaluacionCualitativaRequest request,
                 RegistrarEvaluacionCualitativaHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -624,8 +685,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 if (!Enum.TryParse<CalificacionCualitativa>(request.Calificacion, ignoreCase: true, out var calificacion))
                 {
@@ -643,7 +709,7 @@ public static class InspeccionesEndpoints
                     Calificacion: calificacion,
                     Observacion: request.Observacion,
                     EmitidoPor: tecnicoId,
-                    Capabilities: Array.Empty<string>());
+                    Capabilities: session.Capabilities);
 
                 try
                 {
@@ -689,6 +755,7 @@ public static class InspeccionesEndpoints
                 int itemId,
                 OmitirItemMonitoreoRequest request,
                 OmitirItemMonitoreoHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -703,15 +770,20 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará los claims reales en el JWT.
-                const string tecnicoId = "rmartinez";
+                // PRE-CAP-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new OmitirItemMonitoreo(
                     InspeccionId: inspeccionId,
                     ItemId: itemId,
                     Motivo: request.Motivo,
                     EmitidoPor: tecnicoId,
-                    Capabilities: Array.Empty<string>());
+                    Capabilities: session.Capabilities);
 
                 try
                 {
@@ -767,6 +839,7 @@ public static class InspeccionesEndpoints
                 Guid id,
                 GenerarOTRequest request,
                 GenerarOTHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -781,18 +854,14 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // PRE-1 — capability "generar-ot" requerida (spec §4, §6.3).
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
-                // El header X-Sin-Capability-Generar-OT se usa en tests para simular claims sin capability.
-                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Generar-OT");
-                if (sinCapabilityHeader)
+                // PRE-1 — capability "generar-ot" requerida (spec mt-1 §9.5).
+                if (!session.Capabilities.Contains("generar-ot"))
                 {
                     return Forbidden403("PRE-1", MensajeCapabilityGenerarOT);
                 }
 
-                // Claims mock — capability "generar-ot" hardcodeada hasta ADR-002.
-                const string aprobadorId = "jefe.campo.01";
-                var capabilities = (IReadOnlyCollection<string>)["generar-ot"];
+                var aprobadorId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
+                var capabilities = session.Capabilities;
 
                 if (!Enum.TryParse<ResponsableCosto>(request.Responsable, ignoreCase: true, out var responsable))
                 {
@@ -871,6 +940,7 @@ public static class InspeccionesEndpoints
                 Guid id,
                 RechazarGenerarOTRequest request,
                 RechazarGenerarOTHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -885,18 +955,14 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // PRE-1 — capability "generar-ot" requerida (spec §4, §6.3 — misma capability que GenerarOT).
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
-                // El header X-Sin-Capability-Generar-OT se usa en tests para simular claims sin capability.
-                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Generar-OT");
-                if (sinCapabilityHeader)
+                // PRE-1 — capability "generar-ot" requerida (spec mt-1 §9.5 — misma capability que GenerarOT).
+                if (!session.Capabilities.Contains("generar-ot"))
                 {
                     return Forbidden403("PRE-1", MensajeCapabilityGenerarOT);
                 }
 
-                // Claims mock — capability "generar-ot" hardcodeada hasta ADR-002.
-                const string aprobadorId = "jefe.campo.01";
-                var capabilities = (IReadOnlyCollection<string>)["generar-ot"];
+                var aprobadorId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
+                var capabilities = session.Capabilities;
 
                 var cmd = new RechazarGenerarOT(
                     InspeccionId: id,
@@ -955,6 +1021,7 @@ public static class InspeccionesEndpoints
                 Guid id,
                 CancelarInspeccionRequest request,
                 CancelarInspeccionHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -969,22 +1036,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // PRE-1 — capability "ejecutar-inspeccion" requerida (spec §4, §6.4).
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
-                // El header X-Sin-Capability-Ejecutar se usa en tests para simular claims sin capability.
-                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Ejecutar");
-                if (sinCapabilityHeader)
+                // PRE-1 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
                 {
                     return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
                 }
 
-                // Claims mock — capability "ejecutar-inspeccion" hardcodeada hasta ADR-002.
-                // El TecnicoId se extrae del header X-Tecnico-Id en tests (simula JWT claims).
-                const string tecnicoIdDefault = "carlos.ruiz";
-                var tecnicoId = ctx.Request.Headers.TryGetValue("X-Tecnico-Id", out var tecnicoIdValues)
-                    && !string.IsNullOrWhiteSpace(tecnicoIdValues.ToString())
-                    ? tecnicoIdValues.ToString()
-                    : tecnicoIdDefault;
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new CancelarInspeccion(
                     InspeccionId: id,
@@ -1037,6 +1095,7 @@ public static class InspeccionesEndpoints
                 int novedadId,
                 DescartarNovedadPreopRequest request,
                 DescartarNovedadPreopHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -1051,21 +1110,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // PRE-4 — capability "ejecutar-inspeccion" requerida (spec §4).
-                // El header X-Sin-Capability-Ejecutar se usa en tests para simular claims sin capability.
-                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Ejecutar");
-                if (sinCapabilityHeader)
+                // PRE-4 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
                 {
                     return Forbidden403("PRE-4", MensajeCapabilityEjecutarInspeccion);
                 }
 
-                // Claims mock — ADR-002 tentativo.
-                // El TecnicoId se extrae del header X-Tecnico-Id en tests (simula JWT claims).
-                const string tecnicoIdDefault = "ana.gomez";
-                var tecnicoId = ctx.Request.Headers.TryGetValue("X-Tecnico-Id", out var tecnicoIdValues)
-                    && !string.IsNullOrWhiteSpace(tecnicoIdValues.ToString())
-                    ? tecnicoIdValues.ToString()
-                    : request.DescartadaPor ?? tecnicoIdDefault;
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 var cmd = new DescartarNovedadPreop(
                     InspeccionId: inspeccionId,
@@ -1119,6 +1170,7 @@ public static class InspeccionesEndpoints
                 Guid repuestoId,
                 ActualizarRepuestoRequest request,
                 ActualizarRepuestoHandler handler,
+                ISessionService session,
                 HttpContext ctx,
                 CancellationToken ct) =>
             {
@@ -1133,17 +1185,13 @@ public static class InspeccionesEndpoints
                     });
                 }
 
-                // PRE-0 — capability "ejecutar-inspeccion" requerida (spec §4, §6.12).
-                // Claims mock — ADR-002 tentativo. El host PWA inyectará claims reales vía JWT.
-                // El header X-Sin-Capability-Ejecutar se usa en tests para simular claims sin capability.
-                var sinCapabilityHeader = ctx.Request.Headers.ContainsKey("X-Sin-Capability-Ejecutar");
-                if (sinCapabilityHeader)
+                // PRE-0 — capability "ejecutar-inspeccion" requerida (spec mt-1).
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
                 {
                     return Forbidden403("PRE-0", MensajeCapabilityEjecutarInspeccion);
                 }
 
-                // Claims mock — ADR-002 tentativo.
-                const string tecnicoId = "rmartinez";
+                var tecnicoId = session.IdUsuario.ToString(CultureInfo.InvariantCulture);
 
                 // P-2: normalizar ObservacionNueva vacía a null en handler (spec §12 P-2 opción A).
                 var observacionNormalizada = string.IsNullOrWhiteSpace(request.ObservacionNueva)

@@ -37,11 +37,12 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
 
     /// <summary>
     /// Siembra un stream de inspección técnica en estado EnEjecucion.
-    /// TecnicoIniciador = "carlos.ruiz" — contribuyente por defecto.
+    /// TecnicoIniciador = "1" — corresponde al default IdUsuario del
+    /// TestHeaderAwareSessionService (spec mt-1 D-MT1-6: IdUsuario.ToString()).
     /// </summary>
     private async Task<Guid> SembrarInspeccionEnEjecucion(
         int equipoId,
-        string tecnicoId = "carlos.ruiz")
+        string tecnicoId = "1")
     {
         var store = factory.Services.GetRequiredService<IDocumentStore>();
         var inspeccionId = Guid.NewGuid();
@@ -85,7 +86,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
                 EquipoId: equipoId,
                 RutinaId: 18,
                 RutinaCodigo: "INSP. BULL.MOTOR",
-                TecnicoIniciador: "carlos.ruiz",
+                TecnicoIniciador: "1",
                 ProyectoId: 3,
                 Ubicacion: new UbicacionGps(4.711m, -74.072m, 8.5m, CapturadoEn),
                 IniciadaEn: CapturadoEn,
@@ -109,22 +110,22 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
                 CausaFallaId: null,
                 ObservacionCampo: null,
                 Ubicacion: null,
-                EmitidoPor: "carlos.ruiz",
+                EmitidoPor: "1",
                 RegistradoEn: CapturadoEn),
             new DiagnosticoEmitido_v1(
                 InspeccionId: inspeccionId,
                 DiagnosticoFinal: "Inspección completa",
-                EmitidoPor: "carlos.ruiz",
+                EmitidoPor: "1",
                 EmitidoEn: CapturadoEn),
             new DictamenEstablecido_v1(
                 InspeccionId: inspeccionId,
                 Dictamen: DictamenOperacion.PuedeOperar,
                 Justificacion: "Sin hallazgos críticos",
-                EmitidoPor: "carlos.ruiz",
+                EmitidoPor: "1",
                 EstablecidoEn: CapturadoEn),
             new InspeccionFirmada_v1(
                 InspeccionId: inspeccionId,
-                FirmadoPor: "carlos.ruiz",
+                FirmadoPor: "1",
                 FirmaUri: "https://blobs/firma-01.png",
                 UbicacionFirma: new UbicacionGps(4.711m, -74.072m, 8.5m, CapturadoEn),
                 FirmadaEn: CapturadoEn));
@@ -146,7 +147,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             new InspeccionCancelada_v1(
                 InspeccionId: inspeccionId,
                 Motivo: "Cancelación previa del técnico",
-                CanceladaPor: "carlos.ruiz",
+                CanceladaPor: "1",
                 CanceladaEn: CapturadoEn));
         await session.SaveChangesAsync();
         return inspeccionId;
@@ -176,7 +177,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
         // X-Tecnico-Id simula el JWT claim en el mock de ADR-002 (tecnico contribuyente)
-        request.Headers.Add("X-Tecnico-Id", "carlos.ruiz");
+        // X-Tecnico-Id omitido: el default IdUsuario=1 del TestHeaderAwareSessionService es contribuyente.
 
         var response = await client.SendAsync(request);
 
@@ -233,7 +234,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             Content = JsonContent.Create(RequestBodyBase())
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Tecnico-Id", "carlos.ruiz");
+        // X-Tecnico-Id omitido: el default IdUsuario=1 del TestHeaderAwareSessionService es contribuyente.
 
         var response = await client.SendAsync(request);
 
@@ -248,7 +249,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
     public async Task POST_cancelar_inspeccion_tecnico_no_contribuyente_responde_403()
     {
         var inspeccionId = await SembrarInspeccionEnEjecucion(
-            equipoId: 80003, tecnicoId: "carlos.ruiz");
+            equipoId: 80003, tecnicoId: "1");
 
         var client = factory.CreateClient();
         var request = new HttpRequestMessage(
@@ -258,8 +259,9 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             Content = JsonContent.Create(RequestBodyBase())
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-        // Técnico externo no contribuyente
-        request.Headers.Add("X-Tecnico-Id", "tecnico.externo.99");
+        // X-Tecnico-Id=99 — int distinto al sembrado (=1), TestHeaderAwareSessionService
+        // mapea el header a IdUsuario=99 → técnico externo no contribuyente.
+        request.Headers.Add("X-Tecnico-Id", "99");
 
         var response = await client.SendAsync(request);
 
@@ -286,7 +288,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             Content = JsonContent.Create(RequestBodyBase(motivo: ""))
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Tecnico-Id", "carlos.ruiz");
+        // X-Tecnico-Id omitido: el default IdUsuario=1 del TestHeaderAwareSessionService es contribuyente.
 
         var response = await client.SendAsync(request);
 
@@ -314,7 +316,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             Content = JsonContent.Create(RequestBodyBase(motivo: "Corto"))
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Tecnico-Id", "carlos.ruiz");
+        // X-Tecnico-Id omitido: el default IdUsuario=1 del TestHeaderAwareSessionService es contribuyente.
 
         var response = await client.SendAsync(request);
 
@@ -340,7 +342,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             Content = JsonContent.Create(RequestBodyBase())
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Tecnico-Id", "carlos.ruiz");
+        // X-Tecnico-Id omitido: el default IdUsuario=1 del TestHeaderAwareSessionService es contribuyente.
 
         var response = await client.SendAsync(request);
 
@@ -367,7 +369,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             Content = JsonContent.Create(RequestBodyBase())
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-        request.Headers.Add("X-Tecnico-Id", "carlos.ruiz");
+        // X-Tecnico-Id omitido: el default IdUsuario=1 del TestHeaderAwareSessionService es contribuyente.
 
         var response = await client.SendAsync(request);
 

@@ -1,4 +1,5 @@
 using Inspecciones.Domain.Catalogos;
+using Inspecciones.Infrastructure.Auth;
 using Inspecciones.Infrastructure.Erp;
 using Inspecciones.Infrastructure.Erp.Dtos;
 using Marten;
@@ -297,10 +298,26 @@ public static class CatalogosEndpoints
         // abrir la app y el admin lo usa para "Refrescar ahora". Sin body; el
         // handler decide internamente qué catálogos verificar.
         // Siempre devuelve 200 OK aunque algún catálogo falle (D5 partial-failure).
+        //
+        // PRE-CAP-1 (cierre FU-52, spec slice mt-1 §9.5 D-MT1-9): requiere
+        // capability "ejecutar-inspeccion" o "administrar-catalogos".
         app.MapPost("/api/v1/catalogos/sync", async (
                 SincronizarCatalogosHandler handler,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains("ejecutar-inspeccion")
+                    && !session.Capabilities.Contains("administrar-catalogos"))
+                {
+                    return Results.Json(
+                        new
+                        {
+                            codigoError = "PRE-1",
+                            mensaje = "Capability 'ejecutar-inspeccion' o 'administrar-catalogos' requerida."
+                        },
+                        statusCode: 403);
+                }
+
                 var resultado = await handler.EjecutarAsync(ct);
                 return Results.Ok(new
                 {

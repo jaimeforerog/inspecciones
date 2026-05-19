@@ -15,4 +15,10 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
 
+  <!-- Sinco corporativos — identidad del host PWA (ADR-002 / ADR-009). -->
+  <ItemGroup>
+    <PackageReference Include="SincoSoft.MYE.Common" />
+    <PackageReference Include="SincoSoft.MYE.Middleware" />
+  </ItemGroup>
+
 </Project>

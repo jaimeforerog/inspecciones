@@ -34,6 +34,17 @@
   </ItemGroup>
   <ItemGroup Label="Logging / Hosting">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+    <!-- 9.0.3 requerido por SincoSoft.MYE.Common 1.5.1 (transitive vía Microsoft.EntityFrameworkCore 9.0.3). -->
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.3" />
+  </ItemGroup>
+  <ItemGroup Label="Sinco corporativos — Middleware de identidad del host PWA (ADR-002 / ADR-009)">
+    <!--
+      Paridad 1:1 con proyecto Attachment. SincoSoft.MYE.Common expone
+      MiddlewareAuthorizationToken (extrae JWT y popula SessionVariables).
+      SincoSoft.MYE.Middleware encapsula la pipeline ASP.NET de validación.
+      Feed corporativo: pkgs.dev.azure.com/sincosoftsas/...
+    -->
+    <PackageVersion Include="SincoSoft.MYE.Common" Version="1.5.1" />
+    <PackageVersion Include="SincoSoft.MYE.Middleware" Version="1.1.6" />
   </ItemGroup>
 </Project>

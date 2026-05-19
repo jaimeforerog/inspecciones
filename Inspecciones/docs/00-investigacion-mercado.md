@@ -1124,13 +1124,50 @@ B-5: Integración punta a punta + ajustes          (2 sem)       ◀ todos
 
 ---
 
-## 9.14 ADR-002 — Estrategia de autenticación y autorización (2026-04-27)
+## 9.14 ADR-002 — Estrategia de autenticación y autorización (2026-04-27 → cerrada 2026-05-19)
 
-**Estado:** Tentativamente aceptada, dependiente de confirmar el mecanismo de auth actual de Sinco.
+**Estado:** **ACEPTADA** (cerrada 2026-05-19 con implementación del slice `mt-1-jwt-claims-pipeline`).
 
-> **⚠️ DECISIÓN 2026-05-05 — el módulo no maneja identidad:** análisis de opciones A/B/C/D/E queda como referencia histórica. **Decisión Jaime 2026-05-05:** el módulo Inspecciones NO maneja usuarios, NO sincroniza identidad, NO tiene app registration propio. Toda la identidad viene del host PWA Sinco MYE vía JWT. El módulo solo: (a) valida cloud-side el token recibido (issuer/JWKS configurable según el IdP del host), (b) autoriza por capability, (c) usa `tecnicoId` opaco del JWT. Endpoints `GET /api/v1/admin/usuarios?desde={lastSync}` (U-1, U-2) eliminados del contrato. Sin sync de usuarios — sin coordinación con equipo Seguridad/IT Sinco. Las 5 opciones del análisis abajo describen IdPs posibles para el host PWA, no para este módulo. Ver `06-contrato-apis-erp.md` §3.6 (NO APLICA) + `roadmap.md` Fase 2 actualizada.
+> **DECISIÓN FINAL 2026-05-19:** Inspecciones consume el JWT que la PWA Sinco MYE host propaga en cada request. La validación se delega al middleware corporativo `MiddlewareAuthorizationToken` del paquete `SincoSoft.MYE.Common 1.5.1` (mismo paquete usado por el proyecto hermano Attachment — paridad 1:1). Las 5 claims del contrato (`UsuarioId`, `NomUsuario`, `IdEmpresa`, `IdSucursal`, `IdProyecto`) más una claim adicional `capabilities` (lista de strings) se exponen al resto del módulo a través del puerto `ISessionService` (`Inspecciones.Infrastructure.Auth`). El módulo NO maneja identidad propia, NO sincroniza usuarios, NO tiene app registration propio. Slice de implementación: `slices/mt-1-jwt-claims-pipeline/`. Cierra FU-14 y FU-52.
 >
-> **Aclaración previa 2026-04-29 (preservada):** este análisis se redactó asumiendo que el módulo cloud elegía su propio IdP de manera autónoma. La realidad operativa es distinta: **Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente** y hereda el contexto del usuario del host. La decisión 2026-05-05 cierra esta línea — el módulo no participa en la elección de IdP, solo valida lo que reciba.
+> **Decisión Jaime 2026-05-05 (preservada):** el módulo Inspecciones NO maneja usuarios. Endpoints `GET /api/v1/admin/usuarios` (U-1, U-2) eliminados del contrato. Sin coordinación con equipo Seguridad/IT Sinco. El análisis histórico de opciones A/B/C/D/E (abajo) describe IdPs posibles para el host PWA, no para este módulo.
+>
+> **Aclaración previa 2026-04-29 (preservada):** Inspecciones es módulo dentro de la PWA Sinco MYE móvil existente y hereda el contexto del usuario del host.
+
+### Implementación cerrada (mt-1, commit `feat(slice-mt-1): ...`)
+
+**Puerto `ISessionService`** (`src/Inspecciones.Infrastructure/Auth/ISessionService.cs`):
+
+```csharp
+public interface ISessionService
+{
+    int IdEmpresa { get; }       // claim canonical "IdEmpresa" (D-MT1-1)
+    int IdUsuario { get; }       // claim "UsuarioId"
+    string NomUsuario { get; }   // claim "NomUsuario"
+    int IdSucursal { get; }      // claim "IdSucursal" (0 si no aplica)
+    int IdProyecto { get; }      // claim "IdProyecto" (0 si no aplica)
+    IReadOnlyCollection<string> Capabilities { get; }
+}
+```
+
+**Implementaciones registradas en DI condicional por env:**
+
+- **Producción/Development**: `SincoMiddlewareSessionService` lee `MiddlewareAuthorizationToken.SessionVariables()` del paquete corporativo. Si la claim `IdEmpresa` (PRE-AUTH-3) o `UsuarioId` (PRE-AUTH-4) está ausente, lanza `ClaimRequeridaException` que un middleware global en `Program.cs` mapea a `401 Unauthorized` con body `{ codigoError: "CLAIM-{NOMBRE}-AUSENTE", mensaje: ... }`. Las claims `IdSucursal`, `IdProyecto`, `NomUsuario` son opcionales (default a 0/empty). La claim `capabilities` es manejo especial: si el JWT no la expone, devuelve el set completo (always-allow) hasta que el host confirme el contrato (FU-54).
+- **Tests (`ASPNETCORE_ENVIRONMENT=Test`)**: la fixture `InspeccionesAppFactory` registra `TestHeaderAwareSessionService` por default (lee headers HTTP para backward-compat con tests legacy) y permite override por test vía `factory.WithSessionService(new FakeSessionService(...))`. El middleware corporativo NO se monta en env Test — paridad con proyecto Attachment.
+
+**Endpoints HTTP refactorizados (15):** cada uno lee `ISessionService session` por DI en la lambda, valida la capability con `if (!session.Capabilities.Contains("ejecutar-inspeccion")) return Forbidden403("PRE-1", ...);` y construye el `tecnicoId` desde `session.IdUsuario.ToString(CultureInfo.InvariantCulture)` (D-MT1-6 — el dominio sigue tratando el `TecnicoId` como string opaco, sin cambiar el shape de los eventos `_v1` existentes). Headers de simulación (`X-Sin-Capability-Generar-OT`, `X-Sin-Capability-Ejecutar`, `X-Tecnico-Id`) eliminados de los endpoints — vivían solo como mock de tests pre-mt-1.
+
+**Regla dura nueva (CLAUDE.md):** todo endpoint HTTP lee identidad vía `ISessionService`. Prohibido leer `HttpContext.User` o claims directamente en endpoints o handlers. El dominio nunca conoce JWTs — los handlers reciben `ClaimsTecnico` por parámetro.
+
+**Endpoint que gana capability check (cierre FU-52):** `POST /api/v1/catalogos/sync` ahora requiere `ejecutar-inspeccion` o `administrar-catalogos`.
+
+### Followups vivos asociados
+
+- **FU-44** (rola a **mt-3**): propagar el JWT entrante a `MaquinariaErpClient` y a las sagas que disparan llamadas al ERP. Hoy el cliente usa `MaquinariaErpOptions.JwtToken` (token fijo de config). Para sagas que corren fuera de scope HTTP, definir estrategia (token de servicio dedicado vs. extraer JWT del envelope Wolverine).
+- **FU-53** (cross-team CI): documentar cómo configurar el credential provider para los feeds Azure DevOps en GitHub Actions (PAT en secret o caché propia del runner) antes del primer merge a `main`. Localmente, el restore funciona con la caché global caliente.
+- **FU-54** (cross-team Sergio/David): confirmar si el JWT del host PWA emite la claim `capabilities` (array de strings). Cuando se confirme el contrato, apretar el default de `SincoMiddlewareSessionService.Capabilities` de "always-allow" a "vacío" — esto convierte el "default permisivo" en "default deniegues" y obliga al host a propagar la claim explícitamente.
+
+### Análisis histórico de opciones (preservado para referencia)
 
 ### Contexto
 
@@ -2048,6 +2085,92 @@ Estos gaps son aceptados conscientemente para v1.0 y tienen camino de evolución
 ### Diagrama interactivo
 
 Ver [`09-adr-008-offline-cliente.html`](09-adr-008-offline-cliente.html) — flujo cliente offline → cola → sync → eventos en Marten + estados de un comando + flujo de adjuntos en 2 fases + anatomía de una jornada.
+
+---
+
+## 9.17 ADR-009 — Multi-tenancy Marten conjoined por `IdEmpresa` (2026-05-19)
+
+**Estado:** **ACEPTADA** como decisión arquitectónica (enforcement implementado en slices mt-1..mt-4 del sub-track multi-tenancy; mt-1 cerrado el 2026-05-19, mt-2..mt-4 pendientes).
+
+### Contexto
+
+Inspecciones es un módulo embebido en la PWA Sinco MYE que sirve a múltiples empresas (clientes finales de Sinco). Cada empresa tiene sus propios proyectos, equipos, inspecciones, hallazgos y catálogos. El JWT del host PWA propaga `IdEmpresa: int` (decisión D-MT1-1 de mt-1) en cada request — el módulo lo recibe vía `ISessionService.IdEmpresa` ([ADR-002 §9.14](#914-adr-002--estrategia-de-autenticación-y-autorización)).
+
+La pregunta: **¿cómo se persiste y consulta la data por-empresa en Marten?**
+
+### Opciones evaluadas
+
+| Opción | Marten setup | Pro | Con |
+|---|---|---|---|
+| **A. Multi-DB (database-per-tenant)** | Una DB Postgres por empresa | Aislamiento físico fuerte; backups independientes | Costo Azure × N empresas; provisioning operativo complejo; migraciones N veces; cross-tenant queries imposibles |
+| **B. Multi-schema (schema-per-tenant)** | Schema Marten distinto por empresa | Aislamiento lógico fuerte; migraciones agrupables | Marten tiene soporte experimental; switching de schema por request requiere wiring custom |
+| **C. Marten `Conjoined` (tenant_id discriminado en cada tabla)** | Tablas únicas con columna `tenant_id` indexada | Soporte nativo Marten; query filter automático por session; un único schema migrado | Riesgo si el filter no se aplica (bug = leak cross-tenant); índice por `tenant_id` indispensable |
+| **D. Application-level filtering (sin tenancy en Marten)** | Cada query incluye `WHERE IdEmpresa = ?` manualmente | Cero overhead Marten | Frágil — un solo query sin el WHERE es un leak; revisión humana en cada slice |
+
+### Decisión
+
+**Opción C — Marten `Conjoined` con `tenant_id` derivado de `ISessionService.IdEmpresa`.**
+
+Razones:
+
+1. **Soporte nativo Marten 7**: `StoreOptions.Policies.AllDocumentsAreMultiTenanted()` y `session.ForTenant(idEmpresa)` activan el filter automático en lectura y escritura. Cada documento persiste con `tenant_id` y cada query lo agrega al WHERE implícitamente.
+2. **Single migration path**: una sola `inspecciones` schema, una sola migración por cambio. El operacional es idéntico al actual.
+3. **Cost-effective**: una DB Postgres compartida (Azure Database for PostgreSQL Flexible) escala con índices y particionamiento. No hay overhead de provisioning por empresa.
+4. **Compatible con event store**: los streams `Inspeccion` también se persisten con `tenant_id` — el `IDocumentSession.Events.AggregateStreamAsync<T>(streamId)` filtra automáticamente.
+5. **D5 firmado por el usuario (mt-1 spec §0.D5)**: todos los catálogos son por-empresa (sin excepciones single-tenant), siempre que Marten lo permita. Conjoined lo permite uniformemente.
+
+### Arquitectura del flujo (post-mt-2)
+
+```
+HTTP Request
+   ↓
+ISessionService.IdEmpresa = 7    (lee del JWT del host)
+   ↓
+Endpoint reads session.IdEmpresa
+   ↓
+Handler.ManejarAsync(cmd, claims, ct)
+   ↓
+IDocumentSession session = store.LightweightSession(tenantId: idEmpresa)
+       (factory wired en DI usando ISessionService — agregado en mt-2)
+   ↓
+session.Events.AggregateStreamAsync<Inspeccion>(...)
+       (Marten aplica tenant_id=7 automáticamente)
+session.Events.Append(streamId, evento_v1)
+       (Marten persiste con tenant_id=7)
+   ↓
+session.SaveChangesAsync()
+   ↓
+HTTP Response
+```
+
+### Slices del sub-track multi-tenancy
+
+| Slice | Estado | Foco |
+|---|---|---|
+| **mt-1** — JWT claims pipeline | ✅ Cerrado 2026-05-19 | `ISessionService` puerto + cableado en 15 endpoints + ADR-002 cerrado + ADR-009 creado |
+| **mt-2** — Marten conjoined | ⏳ Pendiente | `StoreOptions.AllDocumentsAreMultiTenanted()` + `IDocumentSessionFactory` wired al `ISessionService` + migración de schema (`tenant_id` column + index) + tests cross-tenant isolation |
+| **mt-3** — JWT propagation a ERP | ⏳ Pendiente | Propagar JWT entrante a `MaquinariaErpClient` (FU-44). Decidir estrategia para sagas que corren fuera de scope HTTP (token de servicio dedicado vs. capturar JWT en envelope Wolverine) |
+| **mt-4** — Smoke E2E + observabilidad | ⏳ Pendiente | Tests E2E con 2 tenants concurrentes, asserts de no-leak, métricas App Insights por `IdEmpresa` |
+
+### Decisiones secundarias firmadas (spec mt-1)
+
+- **D2 — `Conjoined`** (no schema-per-tenant ni DB-per-tenant).
+- **D3 — ETag de catálogos en envelope** (no bump de evento `_v1`). Razón: los catálogos pre-tenancy ya están persistidos con shape actual; el `tenant_id` se agrega a la fila sin tocar el shape del evento.
+- **D4 — Reset del schema en dev, backfill en staging**, sin migración cross-empresa. Razón: el módulo está en pilotaje, no hay data prod por-empresa que migrar.
+- **D5 — Todos los catálogos son por-empresa** (sin excepciones single-tenant), siempre que Marten lo permita. Decisión Jaime 2026-05-19.
+
+### Riesgos
+
+- **Riesgo principal**: si el `IDocumentSessionFactory` deja de filtrar por `tenant_id` (bug de wiring), un endpoint puede leer/escribir cross-tenant. Mitigación:
+  - Test E2E con 2 tenants concurrentes que escriben + leen distinto `InspeccionId` con mismo número de stream — Marten Conjoined garantiza que `AggregateStreamAsync` con tenant_id distinto retorne null.
+  - Code review focus: cada `LightweightSession()` debe venir del factory inyectado (no directo del `IDocumentStore`).
+  - Métrica de observabilidad: cardinalidad de `tenant_id` por endpoint en App Insights — pico no esperado sugiere wiring incorrecto.
+- **Riesgo secundario**: PR del ADR sin tests cross-tenant ⇒ el bug se descubre en producción. Mitigación: mt-4 establece la baseline de testing antes del piloto.
+
+### Followups
+
+- **FU-55** (placeholder — abrir al iniciar mt-2): documentar cómo invalidar la caché Marten al cambiar `tenant_id` mid-session (no debería pasar en mt-1, pero es posible en sagas con context-switch).
+- **FU-44** (vivo desde el sub-track ERP): propagación JWT al cliente HTTP del ERP. Rola a mt-3 según decisión D-MT1-10.
 
 ---
 

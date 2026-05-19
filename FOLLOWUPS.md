@@ -55,14 +55,9 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 **Bloqueo pendiente:** confirmar con el orquestador si agregar `EquipoId` a `InspeccionFirmada_v1` e `InspeccionCancelada_v1` es aceptable (el campo es parte del aggregate state, su inclusión en el evento no cambia lógica de negocio — solo enriquece el payload para proyecciones). Si se aprueba, el refactor es: (1) agregar `EquipoId: int` a los dos eventos, (2) actualizar los `Apply` correspondientes del aggregate, (3) reemplazar `EventProjection` por `MultiStreamProjection` en `InspeccionAbiertaPorEquipoProjection`, (4) actualizar los fixtures de test que construyen esos eventos.
 **Notas:** la `EventProjection` actual es funcionalmente correcta; no es deuda bloqueante. La migración a `MultiStreamProjection` mejora rendimiento (elimina la query de lookup al delete) pero no es urgente.
 
-### #14 — Claims reales desde JWT cuando ADR-002 se resuelva 🟢
+### #14 — Claims reales desde JWT cuando ADR-002 se resuelva ✅ MOVIDO A CERRADOS
 
-**Origen:** slice 1b refactorer — candidato §4.2 green-notes
-**Fecha:** 2026-05-06
-**Tipo:** deuda técnica · seguridad · ADR-002
-**Descripción:** El endpoint `POST /api/v1/inspecciones` construye un `ClaimsTecnico` mock fijo (`TecnicoIniciador="rmartinez"`, `ProyectosAsignados={request.ProyectoId}`, `TieneCapabilityEjecutarInspeccion=true`). Cuando ADR-002 se resuelva (mecanismo de inyección de claims del host PWA), reemplazar por extracción desde `HttpContext.User` o claims del middleware del host.
-**Disparador para abrir slice:** decisión sobre ADR-002 (mecanismo concreto de identidad del host PWA confirmado con Jaime/IT Seguridad) + slice de integración del módulo al host.
-**Notas:** el mock es correcto para el MVP en aislamiento; no bloquea ningún slice hasta integración al host.
+(Ver sección `## Cerrados` abajo — cerrado por slice mt-1 el 2026-05-19.)
 
 ### #15 — Wolverine envelope dedup real para `X-Client-Command-Id` (ADR-008) 🟢
 
@@ -325,17 +320,50 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Acción sugerida:** implementar `Func<int> NextEquipoId()` en `InspeccionesAppFactory` o helper compartido que devuelva un `int` único por test (counter atómico). Reemplazar IDs hardcoded en todos los tests E2E. Alternativa: schema reset entre tests (más costoso pero más simple).
 **Notas:** vinculado a FU-39 (Application.Tests sin Docker). Ambos cierran probablemente en el mismo slice de saneamiento de test infra.
 
-### #52 — Endpoint `POST /api/v1/catalogos/sync` sin verificacion de capability PRE-1 (ADR-002) 🟢
+### #52 — Endpoint `POST /api/v1/catalogos/sync` sin verificacion de capability PRE-1 (ADR-002) ✅ MOVIDO A CERRADOS
 
-**Origen:** slice erp-4 review hallazgo #2
+(Ver sección `## Cerrados` abajo — cerrado por slice mt-1 el 2026-05-19 vía D-MT1-9.)
+
+### #53 — Auth a feeds NuGet corporativos Azure DevOps en CI 🟢
+
+**Origen:** slice mt-1 spec §12.C — decisión firmada 2026-05-19.
 **Fecha:** 2026-05-19
-**Tipo:** seguridad · ADR-002 · endpoint
-**Descripción:** El endpoint `POST /api/v1/catalogos/sync` no verifica la capability `ejecutar-inspeccion` o `administrar-catalogos` del JWT entrante (PRE-1 del spec erp-4 §4). El endpoint es actualmente publico — cualquier request sin token puede dispararle el sync-all. La situacion es consistente con todos los endpoints del modulo (FU-14 ADR-002 pendiente), pero es especialmente sensible aqui porque el sync-all hace llamadas al ERP Maquinaria_V4 con el JWT de servicio configurado, lo que podria ser explotado para saturar el ERP con solicitudes de sync desde fuera del host PWA.
-**Disparador para abrir slice:** cierre de ADR-002 (mecanismo concreto de identidad del host PWA) — mismo disparador que FU-14. La adicion de auth al endpoint erp-4 se resuelve en el mismo slice que implementa auth global.
-**Accion:** cuando ADR-002 se resuelva, agregar el middleware de validacion de capability al endpoint `POST /api/v1/catalogos/sync` consistente con el patron aplicado a los demas endpoints del modulo.
-**Notas:** vinculado a FU-14. No bloquea MVP en aislamiento — el ERP Maquinaria_V4 tiene su propio JWT de servicio como segunda linea de defensa. Prioridad media.
+**Tipo:** infra · CI · seguridad
+**Descripción:** `NuGet.Config` del repo lista los feeds corporativos Sinco (`pkgs.dev.azure.com/sincosoftsas/...`) además de `nuget.org`. Los paquetes `SincoSoft.MYE.Common 1.5.1` y `SincoSoft.MYE.Middleware 1.1.6` introducidos por mt-1 solo viven en esos feeds. Localmente el restore funciona porque los paquetes ya están en `%USERPROFILE%\.nuget\packages\` (caché caliente), pero en CI un `dotnet restore` fresco falla con `NU1301 (401 Unauthorized)` contra los feeds Azure DevOps. No hay credentials provider configurado en el pipeline.
+**Disparador para abrir slice:** previo al primer merge de mt-1 a `main`, o cuando se cablee el pipeline GitHub Actions de Inspecciones (mismo slice que el primer despliegue real a Azure Container Apps).
+**Acción sugerida:** registrar un secret `AZURE_DEVOPS_NUGET_PAT` en el repo GitHub + agregar paso al workflow que configure `NuGet.Config` con `<packageSourceCredentials>` desde la env var, o usar `Azure Artifacts Credential Provider` (`microsoft/setup-msbuild` + `nuget setApiKey`). Alternativa: vendoring/mirroring local de los dos paquetes corporativos a un feed accesible sin auth.
+**Notas:** vinculado al embargo NuGet local cerrado por mt-1. Localmente queda destrabado siempre que la caché esté caliente. Riesgo: contribuidor nuevo sin caché necesita acceso al PAT o asistencia del usuario para hidratar caché.
+
+### #54 — Confirmar con Sergio/David si el JWT del host PWA emite claim `capabilities` 🟢
+
+**Origen:** slice mt-1 spec §12.D — decisión firmada 2026-05-19.
+**Fecha:** 2026-05-19
+**Tipo:** integración · cross-team · seguridad · ADR-002
+**Descripción:** mt-1 implementa `SincoMiddlewareSessionService.Capabilities` con fallback "always-allow" (`["ejecutar-inspeccion", "generar-ot", "administrar-catalogos"]`) cuando el JWT del host no expone la claim `capabilities`. El contrato canonical `06-contrato-apis-erp.md §0.B.5` lista 5 claims (`UsuarioId, NomUsuario, IdEmpresa, IdSucursal, IdProyecto`) — capabilities NO está confirmada. El roadmap §2.5 dice que "el host PWA mapea su catálogo de perfiles ERP a capabilities", pero el formato exacto del claim (string CSV, array, claim repetida) no está acordado.
+**Disparador para abrir slice:** cuando Sergio/David confirmen el contrato. Acciones según respuesta:
+- Si el host emite `capabilities`: apretar el default de `SincoMiddlewareSessionService.Capabilities` de "always-allow" a `[]` (denegar por default) y actualizar §0.B.5 del contrato + ADR-002 con el shape exacto.
+- Si el host NO emite `capabilities` aún: definir si el módulo Inspecciones lo infiere de otra claim (p. ej. `Permisos`/`Roles` del JWT actual) o si se introduce una nueva claim cross-team en coordinación con el equipo del host.
+**Acción cross-team:** llevar la pregunta a la próxima ronda con Sergio/David (`07-preguntas-destrabar-followups.md`). Pregunta concreta: ¿el JWT del host PWA emite hoy una claim que mapee a "capabilities" del módulo (ej. `Permisos`, `Roles`), y si no, en qué horizonte se puede agregar?
+**Notas:** no bloquea mt-1 (always-allow es comportamiento histórico equivalente al mock). FU-54 cierra cuando el contrato esté confirmado y los defaults aprieten.
 
 ## Cerrados
+
+### #14 — Claims reales desde JWT cuando ADR-002 se resuelva ✅
+
+**Origen:** slice 1b refactorer — candidato §4.2 green-notes
+**Fecha apertura \ cierre:** 2026-05-06 / 2026-05-19
+**Cierre:** slice `mt-1-jwt-claims-pipeline` (commit `feat(slice-mt-1): JWT claims pipeline + ISessionService + bypass env Test`). Spec firmada `slices/mt-1-jwt-claims-pipeline/spec.md`. ADR-002 cerrado en `Inspecciones/docs/00-investigacion-mercado.md §9.14`.
+**Tipo:** deuda técnica · seguridad · ADR-002
+**Resolución:** los 15 endpoints HTTP del módulo ahora leen el `tecnicoId` desde el puerto `ISessionService` (`session.IdUsuario.ToString(CultureInfo.InvariantCulture)` — D-MT1-6) en vez del mock `"rmartinez"` hardcodeado. En producción `SincoMiddlewareSessionService` extrae los 5 claims canónicos del JWT del host (`MiddlewareAuthorizationToken.SessionVariables()` del paquete corporativo `SincoSoft.MYE.Common 1.5.1` — paridad 1:1 con proyecto Attachment). Capabilities también se leen del puerto. En env Test, `TestHeaderAwareSessionService` mantiene backward-compat con los ~57 tests legacy; tests nuevos del slice usan `FakeSessionService` puro vía `factory.WithSessionService(fake)`.
+**Followups derivados:** FU-44 (propagación JWT al ERP — rola a mt-3), FU-53 (auth feeds NuGet en CI — abierto), FU-54 (cross-team Sergio/David sobre claim `capabilities` — abierto).
+
+### #52 — Endpoint `POST /api/v1/catalogos/sync` sin verificacion de capability PRE-1 (ADR-002) ✅
+
+**Origen:** slice erp-4 review hallazgo #2
+**Fecha apertura \ cierre:** 2026-05-19 / 2026-05-19
+**Cierre:** slice `mt-1-jwt-claims-pipeline` D-MT1-9 (mismo commit que FU-14).
+**Tipo:** seguridad · ADR-002 · endpoint
+**Resolución:** el endpoint ahora valida `if (!session.Capabilities.Contains("ejecutar-inspeccion") && !session.Capabilities.Contains("administrar-catalogos")) return 403;` antes de invocar el handler. Body 403: `{ codigoError: "PRE-1", mensaje: "Capability 'ejecutar-inspeccion' o 'administrar-catalogos' requerida." }`. Cubierto por dos tests E2E nuevos en `SessionServicePipelineTests`: §6.5 (sin capability → 403) y §6.6 (con `administrar-catalogos` → no-403, preserva 23 tests existentes de erp-4).
 
 ### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path ✅
 

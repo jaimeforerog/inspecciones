@@ -82,12 +82,13 @@
 
 | # | Paso | Estado | Notas |
 |---|---|---|---|
-| 2.1 | Confirmar mecanismo actual de auth del host PWA Sinco MYE móvil | ⏳ | **Bloqueante real de ADR-002**. Necesario para definir cómo se valida el token cloud-side (issuer, JWKS, claims esperadas) |
-| 2.5 | Definir matriz comando → capability requerida (least privilege) | ⏳ | **No predefine perfiles del ERP** (técnico, supervisor, etc.). La matriz define **capabilities** (verbos como `ejecutar-inspeccion`, `generar-ot`, `auditar-inspecciones`, `recibir-alertas-sla`, `recibir-alertas-ot-fallida`, `recibir-alertas-ot-rechazada` —última agregada 2026-04-30) que el host PWA mapea a su catálogo de perfiles ERP. El módulo nunca consulta "eres técnico" — consulta "tienes capability X". Independiente del IdP elegido (ADR-002). |
-| 2.6 | Implementar JWT validation middleware en backend cloud | ⏳ | Configurable según IdP del host |
-| 2.7 | Implementar JWT validation en APIs Sinco on-prem | ⏳ | Cross-team con equipos Sinco |
-| 2.8 | Política de gestión de claims (proyectos del técnico) | ⏳ | Mapeo del claim que use el host (p. ej. `sinco_obras` literal del ERP si Entra ID; el módulo lo expone internamente como `proyectos` siguiendo decisión 2026-04-30 followup #4). |
-| 2.9 | Tests de auth end-to-end | ⏳ | |
+| 2.1 | Confirmar mecanismo actual de auth del host PWA Sinco MYE móvil | ✅ | Confirmado 2026-05-19: el host valida JWT con paquete corporativo `SincoSoft.MYE.Common 1.5.1` (`MiddlewareAuthorizationToken`). Mismo paquete consumido por proyecto Attachment — paridad 1:1. ADR-002 cerrado. |
+| 2.5 | Definir matriz comando → capability requerida (least privilege) | 🟡 | Matriz inicial implementada en slice mt-1 (`ejecutar-inspeccion`, `generar-ot`, `administrar-catalogos`). Capability `recibir-alertas-*` queda para slice de notificaciones (Fase 6). FU-54 abierto: confirmar cross-team si el JWT del host emite la claim `capabilities` (hoy mt-1 usa "always-allow" fallback). |
+| 2.6 | Implementar JWT validation middleware en backend cloud | ✅ | Slice mt-1 (2026-05-19): `Program.cs` monta `UseMiddleware<MiddlewareAuthorizationToken>()` en envs no-Test + handler global de `ClaimRequeridaException` → 401. Validación delegada al paquete corporativo. |
+| 2.7 | Implementar JWT validation en APIs Sinco on-prem | ⏳ | Cross-team con equipos Sinco — fuera de scope del módulo. Maquinaria_V4 ya valida el JWT del host con el mismo paquete (paridad). |
+| 2.8 | Política de gestión de claims (proyectos del técnico) | 🟡 | mt-1 D-MT1-5 implementa `ClaimsTecnico.ProyectosAsignados = { request.ProyectoId }` (always-allow, preserva mock). Enforcement cross-proyecto (`request.ProyectoId == session.IdProyecto`) difiere a mt-2. |
+| 2.9 | Tests de auth end-to-end | ✅ | Slice mt-1: 8 tests E2E activos en `SessionServicePipelineTests` + 2 unit tests del fake. Cubre happy path, claim ausente → 401, capability faltante → 403, capability `/catalogos/sync` → 403 (cierre FU-52), `IdUsuario` distinto al default → propaga al evento. 1 test skip (`§6.2 JWT real`) diferido a mt-2. |
+| 2.10 | **Sub-track multi-tenancy `mt-1..mt-4`** | 🟡 | mt-1 cerrado 2026-05-19 (JWT claims pipeline + ISessionService). mt-2 pendiente (Marten `Conjoined` por `IdEmpresa`). mt-3 pendiente (propagación JWT al ERP — cierre FU-44). mt-4 pendiente (tests E2E cross-tenant + observabilidad). Ver ADR-009 §9.17. |
 
 ---
 

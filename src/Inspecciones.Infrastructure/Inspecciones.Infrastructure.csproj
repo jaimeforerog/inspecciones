@@ -19,4 +19,10 @@
     <PackageReference Include="Microsoft.Azure.SignalR" />
   </ItemGroup>
 
+  <!-- Sinco corporativos — SincoMiddlewareSessionService lee MiddlewareAuthorizationToken
+       del paquete Common (ADR-002 / ADR-009, spec mt-1 D-MT1-7). -->
+  <ItemGroup>
+    <PackageReference Include="SincoSoft.MYE.Common" />
+  </ItemGroup>
+
 </Project>

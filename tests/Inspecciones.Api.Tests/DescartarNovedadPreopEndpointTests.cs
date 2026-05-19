@@ -39,11 +39,11 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
     /// <summary>
     /// Siembra un stream de inspección técnica en estado EnEjecucion.
-    /// TecnicoIniciador = "ana.gomez" (coincide con el header X-Tecnico-Id de los tests).
+    /// TecnicoIniciador = "1" (coincide con el header X-Tecnico-Id de los tests).
     /// </summary>
     private async Task<Guid> SembrarInspeccionEnEjecucion(
         int equipoId,
-        string tecnicoId = "ana.gomez")
+        string tecnicoId = "1")
     {
         var store = factory.Services.GetRequiredService<IDocumentStore>();
         var inspeccionId = Guid.NewGuid();
@@ -87,7 +87,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
                 EquipoId: equipoId,
                 RutinaId: 18,
                 RutinaCodigo: "INSP. BULL.MOTOR",
-                TecnicoIniciador: "ana.gomez",
+                TecnicoIniciador: "1",
                 ProyectoId: 3,
                 Ubicacion: new UbicacionGps(4.711m, -74.072m, 8.5m, CapturadoEn),
                 IniciadaEn: CapturadoEn,
@@ -111,22 +111,22 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
                 CausaFallaId: null,
                 ObservacionCampo: null,
                 Ubicacion: null,
-                EmitidoPor: "ana.gomez",
+                EmitidoPor: "1",
                 RegistradoEn: CapturadoEn),
             new DiagnosticoEmitido_v1(
                 InspeccionId: inspeccionId,
                 DiagnosticoFinal: "Inspección completa",
-                EmitidoPor: "ana.gomez",
+                EmitidoPor: "1",
                 EmitidoEn: CapturadoEn),
             new DictamenEstablecido_v1(
                 InspeccionId: inspeccionId,
                 Dictamen: DictamenOperacion.PuedeOperar,
                 Justificacion: "Sin hallazgos críticos",
-                EmitidoPor: "ana.gomez",
+                EmitidoPor: "1",
                 EstablecidoEn: CapturadoEn),
             new InspeccionFirmada_v1(
                 InspeccionId: inspeccionId,
-                FirmadoPor: "ana.gomez",
+                FirmadoPor: "1",
                 FirmaUri: "https://blobs/firma-01.png",
                 UbicacionFirma: new UbicacionGps(4.711m, -74.072m, 8.5m, CapturadoEn),
                 FirmadaEn: CapturadoEn));
@@ -140,7 +140,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
     /// </summary>
     private async Task<Guid> SembrarInspeccionConNovedadDescartada(int equipoId, int novedadId = 9001)
     {
-        var inspeccionId = await SembrarInspeccionEnEjecucion(equipoId, tecnicoId: "ana.gomez");
+        var inspeccionId = await SembrarInspeccionEnEjecucion(equipoId, tecnicoId: "1");
         var store = factory.Services.GetRequiredService<IDocumentStore>();
 
         await using var session = store.LightweightSession();
@@ -149,7 +149,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
                 InspeccionId: inspeccionId,
                 NovedadId: novedadId,
                 MotivoDescarte: $"Cerrado por ana.gomez el 2026-05-08 15:00 UTC desde Inspecciones",
-                DescartadaPor: "ana.gomez",
+                DescartadaPor: "1",
                 DescartadaEn: CapturadoEn));
         await session.SaveChangesAsync();
         return inspeccionId;
@@ -161,7 +161,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
     /// </summary>
     private async Task<Guid> SembrarInspeccionConHallazgoPreop(int equipoId, int novedadPreopOrigenId = 9001)
     {
-        var inspeccionId = await SembrarInspeccionEnEjecucion(equipoId, tecnicoId: "ana.gomez");
+        var inspeccionId = await SembrarInspeccionEnEjecucion(equipoId, tecnicoId: "1");
         var store = factory.Services.GetRequiredService<IDocumentStore>();
 
         await using var session = store.LightweightSession();
@@ -183,7 +183,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
                 CausaFallaId: 12,
                 ObservacionCampo: null,
                 Ubicacion: null,
-                EmitidoPor: "ana.gomez",
+                EmitidoPor: "1",
                 RegistradoEn: CapturadoEn));
         await session.SaveChangesAsync();
         return inspeccionId;
@@ -194,7 +194,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
     /// </summary>
     private async Task<Guid> SembrarInspeccionCancelada(int equipoId)
     {
-        var inspeccionId = await SembrarInspeccionEnEjecucion(equipoId, tecnicoId: "ana.gomez");
+        var inspeccionId = await SembrarInspeccionEnEjecucion(equipoId, tecnicoId: "1");
         var store = factory.Services.GetRequiredService<IDocumentStore>();
 
         await using var session = store.LightweightSession();
@@ -202,13 +202,13 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
             new InspeccionCancelada_v1(
                 InspeccionId: inspeccionId,
                 Motivo: "Cancelada para tests de DescartarNovedadPreop",
-                CanceladaPor: "ana.gomez",
+                CanceladaPor: "1",
                 CanceladaEn: CapturadoEn));
         await session.SaveChangesAsync();
         return inspeccionId;
     }
 
-    private static object RequestBodyBase(string descartadaPor = "ana.gomez") => new
+    private static object RequestBodyBase(string descartadaPor = "1") => new
     {
         descartadaPor
     };
@@ -216,7 +216,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
     private static HttpRequestMessage BuildRequest(
         Guid inspeccionId,
         int novedadId,
-        string? tecnicoId = "ana.gomez",
+        string? tecnicoId = "1",
         bool incluirClientCommandId = true,
         bool sinCapability = false)
     {
@@ -224,7 +224,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
             HttpMethod.Post,
             $"/api/v1/inspecciones/{inspeccionId}/novedades-preop/{novedadId}/descartar")
         {
-            Content = JsonContent.Create(RequestBodyBase(tecnicoId ?? "ana.gomez"))
+            Content = JsonContent.Create(RequestBodyBase(tecnicoId ?? "1"))
         };
 
         if (incluirClientCommandId)
@@ -256,7 +256,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "ana.gomez"));
+            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "1"));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK,
             "DescartarNovedadPreop devuelve 200 OK en el happy path (spec §9)");
@@ -265,8 +265,8 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
         resultado.Should().NotBeNull();
         resultado!.InspeccionId.Should().Be(inspeccionId);
         resultado.NovedadId.Should().Be(9001);
-        resultado.DescartadaPor.Should().Be("ana.gomez");
-        resultado.MotivoDescarte.Should().Contain("ana.gomez",
+        resultado.DescartadaPor.Should().Be("1");
+        resultado.MotivoDescarte.Should().Contain("1",
             "el motivo autogenerado incluye el userId del técnico (D-4)");
         resultado.MotivoDescarte.Should().Contain("UTC desde Inspecciones",
             "el motivo autogenerado usa la plantilla D-4 del spec §13");
@@ -284,7 +284,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "ana.gomez"));
+            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "1"));
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity,
             "PRE-2: la inspección está Firmada — no se puede descartar novedades (spec §6.2)");
@@ -303,7 +303,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "ana.gomez"));
+            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "1"));
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity,
             "PRE-2: la inspección está Cancelada — estado terminal (spec §6.3)");
@@ -322,7 +322,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "ana.gomez"));
+            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "1"));
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity,
             "PRE-5: la novedad 9001 ya fue descartada en esta inspección (spec §6.4 / I4 / INV-ND1)");
@@ -341,7 +341,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "ana.gomez"));
+            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "1"));
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity,
             "PRE-6 / INV-ND1: la novedad 9001 ya fue importada como hallazgo — exclusividad mutua (spec §6.5)");
@@ -360,7 +360,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "ana.gomez", sinCapability: true));
+            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "1", sinCapability: true));
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
             "PRE-4: el endpoint debe rechazar con 403 si el técnico no tiene capability 'ejecutar-inspeccion'");
@@ -375,7 +375,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
     {
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(Guid.NewGuid(), novedadId: 9001, tecnicoId: "ana.gomez"));
+            BuildRequest(Guid.NewGuid(), novedadId: 9001, tecnicoId: "1"));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound,
             "PRE-1: la inspección no existe en el store (spec §6.8)");
@@ -392,7 +392,7 @@ public class DescartarNovedadPreopEndpointTests(InspeccionesAppFactory factory)
 
         var client = factory.CreateClient();
         var response = await client.SendAsync(
-            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "ana.gomez", incluirClientCommandId: false));
+            BuildRequest(inspeccionId, novedadId: 9001, tecnicoId: "1", incluirClientCommandId: false));
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
             "El header X-Client-Command-Id es obligatorio (ADR-008 §9.16)");

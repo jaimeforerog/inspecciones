@@ -1,7 +1,10 @@
+using Inspecciones.Api.Tests.Auth;
+using Inspecciones.Infrastructure.Auth;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Npgsql;
@@ -78,9 +81,33 @@ public sealed class InspeccionesAppFactory : WebApplicationFactory<Program>, IAs
         await base.DisposeAsync();
     }
 
+    /// <summary>
+    /// Override del <see cref="ISessionService"/> registrado en DI antes de
+    /// crear el cliente HTTP — usado por <c>SessionServicePipelineTests</c>
+    /// (spec slice mt-1 §6 + §12.B) para inyectar instancias específicas que
+    /// fuerzan capabilities vacías, lanzan <c>ClaimRequeridaException</c>, etc.
+    ///
+    /// Devuelve un <see cref="WebApplicationFactory{Program}"/> nuevo que
+    /// comparte la misma fixture pero con el servicio sustituido — siguiendo
+    /// el patrón estándar de <c>WebApplicationFactory.WithWebHostBuilder</c>.
+    /// </summary>
+    public WebApplicationFactory<Program> WithSessionService(ISessionService session)
+        => WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<ISessionService>();
+                services.AddSingleton(session);
+            });
+        });
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        // Env Test: SincoMiddlewareSessionService NO se registra (Program.cs lo gatea
+        // por env); el middleware corporativo MiddlewareAuthorizationToken tampoco
+        // se monta. La fixture inyecta TestHeaderAwareSessionService por default.
+        // Decisión spec mt-1 §12.B firmada.
+        builder.UseEnvironment("Test");
 
         // UseSetting tiene prioridad sobre appsettings.Development.json (que puede tener
         // una connection string apuntando a la DB de desarrollo `inspecciones`, distinta
@@ -91,7 +118,12 @@ public sealed class InspeccionesAppFactory : WebApplicationFactory<Program>, IAs
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Postgres"] = _connectionString
+                ["ConnectionStrings:Postgres"] = _connectionString,
+                // BaseUrl placeholder — los tests no realizan llamadas reales al ERP
+                // (el listener vive en Wolverine local queue + outbox; los tests que
+                // realmente disparan el adapter HTTP usan WireMock independiente).
+                // Sin valor, IMaquinariaErpClient explota al construir HttpClient.
+                ["Maquinaria:BaseUrl"] = "http://wiremock-placeholder.test/api/v4/Maquinaria"
             });
         });
 
@@ -131,6 +163,12 @@ public sealed class InspeccionesAppFactory : WebApplicationFactory<Program>, IAs
             var fakeTime = new FakeTimeProvider(
                 new DateTimeOffset(2026, 5, 8, 15, 0, 0, TimeSpan.Zero));
             services.AddSingleton<TimeProvider>(fakeTime);
+
+            // ISessionService default en env Test: header-aware backward-compat con
+            // tests legacy (spec mt-1 — TestHeaderAwareSessionService).
+            // Los tests del slice mt-1 lo overridean vía WithSessionService(fake).
+            services.RemoveAll<ISessionService>();
+            services.AddScoped<ISessionService, TestHeaderAwareSessionService>();
         });
     }
 
