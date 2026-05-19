@@ -425,7 +425,7 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 
 **Origen:** slice erp-1 acople Maquinaria_V4 (2026-05-19)
 **Fecha apertura \ cierre:** 2026-05-19 / 2026-05-19
-**Cierre:** slice `mt-3-jwt-propagation-erp` (commit `feat(slice-mt-3): propagación JWT entrante al MaquinariaErpClient`). Spec firmada `slices/mt-3-jwt-propagation-erp/spec.md`.
+**Cierre:** slice `mt-3-jwt-propagation-erp` (commit `1108426`). Spec firmada `slices/mt-3-jwt-propagation-erp/spec.md`.
 **Tipo:** seguridad · ADR-002 · adapter
 **Resolución:** se introdujo el puerto `IBearerTokenAccessor` y el `BearerTokenPropagationHandler` (DelegatingHandler) que reemplaza el `http.DefaultRequestHeaders.Authorization` fijo. La cadena `ChainedBearerTokenAccessor` resuelve en orden HTTP → Ambient → ServiceAccount: cuando hay caller HTTP, propaga el Bearer del request; cuando es un listener Wolverine, propaga el JWT del envelope (header `X-Forwarded-Authorization` seteado via `AmbientBearerTokenAccessor`); fallback `MaquinariaErpOptions.JwtToken` cambia de rol a "service-account". Decisión D-MT3-2 (chained accessors con fallback). Fail-closed por `BearerTokenAusenteException` si todos vacíos (MT3-INV-3).
 **Followups derivados:** FU-60 (`CaptureBearerForOutboxMiddleware` automatización del envelope), FU-61 (re-evaluar AsyncLocal static), FU-62 (refresh JWT en retry — condicional).
