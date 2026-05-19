@@ -477,6 +477,33 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** primera vez que un desarrollador con Postgres local pero sin Docker necesite iterar en Application.Tests.
 **Notas:** copy/paste del patrón de `InspeccionesAppFactory` a `PostgresFixture` — bajo riesgo, baja prioridad mientras CI tenga Docker disponible.
 
+### #48 — Política Wolverine `ArgumentException → MoveToErrorQueue` es global 🟢
+
+**Origen:** slice erp-2-descartar-novedad-preop-outbox refactor
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · infra
+**Descripción:** La regla `opts.Policies.OnException<ArgumentException>().MoveToErrorQueue()` registrada en `Program.cs` aplica a todos los handlers, no solo a `DescartarNovedadPreopErpListener`. Si algún handler futuro usa `ArgumentException` para indicar un error de negocio recuperable (poco probable pero posible), esta política lo enviaría a dead-letter sin retry. La solución limpia es acotar la política al tipo de mensaje: `opts.HandlerFor<NovedadPreopDescartada_v1>().OnException<ArgumentException>().MoveToErrorQueue()` — cambio trivial si surge la colisión.
+**Disparador para abrir slice:** primer handler que necesite retry en `ArgumentException`.
+**Notas:** Riesgo bajo en MVP. Los handlers de dominio actuales no usan `ArgumentException` para flujos recuperables.
+
+### #49 — `NovedadPreopErpCierreFallido_v1` record no ejercido por tests 🟢
+
+**Origen:** slice erp-2-descartar-novedad-preop-outbox review §3 hallazgo #2
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · observabilidad
+**Descripción:** El record `NovedadPreopErpCierreFallido_v1` (5 campos: `InspeccionId`, `NovedadId`, `IntentosAgotados`, `UltimoError`, `EsReintentable`) existe en producción pero ningún test lo instancia directamente. La señal de observabilidad se emite vía `LoggerMessage` (que sí cubre el caso), pero el record en sí no tiene cobertura de constructor. Si a futuro se extiende para alimentar una proyección Marten (spec §8), el contrato del record puede divergir del `LoggerMessage` silenciosamente.
+**Disparador para abrir slice:** cuando se cree la proyección "novedades con cierre ERP fallido" (spec §8). En ese momento alinear el record con el `LoggerMessage` o reemplazar el record por la struct del log.
+**Notas:** No bloqueante en MVP mientras sea solo log estructurado.
+
+### #50 — Assertions de tipo demasiado genéricas en tests 4xx del listener ✅
+
+**Origen:** slice erp-2-descartar-novedad-preop-outbox review §3 hallazgo #3
+**Fecha:** 2026-05-19 · **Cerrado:** 2026-05-19
+**Tipo:** deuda técnica · tests
+**Descripción:** Los tests `Listener_erp_400_no_reintenta_va_a_dead_letter_INV_L3` y `Listener_erp_404_no_reintenta_va_a_dead_letter_INV_L3` verifican `ThrowAsync<Exception>()` (tipo base) en lugar de `ThrowAsync<MaquinariaErpException>()`. Si el adapter cambia a lanzar un tipo de excepción diferente, los tests seguirían en verde aunque la política de retry de Wolverine (que filtra por `MaquinariaErpException`) pudiera verse afectada.
+**Disparador para abrir slice:** primera vez que se refactorice el contrato de excepciones del adapter `MaquinariaErpClient`.
+**Notas:** Cerrado en la iteración 2 post-review del refactorer (2026-05-19). Ambos tests cambiados a `ThrowAsync<MaquinariaErpException>()` con aserción adicional sobre `StatusCode` exacto (`BadRequest` y `NotFound` respectivamente).
+
 ---
 
 ## Plantilla de entry

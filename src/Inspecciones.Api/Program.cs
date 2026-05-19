@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using Inspecciones.Api.Catalogos;
@@ -5,10 +6,12 @@ using Inspecciones.Api.Inspecciones;
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
 using Inspecciones.Infrastructure.Erp;
+using Inspecciones.Infrastructure.Erp.Listeners;
 using Marten;
 using Oakton;
 using Scalar.AspNetCore;
 using Wolverine;
+using Wolverine.ErrorHandling;
 using Wolverine.Marten;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -67,10 +70,42 @@ builder.Host.UseWolverine(opts =>
 {
     // Auto-discovery de handlers en todos los proyectos referenciados.
     opts.Discovery.IncludeAssembly(typeof(Inspecciones.Application.AssemblyMarker).Assembly);
+    // Listeners de integración ERP (p. ej. DescartarNovedadPreopErpListener) viven en Infrastructure.
+    opts.Discovery.IncludeAssembly(typeof(DescartarNovedadPreopErpListener).Assembly);
 
     // Persistir mensajes pendientes (outbox) para resiliencia ante caídas del proceso.
     opts.Policies.AutoApplyTransactions();
     opts.Policies.UseDurableLocalQueues();
+
+    // ── Política de resiliencia ADR-006 §16 para llamadas a Maquinaria_V4 ──────
+    //
+    // 5xx y timeout (transitorio): reintento con backoff progresivo.
+    //   4 reintentos (5s → 30s → 2m → 10m); si agota → dead-letter.
+    opts.Policies
+        .OnException<MaquinariaErpException>(
+            ex => ex.StatusCode.HasValue && (int)ex.StatusCode.Value >= 500,
+            "5xx retryable — ERP no disponible temporalmente")
+        .ScheduleRetry(
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(10))
+        .Then.MoveToErrorQueue();
+
+    // 4xx (incluyendo 409 código desconocido): error permanente, no reintentar (INV-L3).
+    //   El caso 409 YA_CERRADO se captura en el listener antes de llegar aquí.
+    opts.Policies
+        .OnException<MaquinariaErpException>(
+            ex => ex.StatusCode.HasValue
+                  && (int)ex.StatusCode.Value >= 400
+                  && (int)ex.StatusCode.Value < 500,
+            "4xx permanente — dead-letter inmediato (INV-L3)")
+        .MoveToErrorQueue();
+
+    // Evento malformado (PRE-L1): dead-letter inmediato sin reintentos.
+    opts.Policies
+        .OnException<ArgumentException>()
+        .MoveToErrorQueue();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

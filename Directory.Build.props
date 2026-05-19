@@ -15,6 +15,13 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <!-- Supresión temporal de audit NU1904 para Marten 7.40.0 (GHSA-vmw2-qwm8-x84c).
+       Pendiente actualizar Marten cuando se estabilice la versión compatible con Wolverine 3.x.
+       Ver FOLLOWUPS.md para el ticket de seguimiento. -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-vmw2-qwm8-x84c" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(MSBuildProjectName.EndsWith(`.Tests`))' == 'true'">
     <IsPackable>false</IsPackable>
     <NoWarn>$(NoWarn);CA1707;CA1861;CS1591</NoWarn>
