@@ -325,6 +325,16 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Acción sugerida:** implementar `Func<int> NextEquipoId()` en `InspeccionesAppFactory` o helper compartido que devuelva un `int` único por test (counter atómico). Reemplazar IDs hardcoded en todos los tests E2E. Alternativa: schema reset entre tests (más costoso pero más simple).
 **Notas:** vinculado a FU-39 (Application.Tests sin Docker). Ambos cierran probablemente en el mismo slice de saneamiento de test infra.
 
+### #52 — Endpoint `POST /api/v1/catalogos/sync` sin verificacion de capability PRE-1 (ADR-002) 🟢
+
+**Origen:** slice erp-4 review hallazgo #2
+**Fecha:** 2026-05-19
+**Tipo:** seguridad · ADR-002 · endpoint
+**Descripción:** El endpoint `POST /api/v1/catalogos/sync` no verifica la capability `ejecutar-inspeccion` o `administrar-catalogos` del JWT entrante (PRE-1 del spec erp-4 §4). El endpoint es actualmente publico — cualquier request sin token puede dispararle el sync-all. La situacion es consistente con todos los endpoints del modulo (FU-14 ADR-002 pendiente), pero es especialmente sensible aqui porque el sync-all hace llamadas al ERP Maquinaria_V4 con el JWT de servicio configurado, lo que podria ser explotado para saturar el ERP con solicitudes de sync desde fuera del host PWA.
+**Disparador para abrir slice:** cierre de ADR-002 (mecanismo concreto de identidad del host PWA) — mismo disparador que FU-14. La adicion de auth al endpoint erp-4 se resuelve en el mismo slice que implementa auth global.
+**Accion:** cuando ADR-002 se resuelva, agregar el middleware de validacion de capability al endpoint `POST /api/v1/catalogos/sync` consistente con el patron aplicado a los demas endpoints del modulo.
+**Notas:** vinculado a FU-14. No bloquea MVP en aislamiento — el ERP Maquinaria_V4 tiene su propio JWT de servicio como segunda linea de defensa. Prioridad media.
+
 ## Cerrados
 
 ### #36 — Endpoint `POST /inspecciones/{id}/hallazgos` retorna 400 BadRequest en happy path ✅
@@ -521,6 +531,15 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Descripción:** Los tests `Listener_erp_400_no_reintenta_va_a_dead_letter_INV_L3` y `Listener_erp_404_no_reintenta_va_a_dead_letter_INV_L3` verifican `ThrowAsync<Exception>()` (tipo base) en lugar de `ThrowAsync<MaquinariaErpException>()`. Si el adapter cambia a lanzar un tipo de excepción diferente, los tests seguirían en verde aunque la política de retry de Wolverine (que filtra por `MaquinariaErpException`) pudiera verse afectada.
 **Disparador para abrir slice:** primera vez que se refactorice el contrato de excepciones del adapter `MaquinariaErpClient`.
 **Notas:** Cerrado en la iteración 2 post-review del refactorer (2026-05-19). Ambos tests cambiados a `ThrowAsync<MaquinariaErpException>()` con aserción adicional sobre `StatusCode` exacto (`BadRequest` y `NotFound` respectivamente).
+
+### #51 — Test E2E de `POST /api/v1/catalogos/sync` con Postgres real 🟢
+
+**Origen:** slice erp-4 refactor-notes §Refactors descartados
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica (cobertura de test)
+**Descripción:** El endpoint `POST /api/v1/catalogos/sync` tiene cobertura del handler vía `Infrastructure.Tests` con fake repo y WireMock, pero carece de test E2E que ejercite `MartenCatalogoSyncRepository` contra Postgres real. Un test en `Inspecciones.Api.Tests` con `WebApplicationFactory` + `WireMock` + Testcontainers verificaría la atomicidad wipe+replace+state de `MartenCatalogoSyncRepository` y el mapeo completo del response DTO.
+**Disparador para abrir slice:** cuando se añada el segundo catálogo al sync-all (equipos o rutinas técnicas) o cuando un bug de atomicidad sea reportado en producción.
+**Notas:** requiere agregar WireMock al proyecto `Inspecciones.Api.Tests` (ya tiene Testcontainers). Un solo happy-path es suficiente — los escenarios 304/error/vaciado-sospechoso ya están cubiertos por `Infrastructure.Tests`.
 
 ---
 

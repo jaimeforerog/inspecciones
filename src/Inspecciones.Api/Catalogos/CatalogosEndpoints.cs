@@ -292,6 +292,32 @@ public static class CatalogosEndpoints
             .WithTags("Admin")
             .WithSummary("Pasa-piso a Maquinaria_V4: cierra novedades preop bulk (PodIds + observaciones).");
 
+        // ── POST /api/v1/catalogos/sync ─────────────────────────────────────
+        // Endpoint principal del ADR-004 sync on-app-open. La PWA lo dispara al
+        // abrir la app y el admin lo usa para "Refrescar ahora". Sin body; el
+        // handler decide internamente qué catálogos verificar.
+        // Siempre devuelve 200 OK aunque algún catálogo falle (D5 partial-failure).
+        app.MapPost("/api/v1/catalogos/sync", async (
+                SincronizarCatalogosHandler handler,
+                CancellationToken ct) =>
+            {
+                var resultado = await handler.EjecutarAsync(ct);
+                return Results.Ok(new
+                {
+                    catalogos = resultado.Catalogos.Select(c => new
+                    {
+                        nombre = c.Nombre,
+                        status = c.Status,
+                        actualizadosEn = c.ActualizadosEn,
+                        error = c.Error,
+                    }),
+                    sincronizadoEn = resultado.SincronizadoEn,
+                });
+            })
+            .WithName("SincronizarCatalogos")
+            .WithTags("Catalogos")
+            .WithSummary("Sincroniza los catálogos globales desde Maquinaria_V4 usando ETag/If-None-Match (ADR-004).");
+
         // ── PUT /api/v1/admin/dictamen-equipo-erp/{equipoCodigo} ───────────
         // Pasa-piso a M-W-1. Pre-saga: este endpoint NO debería invocarse en
         // producción; la fuente canónica es SincronizarDictamenVigenteSaga.

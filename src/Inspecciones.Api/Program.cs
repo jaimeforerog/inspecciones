@@ -182,6 +182,13 @@ builder.Services.AddHttpClient<IMaquinariaErpClient, MaquinariaErpClient>((sp, h
 builder.Services.AddScoped<SincronizarEquipoDesdeErpHandler>();
 builder.Services.AddScoped<SeedManualCatalogoHandler>();
 
+// Sync de catálogos globales on-app-open (ADR-004, erp-4).
+// MartenCatalogoSyncRepository recibe IDocumentStore (singleton) para abrir sesiones
+// independientes por catálogo — evita la race condition de IDocumentSession compartida
+// en Task.WhenAll (hallazgo #1 review erp-4).
+builder.Services.AddSingleton<ICatalogoSyncRepository, MartenCatalogoSyncRepository>();
+builder.Services.AddScoped<SincronizarCatalogosHandler>();
+
 // Puerto de lectura del aggregate Inspeccion — usado por SincronizarDictamenVigenteListener (erp-3).
 builder.Services.AddScoped<IInspeccionReader, MartenInspeccionReader>();
 
