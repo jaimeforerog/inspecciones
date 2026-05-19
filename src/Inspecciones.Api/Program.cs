@@ -182,6 +182,9 @@ builder.Services.AddHttpClient<IMaquinariaErpClient, MaquinariaErpClient>((sp, h
 builder.Services.AddScoped<SincronizarEquipoDesdeErpHandler>();
 builder.Services.AddScoped<SeedManualCatalogoHandler>();
 
+// Puerto de lectura del aggregate Inspeccion — usado por SincronizarDictamenVigenteListener (erp-3).
+builder.Services.AddScoped<IInspeccionReader, MartenInspeccionReader>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON serializer — Minimal APIs: enums como string en request y response bodies.
 // ─────────────────────────────────────────────────────────────────────────────

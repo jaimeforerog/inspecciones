@@ -297,6 +297,24 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** cuando emerja necesidad de auditar cobertura E2E completa, o como nit al cierre de Fase 1.
 **Acción:** agregar test `PATCH_repuesto_repuesto_en_hallazgo_incorrecto_responde_404_PRE5` en `tests/Inspecciones.Api.Tests/ActualizarRepuestoEndpointTests.cs` siguiendo el patrón de §6.8.
 
+### #44 — `InvalidOperationException` (PRE-L1) sin política `OnException<T>().MoveToErrorQueue()` en Wolverine 🟢
+
+**Origen:** slice erp-3 review hallazgo #1
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · resiliencia · Wolverine
+**Descripción:** El listener `SincronizarDictamenVigenteListener` lanza `InvalidOperationException` en PRE-L1 (aggregate nulo → stream no existe, o Dictamen nulo → stream corrupto). La spec §4 PRE-L1 requiere "dead-letter inmediato". Sin embargo, en `Program.cs` la política de Wolverine para dead-letter inmediato solo cubre `ArgumentException` (línea 107), que captura `ArgumentOutOfRangeException` (PRE-L3) por herencia, pero no `InvalidOperationException`. En producción, Wolverine aplicará comportamiento default (retry con backoff hasta agotar intentos antes de dead-letter), no "dead-letter inmediato". El efecto final es el mismo (dead-letter), pero el camino difiere y cada intento de retry para PRE-L1 relanzará la excepción con la misma causa raíz (el stream o el Dictamen siguen siendo inválidos). Los reintentos son inútiles y demoran el dead-letter ~20 min.
+**Disparador para abrir slice:** antes del primer despliegue en entorno staging con Wolverine durables activos. La corrección es de 1 línea en `Program.cs`.
+**Acción:** añadir `opts.Policies.OnException<InvalidOperationException>().MoveToErrorQueue()` en el bloque de políticas de Wolverine en `Program.cs`, verificando que no afecta handlers que puedan lanzar `InvalidOperationException` por razones retriables (poco probable — las excepciones de infraestructura retriables usan `MaquinariaErpException`).
+
+### #45 — `MartenInspeccionReader` sin tests de integración contra Marten real 🟢
+
+**Origen:** slice erp-3 review hallazgo #2
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · cobertura · integración
+**Descripción:** `MartenInspeccionReader` (implementación de producción de `IInspeccionReader`) es un wrapper de una línea sobre `IQuerySession.Events.AggregateStreamAsync<Inspeccion>`. No tiene tests propios en el slice erp-3 — la decisión Opción B (FakeInspeccionReader) fue pragmática y coherente con el patrón erp-2. El cobertura del path producción (Marten real → aggregate reconstruido) queda a cero. Los escenarios críticos sin test son: (a) stream existente → aggregate con Dictamen y EquipoId correctos; (b) stream inexistente → null (PRE-L1). Bajo riesgo porque la implementación es trivial, pero la interfaz `IInspeccionReader` puede ser reutilizada por futuros listeners — un test de integración protege que el adapter se comporta como el fake.
+**Disparador para abrir slice:** primer slice que añada un segundo listener usando `IInspeccionReader`, o cuando se implemente la suite de integración end-to-end de los listeners ERP (slice de test de integración erp-all o similar). Alternativamente, cuando FU-39 (Application.Tests sin Docker) se cierre y se pueda correr Testcontainers localmente.
+**Acción:** añadir una clase `MartenInspeccionReaderTests` en `Inspecciones.Infrastructure.Tests` (con Testcontainers Postgres + Marten) que verifique los dos escenarios mencionados.
+
 ### #43 — Colisión de EquipoIds en Api.Tests entre slices (manifestación expandida de FU-39) 🟢
 
 **Origen:** slice 1o green/orquestador — fix aplicado durante el slice
