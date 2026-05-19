@@ -365,15 +365,39 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Acción sugerida:** test integración con Wolverine host real (no in-process) que publica `InspeccionFirmada_v1` con tenant_id y asserta que el listener tenant-aware ejecutó (sentinel: el log estructurado debe contener `TenantId`).
 **Notas:** según docs Wolverine, la convención de discovery prefiere métodos con más parámetros. Riesgo bajo pero no validado.
 
-### #57 — `DescartarNovedadPreopErpListener` no propaga tenant a logs estructurados 🟢
+### #57 — `DescartarNovedadPreopErpListener` no propaga tenant a logs estructurados ✅ MOVIDO A CERRADOS
 
-**Origen:** slice mt-2 review §3 hallazgo #2
+(Ver sección `## Cerrados` abajo — cerrado por slice mt-3 el 2026-05-19.)
+
+### #60 — `CaptureBearerForOutboxMiddleware` para enriquecer envelope con JWT entrante 🟢
+
+**Origen:** slice mt-3 review hallazgo #1 + green-notes "Decisiones del spec NO aplicadas"
 **Fecha:** 2026-05-19
-**Tipo:** observabilidad · multi-tenancy
-**Descripción:** El listener `DescartarNovedadPreopErpListener` no lee `Envelope.TenantId`. No es bug funcional (el listener solo invoca `POST` HTTP al ERP, no toca Marten directamente), pero los logs estructurados (`NovedadPreopErpCierreFallido_v1`) salen sin tenant. Cuando ops investigue un fallo de descarte cross-empresa, no podrá filtrar por tenant en App Insights/Loki.
-**Disparador para abrir slice:** mt-3 (propagación JWT al ERP) — natural agrupar el cambio con la captura del envelope.
-**Acción sugerida:** agregar overload `HandleAsync(NovedadPreopDescartada_v1, Envelope, ct)` y enriquecer `LogCierreFallido(...)` con `tenantId = envelope.TenantId`. Sin lanzar `TenantRequeridoEnEnvelopeException` (la propagación al ERP no la requiere) — solo logging defensivo.
-**Notas:** bajo riesgo, alto valor para triage operativo.
+**Tipo:** deuda técnica · auth cross-process · Wolverine
+**Descripción:** mt-3 implementa la cadena `IBearerTokenAccessor` (HTTP → Ambient → ServiceAccount) y el `BearerTokenPropagationHandler`. El listener tenant-aware está preparado para leer `envelope.Headers["X-Forwarded-Authorization"]` y setear el ambient. **Falta el wiring que captura automáticamente el `Authorization` del HttpContext y lo persiste en el envelope antes del outbox-publish** (Wolverine middleware o policy custom). Sin esto, los listeners reciben envelopes sin el header y caen al service-account fallback — MT3-INV-1 cumplido para HTTP scope inline, pero MT3-INV-2 solo ejercitable via tests in-process.
+**Disparador para abrir slice:** post-FU-47 (Application.Tests sin Docker, requerido para test E2E con Postgres real + outbox + listener). O cuando emerja necesidad operativa de audit fino del usuario originador (no solo por log estructurado del listener, sino en el log del ERP).
+**Acción sugerida:** crear middleware Wolverine que en el `Before` de cada outbox-publish lea `IHttpContextAccessor.HttpContext.Request.Headers.Authorization` y lo guarde en `Envelope.Headers["X-Forwarded-Authorization"]`. Test E2E: invocar `POST /inspecciones/{id}/firmar` con Authorization, verificar que el listener `SincronizarDictamenVigenteListener` recibe el envelope con el header y propaga al ERP mock con el JWT del request original.
+**Notas:** patrón análogo al `CaptureBearerForOutboxMiddleware` documentado en `slices/mt-3-jwt-propagation-erp/spec.md §2`.
+
+### #61 — Re-evaluar storage estático de `AmbientBearerTokenAccessor` cuando emerja caso patológico 🟢
+
+**Origen:** slice mt-3 review hallazgo #2 + green-notes "Decisiones emergentes en green"
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · multi-tenancy · defensivo
+**Descripción:** `AmbientBearerTokenAccessor` usa `private static readonly AsyncLocal<string?> Current = new()`. Semánticamente "UN ambient por proceso". Razón de la elección (green): los tests construyen distintas instancias del accessor para el chain del adapter y para el listener — si fuera de instancia, dos instancias no compartirían storage. Riesgo teórico: paralelismo cross-tenant en mismo proceso. AsyncLocal aísla por contexto async, pero no por instancia. Bajo riesgo hoy (tests verifican aislamiento de tareas paralelas).
+**Disparador para abrir slice:** emerge necesidad de múltiples ambients aislados (testing paralelo con tokens distintos cross-test que compartan thread, o sagas largas con context-switch).
+**Acción sugerida:** reescribir como instance-AsyncLocal e inyectar la misma instancia a listener y `ChainedBearerTokenAccessor` por DI. Cambio aislado: signature de `IBearerTokenAccessor` y `AmbientBearerTokenAccessor` permanecen idénticos.
+**Notas:** placeholder defensivo. Sin acción hoy.
+
+### #62 — Refresh automático del JWT en retry del outbox (condicional) 🟢
+
+**Origen:** slice mt-3 review hallazgo #3
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · resiliencia · seguridad
+**Descripción:** ADR-006 retry policy: 5s → 30s → 2m → 10m (~12 min total). El JWT del envelope se persiste al publish original y NO se refresca durante retries. Si expira (TTL típico del host PWA Sinco MYE < 1h, variable), el ERP responde 401 → política 4xx → `MoveToErrorQueue()` permanente. Comportamiento esperado para mt-3 (D-MT3-2 nota). Si operativamente emerge necesidad de refresh, abrir slice — requiere coordinación cross-team con el equipo del host para obtener un refresh token o pattern "service principal" del módulo.
+**Disparador para abrir slice:** ≥3 incidentes operativos de "OT firmada pero dictamen no propagado al ERP por JWT expirado" reportados en piloto.
+**Acción sugerida:** evaluar dos opciones: (a) refresh token cliente-side antes del publish del outbox; (b) wrapper en el `BearerTokenPropagationHandler` que detecta 401 → refresca JWT del service-account → reintenta UNA vez. Opción (b) es más simple y no requiere cambios al host PWA.
+**Notas:** condicional — no abrir sin evidencia operativa.
 
 ### #58 — SQL backfill staging para data legacy pre-mt-2 🟢
 
@@ -396,6 +420,23 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Notas:** bajo riesgo — los 8 tests E2E ya verifican el comportamiento end-to-end. Este es defensivo para auditar `Apply` puro.
 
 ## Cerrados
+
+### #44 — JWT del request entrante reemplaza `MaquinariaErpOptions.JwtToken` (ADR-002) ✅
+
+**Origen:** slice erp-1 acople Maquinaria_V4 (2026-05-19)
+**Fecha apertura \ cierre:** 2026-05-19 / 2026-05-19
+**Cierre:** slice `mt-3-jwt-propagation-erp` (commit `feat(slice-mt-3): propagación JWT entrante al MaquinariaErpClient`). Spec firmada `slices/mt-3-jwt-propagation-erp/spec.md`.
+**Tipo:** seguridad · ADR-002 · adapter
+**Resolución:** se introdujo el puerto `IBearerTokenAccessor` y el `BearerTokenPropagationHandler` (DelegatingHandler) que reemplaza el `http.DefaultRequestHeaders.Authorization` fijo. La cadena `ChainedBearerTokenAccessor` resuelve en orden HTTP → Ambient → ServiceAccount: cuando hay caller HTTP, propaga el Bearer del request; cuando es un listener Wolverine, propaga el JWT del envelope (header `X-Forwarded-Authorization` seteado via `AmbientBearerTokenAccessor`); fallback `MaquinariaErpOptions.JwtToken` cambia de rol a "service-account". Decisión D-MT3-2 (chained accessors con fallback). Fail-closed por `BearerTokenAusenteException` si todos vacíos (MT3-INV-3).
+**Followups derivados:** FU-60 (`CaptureBearerForOutboxMiddleware` automatización del envelope), FU-61 (re-evaluar AsyncLocal static), FU-62 (refresh JWT en retry — condicional).
+
+### #57 — `DescartarNovedadPreopErpListener` no propaga tenant a logs estructurados ✅
+
+**Origen:** slice mt-2 review §3 hallazgo #2
+**Fecha apertura \ cierre:** 2026-05-19 / 2026-05-19
+**Cierre:** slice `mt-3-jwt-propagation-erp` (mismo commit que FU-44).
+**Tipo:** observabilidad · multi-tenancy
+**Resolución:** el listener `DescartarNovedadPreopErpListener` gana overload `HandleAsync(NovedadPreopDescartada_v1, Envelope, ct)` que: (a) lee `envelope.Headers["X-Forwarded-Authorization"]` y setea el ambient para propagar al ERP; (b) enriquece `LogCierreFallido` con `tenantId = envelope.TenantId`. El template del `[LoggerMessage]` ahora incluye `TenantId={TenantId}`. Verificado por test `Listener_log_estructurado_incluye_TenantId_del_envelope_en_fallo_5xx` que invoca con envelope tenant 7, fuerza un 5xx del ERP mock, e inspecciona la entrada del log estructurado.
 
 ### #14 — Claims reales desde JWT cuando ADR-002 se resuelva ✅
 
@@ -542,14 +583,9 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Tipo:** deuda técnica · infraestructura de tests
 **Descripción:** Los EquipoIds de siembra del slice 1o originalmente asignados (80001-80010) colisionaron con slices 1m/1n. El orquestador los renombró a 100001-100010. La causa raíz es FU-39: IDs hardcoded en tests de integración sin aislamiento por colección. Cada nuevo slice requiere elegir rangos manualmente. Solución: cuando el número de suites haga inviable la asignación manual, implementar generación dinámica de IDs de siembra (`Guid.NewGuid()` para streams Marten, o rangos con offset generado por colección) para eliminar la necesidad de coordinación manual.
 
-### #44 — JWT del request entrante reemplaza `MaquinariaErpOptions.JwtToken` (ADR-002) 🟢
+### #44 — JWT del request entrante reemplaza `MaquinariaErpOptions.JwtToken` (ADR-002) ✅ MOVIDO A CERRADOS
 
-**Origen:** slice erp-1 acople Maquinaria_V4 (2026-05-19)
-**Fecha:** 2026-05-19
-**Tipo:** seguridad · ADR-002 · adapter
-**Descripción:** El `MaquinariaErpClient` actual usa un JWT fijo desde `appsettings.Maquinaria:JwtToken` configurado al startup. La identidad real del módulo es 100% del host PWA (decisión 2026-05-05) — el JWT que valida Maquinaria_V4 debe ser **el mismo** que entrega el host en la request entrante. Solución: agregar `IHttpContextAccessor` al cliente y propagar `HttpContext.Request.Headers["Authorization"]` en cada llamada (DelegatingHandler con `TypedHttpClientFactory`), reemplazando el `DefaultRequestHeaders.Authorization` fijo.
-**Disparador para abrir slice:** cierre de ADR-002 (mecanismo de identidad del host PWA) o primer slice de saga que invoque Maquinaria_V4 fuera del request-scope (ej. `SincronizarDictamenVigenteSaga` desde Wolverine outbox — ese caso requiere otra estrategia: token de servicio dedicado o "service principal").
-**Notas:** vinculado a FU-14. Mientras tanto el adapter sirve para QA, smoke testing y endpoints `/admin/*` con token configurado manualmente.
+(Ver sección `## Cerrados` abajo — cerrado por slice mt-3 el 2026-05-19.)
 
 ### #45 — Adapters de catálogo: cache de ETag cliente-side + persistencia en Marten (ADR-004) 🟢
 

@@ -1,8 +1,10 @@
 using System.Net;
 using Inspecciones.Domain.Inspecciones;
+using Inspecciones.Infrastructure.Auth;
 using Inspecciones.Infrastructure.Erp.Dtos;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Wolverine;
 
 namespace Inspecciones.Infrastructure.Erp.Listeners;
 
@@ -31,7 +33,33 @@ public sealed partial class DescartarNovedadPreopErpListener
         _logger = logger ?? NullLogger<DescartarNovedadPreopErpListener>.Instance;
     }
 
+    /// <summary>
+    /// Overload tenant-aware (mt-3 §6.2 + §6.7). Lee
+    /// <c>envelope.Headers["X-Forwarded-Authorization"]</c> y lo setea en
+    /// <see cref="AmbientBearerTokenAccessor"/> para que el adapter propague
+    /// el JWT del usuario originador al ERP. Si el header no está presente,
+    /// el ambient queda en null y la chain cae al service-account fallback.
+    ///
+    /// También enriquece los logs estructurados con <c>envelope.TenantId</c>
+    /// (FU-57 cierre — observabilidad multi-tenancy).
+    /// </summary>
+    public async Task HandleAsync(NovedadPreopDescartada_v1 evento, Envelope envelope, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+
+        var tenantId = envelope.TenantId;
+        var jwtEnvelope = EnvelopeBearerExtractor.ExtraerBearerForwarded(envelope);
+        using var _ = new AmbientBearerTokenAccessor().SetForCurrentScope(jwtEnvelope);
+
+        await ProcesarAsync(evento, tenantId, ct).ConfigureAwait(false);
+    }
+
     public async Task HandleAsync(NovedadPreopDescartada_v1 evento, CancellationToken ct = default)
+    {
+        await ProcesarAsync(evento, tenantId: null, ct).ConfigureAwait(false);
+    }
+
+    private async Task ProcesarAsync(NovedadPreopDescartada_v1 evento, string? tenantId, CancellationToken ct)
     {
         // PRE-L1: NovedadId debe ser > 0. MotivoDescarte vacío se permite pasar al ERP
         // (defensa en profundidad: el ERP retorna 400 si lo rechaza — ver spec §6.5).
@@ -69,6 +97,7 @@ public sealed partial class DescartarNovedadPreopErpListener
             LogCierreFallido(
                 evento.InspeccionId,
                 evento.NovedadId,
+                tenantId,
                 ex.StatusCode.HasValue ? (int)ex.StatusCode.Value : null,
                 ex.CodigoErp,
                 esReintentable,
@@ -81,10 +110,11 @@ public sealed partial class DescartarNovedadPreopErpListener
         EventId = 1001,
         Level = LogLevel.Error,
         Message = "NovedadPreopErpCierreFallido_v1 | InspeccionId={InspeccionId} NovedadId={NovedadId} " +
-                  "StatusCode={StatusCode} CodigoErp={CodigoErp} EsReintentable={EsReintentable}")]
+                  "TenantId={TenantId} StatusCode={StatusCode} CodigoErp={CodigoErp} EsReintentable={EsReintentable}")]
     private partial void LogCierreFallido(
         Guid inspeccionId,
         int novedadId,
+        string? tenantId,
         int? statusCode,
         string? codigoErp,
         bool esReintentable,

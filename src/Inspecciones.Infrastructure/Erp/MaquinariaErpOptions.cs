@@ -15,17 +15,20 @@ public sealed class MaquinariaErpOptions
     public string BaseUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// JWT que el host SincoMyE emite. Maquinaria_V4 valida firma e issuer
-    /// vía <c>MiddlewareAuthorizationToken</c>. Vacío == no enviar header
-    /// <c>Authorization</c> (las requests fallarán con 401, pero el módulo
-    /// arranca igual y el endpoint de seed manual sigue siendo usable).
+    /// Token de servicio (service-account) usado como <b>fallback</b> por
+    /// <see cref="Auth.ServiceAccountBearerTokenAccessor"/> cuando no hay
+    /// HttpContext (caller fuera de scope HTTP) ni envelope Wolverine con
+    /// <c>X-Forwarded-Authorization</c> (mensaje legacy o listener-to-listener).
+    ///
+    /// Casos de uso legales: bootstrap/seed manual, retries con JWT del envelope
+    /// expirado, mensajes publicados antes de mt-3. Si está vacío Y no hay
+    /// HTTP/envelope, el <see cref="BearerTokenPropagationHandler"/> falla
+    /// fail-closed con <see cref="Auth.BearerTokenAusenteException"/> (MT3-INV-3).
+    ///
+    /// FU-14 (ADR-002) cerrado en mt-1; FU-44 (propagación del JWT entrante)
+    /// cerrado en mt-3. El token global cambió de rol — ya no es el único, ahora
+    /// es el último recurso de la chain HTTP → Ambient → ServiceAccount (D-MT3-2 / D-MT3-3).
     /// </summary>
-    /// <remarks>
-    /// FU-14 sigue abierto: cuando ADR-002 (mecanismo de identidad del host PWA)
-    /// se resuelva, este token deberá venir del <c>HttpContext</c> de la request
-    /// entrante, no de configuración global. Por ahora se usa un token fijo
-    /// (apto para QA y arranque local).
-    /// </remarks>
     public string JwtToken { get; set; } = string.Empty;
 
     /// <summary>

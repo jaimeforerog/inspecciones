@@ -55,6 +55,13 @@ public sealed partial class SincronizarDictamenVigenteListener
                 messageId: envelope.Id);
         }
 
+        // mt-3 D-MT3-6: propagar el JWT del envelope (X-Forwarded-Authorization)
+        // al adapter HTTP via AmbientBearerTokenAccessor. El DelegatingHandler del
+        // MaquinariaErpClient lo recogerá automáticamente. Si el header no está
+        // presente, el ambient queda en null → la chain cae al service-account fallback.
+        var jwtEnvelope = EnvelopeBearerExtractor.ExtraerBearerForwarded(envelope);
+        using var _ = new AmbientBearerTokenAccessor().SetForCurrentScope(jwtEnvelope);
+
         var aggregate = await _inspeccionReader.LeerAsync(evento.InspeccionId, tenantId, ct).ConfigureAwait(false);
         await DespacharAsync(evento, aggregate, ct).ConfigureAwait(false);
     }

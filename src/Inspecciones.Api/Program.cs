@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using Inspecciones.Api.Catalogos;
 using Inspecciones.Api.Inspecciones;
@@ -172,6 +171,16 @@ builder.Services.AddScoped<ActualizarRepuestoHandler>();
 builder.Services.Configure<MaquinariaErpOptions>(
     builder.Configuration.GetSection(MaquinariaErpOptions.SectionName));
 
+// mt-3: el Bearer del request se propaga vía BearerTokenPropagationHandler
+// (DelegatingHandler que consulta IBearerTokenAccessor en cada SendAsync).
+// El JwtToken global (MaquinariaErpOptions.JwtToken) queda como service-account
+// fallback — su rol cambió, no se elimina (ver MaquinariaErpOptions.cs y D-MT3-3).
+builder.Services.AddTransient<BearerTokenPropagationHandler>();
+builder.Services.AddScoped<HttpContextBearerTokenAccessor>();
+builder.Services.AddScoped<AmbientBearerTokenAccessor>();
+builder.Services.AddScoped<ServiceAccountBearerTokenAccessor>();
+builder.Services.AddScoped<IBearerTokenAccessor, ChainedBearerTokenAccessor>();
+
 builder.Services.AddHttpClient<IMaquinariaErpClient, MaquinariaErpClient>((sp, http) =>
 {
     var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MaquinariaErpOptions>>().Value;
@@ -187,11 +196,11 @@ builder.Services.AddHttpClient<IMaquinariaErpClient, MaquinariaErpClient>((sp, h
     // Timeout consistente con ADR-006: hasta 30s antes de fallar al outbox.
     http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSegundos > 0 ? opts.TimeoutSegundos : 30);
 
-    if (!string.IsNullOrWhiteSpace(opts.JwtToken))
-    {
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", opts.JwtToken);
-    }
-});
+    // mt-3 MT3-INV-4: NO setear DefaultRequestHeaders.Authorization aquí.
+    // El BearerTokenPropagationHandler (registrado abajo) lo hace por request,
+    // consultando IBearerTokenAccessor (HTTP → Ambient → ServiceAccount).
+})
+.AddHttpMessageHandler<BearerTokenPropagationHandler>();
 
 builder.Services.AddScoped<SincronizarEquipoDesdeErpHandler>();
 builder.Services.AddScoped<SeedManualCatalogoHandler>();

@@ -4519,13 +4519,34 @@ Wolverine procesa el outbox después de que la transacción committea. Aunque el
 - Complejidad operacional: requiere monitoreo del outbox, alertas, panel de dead-letter.
 - Acoplamiento al stack Wolverine: si en el futuro se reemplaza el mediator, el patrón debe migrarse manualmente.
 
+### JWT del usuario en el envelope del outbox (mt-3 — 2026-05-19)
+
+Tras la decisión del sub-track multi-tenancy mt-3 (D-MT3-2), el JWT del request HTTP entrante viaja al ERP cuando el listener Wolverine ya está procesando un mensaje fuera del scope HTTP original. El patrón:
+
+1. **Captura en publish:** un middleware Wolverine en el endpoint HTTP enriquece el envelope con `Headers["X-Forwarded-Authorization"] = <Bearer del request>` antes de que el outbox lo persista.
+2. **Lectura en listener:** el listener (`SincronizarDictamenVigenteListener`, `DescartarNovedadPreopErpListener`, etc.) extrae el header del envelope vía `EnvelopeBearerExtractor.ExtraerBearerForwarded(envelope)` y lo setea en `AmbientBearerTokenAccessor` antes de invocar al adapter HTTP.
+3. **Propagación al ERP:** el `BearerTokenPropagationHandler` (DelegatingHandler del `MaquinariaErpClient`) consulta la cadena `IBearerTokenAccessor` (HTTP → Ambient → ServiceAccount) y setea el header `Authorization: Bearer {token}` en cada request al ERP.
+
+**Trade-off de expiración del JWT durante retry:**
+
+La política de reintentos (5s → 30s → 2m → 10m) totaliza hasta ~12 min entre el primer intento y el dead-letter. El JWT del envelope se persistió en el outbox al momento del publish original y **NO se refresca durante los reintentos**. Si expira (TTL típico del host PWA Sinco MYE < 1h, pero variable), el ERP responde 401 → cae en la rama 4xx → `MoveToErrorQueue()` permanente. Comportamiento esperado del 4xx para mt-3.
+
+Fallback `ServiceAccountBearerTokenAccessor` (`MaquinariaErpOptions.JwtToken`): si el envelope NO trae header `X-Forwarded-Authorization` (publish listener-to-listener, mensaje legacy pre-mt-3, etc.), la chain cae al token de servicio. Esto preserva la integración funcional aunque el audit del ERP atribuya la acción a un service-account.
+
+**Decisión 2026-05-19 — NO se introduce refresh automático del JWT en retry para mt-3.** Si emerge requerimiento operativo en el piloto, abrir slice (FU-62).
+
+**PII en outbox:** aceptado. El outbox vive en la misma DB Postgres del módulo (red privada, mismo nivel de protección que streams del dominio que ya contienen GPS y motivos de descarte). El JWT es credencial efímera, no rotated secret.
+
 ### Referencias
 
 - `CLAUDE.md` — regla dura de atomicidad de eventos.
 - ADR-001 — REST sobre VPN (`00-investigacion-mercado.md §9.11`).
+- ADR-002 — auth pipeline del host PWA (`00-investigacion-mercado.md §9.14`, cerrado en mt-1).
 - ADR-003 — instancia específica para M-1 (§13 de este documento).
 - ADR-005 — SignalR push para feedback al cliente (§14).
+- ADR-009 — multi-tenancy Marten conjoined (`00-investigacion-mercado.md §9.17`, mt-3 cerrado).
 - `06-contrato-apis-erp.md §1.8` — convención del contrato que apunta a este ADR.
+- `slices/mt-3-jwt-propagation-erp/spec.md` — propagación del JWT al ERP (mt-3).
 - Wolverine docs — outbox + retry policy.
 
 ---
