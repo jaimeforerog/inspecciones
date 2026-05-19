@@ -41,10 +41,12 @@ public class SessionServicePipelineTests(InspeccionesAppFactory factory)
     // Helpers de siembra (calcados de IniciarInspeccionEndpointTests.cs)
     // ─────────────────────────────────────────────────────────────────────
 
-    private async Task SembrarCatalogo(int equipoId, int proyectoId = 3, int rutinaId = 18)
+    private Task SembrarCatalogo(int equipoId, int proyectoId = 3, int rutinaId = 18) =>
+        SembrarCatalogoEnTenant("1", equipoId, proyectoId, rutinaId);
+
+    private async Task SembrarCatalogoEnTenant(string tenantId, int equipoId, int proyectoId = 3, int rutinaId = 18)
     {
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForTenant(tenantId);
 
         session.Store(new EquipoLocal(
             EquipoId: equipoId,
@@ -114,8 +116,7 @@ public class SessionServicePipelineTests(InspeccionesAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Created,
             "happy path en env Test: el fake suple las claims sin requerir JWT");
 
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var verificacion = store.QuerySession();
+        await using var verificacion = factory.OpenSeedingSessionForDefaultTenant();
         var eventos = await verificacion.Events.FetchStreamAsync(inspeccionId);
         var iniciada = eventos.Select(e => e.Data).OfType<InspeccionIniciada_v1>().Single();
         iniciada.TecnicoIniciador.Should().Be("1",
@@ -268,9 +269,10 @@ public class SessionServicePipelineTests(InspeccionesAppFactory factory)
     [Fact]
     public async Task POST_inspecciones_con_FakeSessionService_IdUsuario_42_emite_evento_con_TecnicoIniciador_42_regression_mt_2()
     {
-        // Given: fake con IdUsuario=42 (simula JWT real con UsuarioId=42 — spec §6.7).
+        // Given: fake con IdEmpresa=7, IdUsuario=42 (simula JWT real con UsuarioId=42 — spec §6.7).
+        // mt-2: la siembra y la lectura ocurren en el tenant "7" para alinear con el FakeSessionService.
         const int equipoId = 50004;
-        await SembrarCatalogo(equipoId);
+        await SembrarCatalogoEnTenant("7", equipoId);
 
         var fakeNoDefault = new FakeSessionService(
             idEmpresa: 7,
@@ -293,8 +295,7 @@ public class SessionServicePipelineTests(InspeccionesAppFactory factory)
         // Then: 201 + el evento lleva TecnicoIniciador="42" (no "rmartinez", no "1").
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var verificacion = store.QuerySession();
+        await using var verificacion = factory.OpenSeedingSessionForTenant("7");
         var eventos = await verificacion.Events.FetchStreamAsync(inspeccionId);
         var iniciada = eventos.Select(e => e.Data).OfType<InspeccionIniciada_v1>().Single();
 

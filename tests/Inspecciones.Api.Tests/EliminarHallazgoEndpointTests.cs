@@ -20,11 +20,10 @@ public class EliminarHallazgoEndpointTests(InspeccionesAppFactory factory)
 
     private async Task<(Guid InspeccionId, Guid HallazgoId)> SembrarInspeccionConHallazgo(int equipoId)
     {
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
         var inspeccionId = Guid.NewGuid();
         var hallazgoId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
 
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(

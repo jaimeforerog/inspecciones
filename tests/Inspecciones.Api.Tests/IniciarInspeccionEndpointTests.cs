@@ -42,8 +42,7 @@ public class IniciarInspeccionEndpointTests(InspeccionesAppFactory factory)
 
     private async Task SembrarCatalogo(int equipoId = 4521, int proyectoId = 3, int rutinaId = 18)
     {
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
 
         session.Store(new EquipoLocal(
             EquipoId: equipoId,
@@ -102,8 +101,8 @@ public class IniciarInspeccionEndpointTests(InspeccionesAppFactory factory)
         resultado.Mensaje.Should().BeNull("happy path no lleva mensaje");
 
         // Verificación profunda: el evento está en el event store y la proyección poblada.
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var verificacion = store.QuerySession();
+        // mt-2: lectura con tenant default ("1") — Conjoined requiere tenant explícito.
+        await using var verificacion = factory.OpenSeedingSessionForDefaultTenant();
 
         var eventos = await verificacion.Events.FetchStreamAsync(inspeccionId);
         eventos.Select(e => e.Data).OfType<InspeccionIniciada_v1>()
@@ -158,8 +157,8 @@ public class IniciarInspeccionEndpointTests(InspeccionesAppFactory factory)
         resultado!.InspeccionId.Should().Be(inspeccionId, "el replay debe devolver el mismo InspeccionId del envío original");
 
         // Verificación profunda: el stream tiene UN SOLO evento (no se duplicó por el replay).
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var verificacion = store.QuerySession();
+        // mt-2: lectura con tenant default ("1") — Conjoined requiere tenant explícito.
+        await using var verificacion = factory.OpenSeedingSessionForDefaultTenant();
         var eventos = await verificacion.Events.FetchStreamAsync(inspeccionId);
         eventos.Select(e => e.Data).OfType<InspeccionIniciada_v1>()
             .Should().ContainSingle("envelope dedup ADR-008 garantiza que el replay no duplica el evento");

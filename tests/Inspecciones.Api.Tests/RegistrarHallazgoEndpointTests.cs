@@ -41,10 +41,9 @@ public class RegistrarHallazgoEndpointTests(InspeccionesAppFactory factory)
     /// </summary>
     private async Task<Guid> SembrarInspeccionConEquipo(int equipoId = 4521)
     {
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
         var inspeccionId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
 
         var evento = new InspeccionIniciada_v1(
             InspeccionId: inspeccionId,
@@ -163,9 +162,9 @@ public class RegistrarHallazgoEndpointTests(InspeccionesAppFactory factory)
         resultado.Should().NotBeNull();
         resultado!.HallazgoId.Should().Be(hallazgoId, "el replay debe devolver el mismo HallazgoId");
 
-        // Verificación profunda: exactamente un HallazgoRegistrado_v1 en el stream
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var verificacion = store.QuerySession();
+        // Verificación profunda: exactamente un HallazgoRegistrado_v1 en el stream.
+        // mt-2: lectura con tenant default ("1") — Conjoined requiere tenant explícito.
+        await using var verificacion = factory.OpenSeedingSessionForDefaultTenant();
         var eventos = await verificacion.Events.FetchStreamAsync(inspeccionId);
         eventos.Select(e => e.Data).OfType<HallazgoRegistrado_v1>()
             .Should().ContainSingle("envelope dedup ADR-008 garantiza que el replay no duplica el evento");

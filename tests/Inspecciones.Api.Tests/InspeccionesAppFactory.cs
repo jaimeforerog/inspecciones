@@ -101,6 +101,34 @@ public sealed class InspeccionesAppFactory : WebApplicationFactory<Program>, IAs
             });
         });
 
+    /// <summary>
+    /// Abre una <see cref="Marten.IDocumentSession"/> de siembra para los tests
+    /// con el tenant default del fixture (<c>"1"</c> — alineado con
+    /// <see cref="TestHeaderAwareSessionService.IdEmpresa"/> y
+    /// <c>FakeSessionService(idEmpresa: 1)</c>).
+    ///
+    /// Reemplaza el patrón pre-mt-2 <c>store.LightweightSession()</c> directo, que ya no
+    /// funciona post-Conjoined (los documentos sin tenant_id no son legibles por handlers
+    /// que abren sesión tenant-aware). MT2-INV-1: tests siguen siendo bypass legal vía
+    /// <see cref="ITenantedDocumentSessionFactory.OpenSessionForTenant"/>.
+    /// </summary>
+    public Marten.IDocumentSession OpenSeedingSessionForDefaultTenant()
+    {
+        var factory = Services.GetRequiredService<ITenantedDocumentSessionFactory>();
+        return factory.OpenSessionForTenant("1");
+    }
+
+    /// <summary>
+    /// Abre una sesión de siembra con un tenant arbitrario — útil para tests que
+    /// quieren sembrar data en tenants distintos al default (escenarios cross-tenant
+    /// del slice mt-2 §6.2 y §6.3).
+    /// </summary>
+    public Marten.IDocumentSession OpenSeedingSessionForTenant(string tenantId)
+    {
+        var factory = Services.GetRequiredService<ITenantedDocumentSessionFactory>();
+        return factory.OpenSessionForTenant(tenantId);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Env Test: SincoMiddlewareSessionService NO se registra (Program.cs lo gatea

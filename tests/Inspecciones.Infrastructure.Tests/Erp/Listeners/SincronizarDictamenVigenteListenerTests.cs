@@ -458,4 +458,8 @@ internal sealed class FakeInspeccionReader : IInspeccionReader
         var resultado = inspeccionId == _inspeccionId ? _aggregate : null;
         return Task.FromResult(resultado);
     }
+
+    // mt-2: overload tenant-aware. Los tests de erp-3 no validan tenant — solo delegan al método base.
+    public Task<Inspeccion?> LeerAsync(Guid inspeccionId, string tenantId, CancellationToken ct = default) =>
+        LeerAsync(inspeccionId, ct);
 }

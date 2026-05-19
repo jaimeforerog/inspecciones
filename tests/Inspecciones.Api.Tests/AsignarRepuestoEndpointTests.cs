@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using Inspecciones.Domain.Catalogos;
 using Inspecciones.Domain.Comun;
@@ -10,7 +10,7 @@ namespace Inspecciones.Api.Tests;
 
 /// <summary>
 /// Tests E2E del endpoint <c>POST /api/v1/inspecciones/{id}/hallazgos/{hid}/repuestos</c>
-/// contra la app real con Postgres en Testcontainers. Spec slice 1f §9.
+/// contra la app real con Postgres en Testcontainers. Spec slice 1f Â§9.
 /// </summary>
 [Collection(nameof(InspeccionesAppCollection))]
 [Trait("Category", "Integration")]
@@ -28,7 +28,7 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         var inspeccionId = Guid.NewGuid();
         var hallazgoId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
 
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
@@ -53,10 +53,10 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
                 EvaluacionOrigenId: null,    // Slice 1i': null para Manual (backward compat)
                 ParteEquipoId: ParteEquipoId,
                 ActividadId: null,
-                ActividadDescripcion: "Revisión sello hidráulico",
+                ActividadDescripcion: "RevisiÃ³n sello hidrÃ¡ulico",
                 NovedadTecnica: "Sello con desgaste avanzado",
                 AccionRequerida: AccionRequerida.RequiereIntervencion,
-                AccionCorrectiva: "Reemplazar sello hidráulico",
+                AccionCorrectiva: "Reemplazar sello hidrÃ¡ulico",
                 TipoFallaId: 3,
                 CausaFallaId: 12,
                 ObservacionCampo: null,
@@ -71,11 +71,11 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
     private async Task SembrarRepuestoLocal(int skuId = SkuIdOk, int[]? parteIdsCompatibles = null)
     {
         var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
         session.Store(new RepuestoLocal(
             SkuId: skuId,
             CodigoSinco: $"INS-{skuId}",
-            Descripcion: "Sello hidráulico",
+            Descripcion: "Sello hidrÃ¡ulico",
             UnidadMedida: "unidad",
             ParteIdsCompatibles: parteIdsCompatibles ?? [ParteEquipoId]));
         await session.SaveChangesAsync();
@@ -100,12 +100,12 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
             })
         };
 
-    // ── Happy path E2E — §6.1 via POST ──────────────────────────────────────
+    // â”€â”€ Happy path E2E â€” Â§6.1 via POST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_repuesto_happy_path_responde_201_Created_con_body()
     {
-        // Given: inspección EnEjecucion con hallazgo RequiereIntervencion + catálogo poblado
+        // Given: inspecciÃ³n EnEjecucion con hallazgo RequiereIntervencion + catÃ¡logo poblado
         await SembrarRepuestoLocal();
         var (inspeccionId, hallazgoId) = await SembrarInspeccionConHallazgo(equipoId: 16001);
         var repuestoId = Guid.NewGuid();
@@ -117,7 +117,7 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         // When
         var response = await client.SendAsync(request);
 
-        // Then: 201 Created con todos los campos del body — spec §9
+        // Then: 201 Created con todos los campos del body â€” spec Â§9
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         response.Headers.Location!.ToString().Should().Contain(repuestoId.ToString());
 
@@ -132,7 +132,7 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body.AsignadoEn.Should().NotBe(default);
     }
 
-    // ── PRE-D: retry con mismo RepuestoId devuelve 201 idempotente ───────────
+    // â”€â”€ PRE-D: retry con mismo RepuestoId devuelve 201 idempotente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_repuesto_retry_con_mismo_RepuestoId_responde_201_PRE_D()
@@ -152,19 +152,19 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         retryRequest.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
         var respuesta = await client.SendAsync(retryRequest);
 
-        // Then: 201 — PRE-D silencioso, el aggregate retorna estado actual
+        // Then: 201 â€” PRE-D silencioso, el aggregate retorna estado actual
         respuesta.StatusCode.Should().Be(HttpStatusCode.Created);
         var body = await respuesta.Content.ReadFromJsonAsync<RespuestaAsignarRepuesto>();
         body!.RepuestoId.Should().Be(repuestoId);
         body.SkuId.Should().Be(SkuIdOk);
     }
 
-    // ── PRE-F: InspeccionId inexistente devuelve 404 ─────────────────────────
+    // â”€â”€ PRE-F: InspeccionId inexistente devuelve 404 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_repuesto_inspeccion_inexistente_responde_404_PRE_F()
     {
-        // Given: no existe ningún stream con este InspeccionId
+        // Given: no existe ningÃºn stream con este InspeccionId
         await SembrarRepuestoLocal();
         var client = factory.CreateClient();
         var request = NuevoRequest(Guid.NewGuid(), Guid.NewGuid());
@@ -179,12 +179,12 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-F");
     }
 
-    // ── PRE-H1: SkuId no existe en catálogo local → 422 ─────────────────────
+    // â”€â”€ PRE-H1: SkuId no existe en catÃ¡logo local â†’ 422 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_repuesto_sku_no_existe_en_catalogo_responde_422_PRE_H1()
     {
-        // Given: catálogo no tiene SkuId=9999
+        // Given: catÃ¡logo no tiene SkuId=9999
         var (inspeccionId, hallazgoId) = await SembrarInspeccionConHallazgo(equipoId: 16003);
         var client = factory.CreateClient();
         var request = NuevoRequest(inspeccionId, hallazgoId, skuId: 9999);
@@ -199,12 +199,12 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-H1");
     }
 
-    // ── PRE-H2: SKU no compatible con la parte del hallazgo → 422 ────────────
+    // â”€â”€ PRE-H2: SKU no compatible con la parte del hallazgo â†’ 422 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_repuesto_sku_incompatible_con_parte_responde_422_PRE_H2()
     {
-        // Given: RepuestoLocal.ParteIdsCompatibles=[10,20] — no incluye ParteEquipoId=77
+        // Given: RepuestoLocal.ParteIdsCompatibles=[10,20] â€” no incluye ParteEquipoId=77
         await SembrarRepuestoLocal(skuId: 888, parteIdsCompatibles: [10, 20]);
         var (inspeccionId, hallazgoId) = await SembrarInspeccionConHallazgo(equipoId: 16004);
         var client = factory.CreateClient();

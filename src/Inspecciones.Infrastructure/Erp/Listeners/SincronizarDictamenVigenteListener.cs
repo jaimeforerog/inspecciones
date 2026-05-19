@@ -1,7 +1,9 @@
 using Inspecciones.Domain.Inspecciones;
+using Inspecciones.Infrastructure.Auth;
 using Inspecciones.Infrastructure.Erp.Dtos;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Wolverine;
 
 namespace Inspecciones.Infrastructure.Erp.Listeners;
 
@@ -34,9 +36,37 @@ public sealed partial class SincronizarDictamenVigenteListener
         _logger = logger ?? NullLogger<SincronizarDictamenVigenteListener>.Instance;
     }
 
+    /// <summary>
+    /// Overload tenant-aware (mt-2 §6.5 + §6.6 del spec). Wolverine 3 inyecta el
+    /// <see cref="Envelope"/> del mensaje entrante; el listener extrae el
+    /// <c>TenantId</c> y lo propaga al <see cref="IInspeccionReader"/>. Si el
+    /// envelope no trae tenant, lanza <see cref="TenantRequeridoEnEnvelopeException"/>
+    /// → dead-letter inmediato (política ADR-006 §16 para errores permanentes).
+    /// </summary>
+    public async Task HandleAsync(InspeccionFirmada_v1 evento, Envelope envelope, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+
+        var tenantId = envelope.TenantId;
+        if (string.IsNullOrEmpty(tenantId))
+        {
+            throw new TenantRequeridoEnEnvelopeException(
+                nombreListener: nameof(SincronizarDictamenVigenteListener),
+                messageId: envelope.Id);
+        }
+
+        var aggregate = await _inspeccionReader.LeerAsync(evento.InspeccionId, tenantId, ct).ConfigureAwait(false);
+        await DespacharAsync(evento, aggregate, ct).ConfigureAwait(false);
+    }
+
     public async Task HandleAsync(InspeccionFirmada_v1 evento, CancellationToken ct = default)
     {
         var aggregate = await _inspeccionReader.LeerAsync(evento.InspeccionId, ct).ConfigureAwait(false);
+        await DespacharAsync(evento, aggregate, ct).ConfigureAwait(false);
+    }
+
+    private async Task DespacharAsync(InspeccionFirmada_v1 evento, Inspeccion? aggregate, CancellationToken ct)
+    {
         if (aggregate is null)
         {
             // PRE-L1: stream no existe — indica bug en handler 1g. Dead-letter inmediato.

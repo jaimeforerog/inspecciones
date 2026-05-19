@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using Inspecciones.Domain.Comun;
 using Inspecciones.Domain.Inspecciones;
@@ -9,20 +9,20 @@ namespace Inspecciones.Api.Tests;
 
 /// <summary>
 /// Tests E2E del endpoint <c>POST /api/v1/inspecciones/{id}/cancelar</c>
-/// contra la app real con Postgres en Testcontainers. Spec slice 1m §9.
+/// contra la app real con Postgres en Testcontainers. Spec slice 1m Â§9.
 ///
 /// Cubre:
-/// §6.1  — happy path (200 OK + body CanceladaEn/CanceladaPor/Motivo + estado Cancelada).
-/// §6.4  — PRE-1 capability "ejecutar-inspeccion" ausente → 403 Forbidden.
-/// §6.5  — PRE-2 InspeccionId inexistente → 404 Not Found.
-/// §6.6  — PRE-3 técnico no contribuyente → 403 Forbidden + codigoError I6-NO-CONTRIBUYENTE.
-/// §6.7  — PRE-4 motivo vacío → 422 Unprocessable Entity + codigoError I6-MOTIVO.
-/// §6.9  — PRE-4 motivo corto (&lt;10 chars) → 422 + codigoError I6-MOTIVO.
-/// §6.10 — PRE-5 inspección firmada → 409 Conflict + codigoError I6-ESTADO.
-/// §6.11 — PRE-5 inspección ya cancelada → 409 Conflict + codigoError I6-ESTADO.
-/// §6.14 — Idempotencia ADR-008 (Skip: requiere Wolverine envelope dedup en producción).
-/// Header — X-Client-Command-Id ausente → 400 Bad Request + codigoError HEADER-REQUERIDO.
-/// Proyección — InspeccionAbiertaPorEquipoView delete tras cancelación.
+/// Â§6.1  â€” happy path (200 OK + body CanceladaEn/CanceladaPor/Motivo + estado Cancelada).
+/// Â§6.4  â€” PRE-1 capability "ejecutar-inspeccion" ausente â†’ 403 Forbidden.
+/// Â§6.5  â€” PRE-2 InspeccionId inexistente â†’ 404 Not Found.
+/// Â§6.6  â€” PRE-3 tÃ©cnico no contribuyente â†’ 403 Forbidden + codigoError I6-NO-CONTRIBUYENTE.
+/// Â§6.7  â€” PRE-4 motivo vacÃ­o â†’ 422 Unprocessable Entity + codigoError I6-MOTIVO.
+/// Â§6.9  â€” PRE-4 motivo corto (&lt;10 chars) â†’ 422 + codigoError I6-MOTIVO.
+/// Â§6.10 â€” PRE-5 inspecciÃ³n firmada â†’ 409 Conflict + codigoError I6-ESTADO.
+/// Â§6.11 â€” PRE-5 inspecciÃ³n ya cancelada â†’ 409 Conflict + codigoError I6-ESTADO.
+/// Â§6.14 â€” Idempotencia ADR-008 (Skip: requiere Wolverine envelope dedup en producciÃ³n).
+/// Header â€” X-Client-Command-Id ausente â†’ 400 Bad Request + codigoError HEADER-REQUERIDO.
+/// ProyecciÃ³n â€” InspeccionAbiertaPorEquipoView delete tras cancelaciÃ³n.
 /// </summary>
 [Collection(nameof(InspeccionesAppCollection))]
 [Trait("Category", "Integration")]
@@ -31,13 +31,13 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
     private static readonly DateTimeOffset CapturadoEn =
         new(2026, 5, 8, 15, 0, 0, TimeSpan.Zero);
 
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Helpers de siembra
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
-    /// Siembra un stream de inspección técnica en estado EnEjecucion.
-    /// TecnicoIniciador = "1" — corresponde al default IdUsuario del
+    /// Siembra un stream de inspecciÃ³n tÃ©cnica en estado EnEjecucion.
+    /// TecnicoIniciador = "1" â€” corresponde al default IdUsuario del
     /// TestHeaderAwareSessionService (spec mt-1 D-MT1-6: IdUsuario.ToString()).
     /// </summary>
     private async Task<Guid> SembrarInspeccionEnEjecucion(
@@ -47,7 +47,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         var store = factory.Services.GetRequiredService<IDocumentStore>();
         var inspeccionId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
 
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
@@ -69,7 +69,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
     }
 
     /// <summary>
-    /// Siembra una inspección firmada completa (para escenario PRE-5 ya firmada).
+    /// Siembra una inspecciÃ³n firmada completa (para escenario PRE-5 ya firmada).
     /// </summary>
     private async Task<Guid> SembrarInspeccionFirmada(int equipoId)
     {
@@ -77,7 +77,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         var inspeccionId = Guid.NewGuid();
         var hallazgoId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
 
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
@@ -102,7 +102,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
                 EvaluacionOrigenId: null,
                 ParteEquipoId: 77,
                 ActividadId: null,
-                ActividadDescripcion: "Revisión general",
+                ActividadDescripcion: "RevisiÃ³n general",
                 NovedadTecnica: "Estado general satisfactorio",
                 AccionRequerida: AccionRequerida.NoRequiereIntervencion,
                 AccionCorrectiva: null,
@@ -114,13 +114,13 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
                 RegistradoEn: CapturadoEn),
             new DiagnosticoEmitido_v1(
                 InspeccionId: inspeccionId,
-                DiagnosticoFinal: "Inspección completa",
+                DiagnosticoFinal: "InspecciÃ³n completa",
                 EmitidoPor: "1",
                 EmitidoEn: CapturadoEn),
             new DictamenEstablecido_v1(
                 InspeccionId: inspeccionId,
                 Dictamen: DictamenOperacion.PuedeOperar,
-                Justificacion: "Sin hallazgos críticos",
+                Justificacion: "Sin hallazgos crÃ­ticos",
                 EmitidoPor: "1",
                 EstablecidoEn: CapturadoEn),
             new InspeccionFirmada_v1(
@@ -135,18 +135,18 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
     }
 
     /// <summary>
-    /// Siembra una inspección ya cancelada (para escenario PRE-5 segunda cancelación §6.11).
+    /// Siembra una inspecciÃ³n ya cancelada (para escenario PRE-5 segunda cancelaciÃ³n Â§6.11).
     /// </summary>
     private async Task<Guid> SembrarInspeccionYaCancelada(int equipoId)
     {
         var inspeccionId = await SembrarInspeccionEnEjecucion(equipoId, tecnicoId: "carlos.ruiz");
         var store = factory.Services.GetRequiredService<IDocumentStore>();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
         session.Events.Append(inspeccionId,
             new InspeccionCancelada_v1(
                 InspeccionId: inspeccionId,
-                Motivo: "Cancelación previa del técnico",
+                Motivo: "CancelaciÃ³n previa del tÃ©cnico",
                 CanceladaPor: "1",
                 CanceladaEn: CapturadoEn));
         await session.SaveChangesAsync();
@@ -159,9 +159,9 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         motivo
     };
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.1 Happy path — 200 OK con body correcto
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.1 Happy path â€” 200 OK con body correcto
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_happy_path_responde_200_OK()
@@ -182,7 +182,7 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         var response = await client.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "CancelarInspeccion devuelve 200 porque la cancelación es síncrona (spec §9)");
+            "CancelarInspeccion devuelve 200 porque la cancelaciÃ³n es sÃ­ncrona (spec Â§9)");
 
         var resultado = await response.Content.ReadFromJsonAsync<RespuestaCancelarInspeccion>();
         resultado.Should().NotBeNull();
@@ -193,9 +193,9 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         resultado.CanceladaEn.Should().BeCloseTo(CapturadoEn, precision: TimeSpan.FromMinutes(5));
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.4 PRE-1 — capability "ejecutar-inspeccion" ausente → 403 Forbidden
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.4 PRE-1 â€” capability "ejecutar-inspeccion" ausente â†’ 403 Forbidden
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_sin_capability_responde_403()
@@ -216,12 +216,12 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         var response = await client.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
-            "PRE-1: el endpoint debe rechazar si el técnico no tiene capability 'ejecutar-inspeccion'");
+            "PRE-1: el endpoint debe rechazar si el tÃ©cnico no tiene capability 'ejecutar-inspeccion'");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.5 PRE-2 — InspeccionId inexistente → 404 Not Found
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.5 PRE-2 â€” InspeccionId inexistente â†’ 404 Not Found
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_inexistente_responde_404()
@@ -241,9 +241,9 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.6 PRE-3 — técnico no contribuyente → 403 Forbidden
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.6 PRE-3 â€” tÃ©cnico no contribuyente â†’ 403 Forbidden
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_tecnico_no_contribuyente_responde_403()
@@ -259,21 +259,21 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
             Content = JsonContent.Create(RequestBodyBase())
         };
         request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-        // X-Tecnico-Id=99 — int distinto al sembrado (=1), TestHeaderAwareSessionService
-        // mapea el header a IdUsuario=99 → técnico externo no contribuyente.
+        // X-Tecnico-Id=99 â€” int distinto al sembrado (=1), TestHeaderAwareSessionService
+        // mapea el header a IdUsuario=99 â†’ tÃ©cnico externo no contribuyente.
         request.Headers.Add("X-Tecnico-Id", "99");
 
         var response = await client.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
-            "PRE-3: el técnico externo no puede cancelar una inspección en la que no ha contribuido");
+            "PRE-3: el tÃ©cnico externo no puede cancelar una inspecciÃ³n en la que no ha contribuido");
         var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
         body!.CodigoError.Should().Be("I6-NO-CONTRIBUYENTE");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.7 PRE-4 — motivo vacío → 422 Unprocessable Entity
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.7 PRE-4 â€” motivo vacÃ­o â†’ 422 Unprocessable Entity
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_motivo_vacio_responde_400_o_422_I6_MOTIVO()
@@ -292,16 +292,16 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
 
         var response = await client.SendAsync(request);
 
-        // 422 para validaciones de negocio (PRE-4 I6-MOTIVO); el endpoint puede también retornar 400
-        // si se implementa validación de modelo antes del handler.
+        // 422 para validaciones de negocio (PRE-4 I6-MOTIVO); el endpoint puede tambiÃ©n retornar 400
+        // si se implementa validaciÃ³n de modelo antes del handler.
         response.StatusCode.Should().BeOneOf(
             new[] { HttpStatusCode.UnprocessableEntity, HttpStatusCode.BadRequest },
-            "PRE-4: motivo vacío — el endpoint debe rechazar con 422 o 400");
+            "PRE-4: motivo vacÃ­o â€” el endpoint debe rechazar con 422 o 400");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.9 PRE-4 — motivo corto (<10 chars) → 422
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.9 PRE-4 â€” motivo corto (<10 chars) â†’ 422
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_motivo_corto_responde_422_I6_MOTIVO()
@@ -325,9 +325,9 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("I6-MOTIVO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.10 PRE-5 — inspección ya firmada → 409 Conflict + codigoError I6-ESTADO
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.10 PRE-5 â€” inspecciÃ³n ya firmada â†’ 409 Conflict + codigoError I6-ESTADO
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_ya_firmada_responde_409_I6_ESTADO()
@@ -347,14 +347,14 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         var response = await client.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict,
-            "PRE-5: la inspección está Firmada, no puede cancelarse (I6 + I-F1)");
+            "PRE-5: la inspecciÃ³n estÃ¡ Firmada, no puede cancelarse (I6 + I-F1)");
         var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
         body!.CodigoError.Should().Be("I6-ESTADO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.11 PRE-5 — inspección ya cancelada → 409 Conflict
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.11 PRE-5 â€” inspecciÃ³n ya cancelada â†’ 409 Conflict
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_ya_cancelada_responde_409_I6_ESTADO()
@@ -374,27 +374,27 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         var response = await client.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.Conflict,
-            "PRE-5: la inspección ya está Cancelada — no se puede cancelar de nuevo (I6)");
+            "PRE-5: la inspecciÃ³n ya estÃ¡ Cancelada â€” no se puede cancelar de nuevo (I6)");
         var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
         body!.CodigoError.Should().Be("I6-ESTADO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.14 Idempotencia ADR-008 — mismo X-Client-Command-Id no duplica eventos (Skip)
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.14 Idempotencia ADR-008 â€” mismo X-Client-Command-Id no duplica eventos (Skip)
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact(Skip = "Requiere Wolverine envelope storage con MessageId dedup. " +
                  "El store en Testcontainers no tiene Wolverine envelope habilitado. " +
-                 "Implementar cuando el handler esté registrado como Wolverine handler " +
-                 "con durable local queues. Ver spec §6.14, §7, ADR-008 §9.16.")]
+                 "Implementar cuando el handler estÃ© registrado como Wolverine handler " +
+                 "con durable local queues. Ver spec Â§6.14, Â§7, ADR-008 Â§9.16.")]
     public async Task POST_cancelar_inspeccion_replay_mismo_ClientCommandId_no_duplica_eventos_ADR_008()
     {
         await Task.CompletedTask;
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Header X-Client-Command-Id ausente → 400 Bad Request
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Header X-Client-Command-Id ausente â†’ 400 Bad Request
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_cancelar_inspeccion_sin_header_X_Client_Command_Id_responde_400()
@@ -417,9 +417,9 @@ public class CancelarInspeccionEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("HEADER-REQUERIDO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DTOs locales de lectura — independientes del namespace de la API
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // DTOs locales de lectura â€” independientes del namespace de la API
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private sealed record RespuestaCancelarInspeccion(
         Guid           InspeccionId,

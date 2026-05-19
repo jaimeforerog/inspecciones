@@ -346,6 +346,55 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Acción cross-team:** llevar la pregunta a la próxima ronda con Sergio/David (`07-preguntas-destrabar-followups.md`). Pregunta concreta: ¿el JWT del host PWA emite hoy una claim que mapee a "capabilities" del módulo (ej. `Permisos`, `Roles`), y si no, en qué horizonte se puede agregar?
 **Notas:** no bloquea mt-1 (always-allow es comportamiento histórico equivalente al mock). FU-54 cierra cuando el contrato esté confirmado y los defaults aprieten.
 
+### #55 — Caché Marten tenant-aware en sagas con context-switch (placeholder ADR-009) 🟢
+
+**Origen:** ADR-009 §"Followups" placeholder + spec mt-2 §"Preguntas abiertas" (no emergió en green).
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · multi-tenancy
+**Descripción:** Documentar cómo invalidar la caché Marten al cambiar `tenant_id` mid-session. En mt-2 no aplica (cada request HTTP abre sesión fresca via `ITenantedDocumentSessionFactory.OpenSession()`, y cada listener Wolverine también). Pero si en sagas largas (ej. `CerrarInspeccionSaga`) emerge necesidad de "leer aggregate del tenant X, luego procesar con tenant Y" — falta protocolo.
+**Disparador para abrir slice:** primera saga que opere cross-tenant (improbable en MVP) o primer bug reportado de "data del tenant equivocado".
+**Notas:** placeholder defensivo. Sin acción inmediata.
+
+### #56 — Validar Wolverine 3 prefiere overload `HandleAsync(evento, Envelope, ct)` en producción 🟢
+
+**Origen:** slice mt-2 review §3 hallazgo #1
+**Fecha:** 2026-05-19
+**Tipo:** deuda técnica · multi-tenancy · validación E2E
+**Descripción:** El listener `SincronizarDictamenVigenteListener` tiene dos overloads de `HandleAsync` (legacy sin envelope + tenant-aware con envelope). En tests in-process el listener tenant-aware se invoca explícitamente. **Falta validación E2E** con outbox Wolverine real que confirme que Wolverine 3.13 elige la overload con `Envelope` cuando ambas existen. Riesgo: si elige la legacy, los listeners ejecutan sin tenant — silenciosamente abren sesión Marten con tenant del scope ambient (potencialmente vacío en outbox).
+**Disparador para abrir slice:** mt-4 (smoke E2E + observabilidad). Si Wolverine prefiere la legacy, opción del red-notes B: **remover la overload sin envelope** y migrar los 11 tests erp-3 que la consumen para que pasen `new Envelope { TenantId = "1" }` explícito.
+**Acción sugerida:** test integración con Wolverine host real (no in-process) que publica `InspeccionFirmada_v1` con tenant_id y asserta que el listener tenant-aware ejecutó (sentinel: el log estructurado debe contener `TenantId`).
+**Notas:** según docs Wolverine, la convención de discovery prefiere métodos con más parámetros. Riesgo bajo pero no validado.
+
+### #57 — `DescartarNovedadPreopErpListener` no propaga tenant a logs estructurados 🟢
+
+**Origen:** slice mt-2 review §3 hallazgo #2
+**Fecha:** 2026-05-19
+**Tipo:** observabilidad · multi-tenancy
+**Descripción:** El listener `DescartarNovedadPreopErpListener` no lee `Envelope.TenantId`. No es bug funcional (el listener solo invoca `POST` HTTP al ERP, no toca Marten directamente), pero los logs estructurados (`NovedadPreopErpCierreFallido_v1`) salen sin tenant. Cuando ops investigue un fallo de descarte cross-empresa, no podrá filtrar por tenant en App Insights/Loki.
+**Disparador para abrir slice:** mt-3 (propagación JWT al ERP) — natural agrupar el cambio con la captura del envelope.
+**Acción sugerida:** agregar overload `HandleAsync(NovedadPreopDescartada_v1, Envelope, ct)` y enriquecer `LogCierreFallido(...)` con `tenantId = envelope.TenantId`. Sin lanzar `TenantRequeridoEnEnvelopeException` (la propagación al ERP no la requiere) — solo logging defensivo.
+**Notas:** bajo riesgo, alto valor para triage operativo.
+
+### #58 — SQL backfill staging para data legacy pre-mt-2 🟢
+
+**Origen:** slice mt-2 review §3 hallazgo #3 + green-notes "SQL backfill staging"
+**Fecha:** 2026-05-19
+**Tipo:** ops · migración
+**Descripción:** mt-2 introduce Marten Conjoined con `tenant_id` en cada tabla. Data legacy en staging (si existe) carece de tenant_id. El SQL de backfill está preparado en `slices/mt-2-marten-conjoined-tenancy/green-notes.md §"SQL backfill staging"` (8 `UPDATE inspecciones.mt_doc_*`) pero **no se ejecuta en este slice** — D4 firmada dice que es responsabilidad de ops post-merge.
+**Disparador para abrir slice:** previo al primer deploy de mt-2 a staging multi-empresa. Verificar que el SQL refleja la convención real de Marten 7.40 para nombres de tabla (`\dt inspecciones.*` antes de ejecutar).
+**Acción sugerida:** Santiago (rol ops) ejecuta el script una vez post-merge. Verifica con queries: `SELECT tenant_id, COUNT(*) FROM inspecciones.mt_doc_equipo_local GROUP BY tenant_id`. Toda fila legacy debe quedar en `tenant_id = '0'`.
+**Notas:** módulo no está en prod, riesgo bajo. Si emerge complejidad (data significativa en staging), abrir slice ops dedicado.
+
+### #59 — Test de rebuild cross-tenant del aggregate `Inspeccion` 🟢
+
+**Origen:** slice mt-2 review §3 hallazgo #4
+**Fecha:** 2026-05-19
+**Tipo:** robustez · cobertura de test
+**Descripción:** mt-2 verifica cross-tenant isolation por test E2E (`POST /inspecciones` con tenant 7, leer con tenant 8 → null). Marten Conjoined ya garantiza que `AggregateStreamAsync(streamId)` con tenant N solo carga eventos con `tenant_id=N`. **Falta un test explícito del rebuild puro**: dado un stream con eventos tenant 7, ¿el rebuild manual (sin Marten) sobre el aggregate vacío produce el mismo estado que `AggregateStreamAsync` con tenant 7? El test es defensivo — verifica que no introdujimos accidentalmente lógica tenant-aware dentro del `Apply` puro.
+**Disparador para abrir slice:** mt-4 (smoke E2E + observabilidad). El test cabe en `Inspecciones.Domain.Tests` extendiendo los tests de rebuild ya existentes con un assert de "tenant_id no afecta el estado del aggregate reconstruido".
+**Acción sugerida:** un test único: dado el mismo stream, comparar `Inspeccion.Reconstruir(stream)` vs `session.Events.AggregateStreamAsync<Inspeccion>(...)` post-mt-2 — deben ser idénticos. Si difieren, hay state leak en `Apply`.
+**Notas:** bajo riesgo — los 8 tests E2E ya verifican el comportamiento end-to-end. Este es defensivo para auditar `Apply` puro.
+
 ## Cerrados
 
 ### #14 — Claims reales desde JWT cuando ADR-002 se resuelva ✅

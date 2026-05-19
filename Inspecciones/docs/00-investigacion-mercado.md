@@ -2090,7 +2090,7 @@ Ver [`09-adr-008-offline-cliente.html`](09-adr-008-offline-cliente.html) — flu
 
 ## 9.17 ADR-009 — Multi-tenancy Marten conjoined por `IdEmpresa` (2026-05-19)
 
-**Estado:** **ACEPTADA** como decisión arquitectónica (enforcement implementado en slices mt-1..mt-4 del sub-track multi-tenancy; mt-1 cerrado el 2026-05-19, mt-2..mt-4 pendientes).
+**Estado:** **ACEPTADA** como decisión arquitectónica y **enforcement implementado** en mt-2. Sub-track multi-tenancy: mt-1 y mt-2 cerrados el 2026-05-19; mt-3 (JWT propagation a ERP) y mt-4 (smoke E2E + observabilidad) pendientes antes del piloto.
 
 ### Contexto
 
@@ -2148,9 +2148,9 @@ HTTP Response
 | Slice | Estado | Foco |
 |---|---|---|
 | **mt-1** — JWT claims pipeline | ✅ Cerrado 2026-05-19 | `ISessionService` puerto + cableado en 15 endpoints + ADR-002 cerrado + ADR-009 creado |
-| **mt-2** — Marten conjoined | ⏳ Pendiente | `StoreOptions.AllDocumentsAreMultiTenanted()` + `IDocumentSessionFactory` wired al `ISessionService` + migración de schema (`tenant_id` column + index) + tests cross-tenant isolation |
-| **mt-3** — JWT propagation a ERP | ⏳ Pendiente | Propagar JWT entrante a `MaquinariaErpClient` (FU-44). Decidir estrategia para sagas que corren fuera de scope HTTP (token de servicio dedicado vs. capturar JWT en envelope Wolverine) |
-| **mt-4** — Smoke E2E + observabilidad | ⏳ Pendiente | Tests E2E con 2 tenants concurrentes, asserts de no-leak, métricas App Insights por `IdEmpresa` |
+| **mt-2** — Marten conjoined | ✅ Cerrado 2026-05-19 | `StoreOptions.AllDocumentsAreMultiTenanted()` + `Events.TenancyStyle = Conjoined` activos. Puerto `ITenantedDocumentSessionFactory` introducido, `IDocumentSession`/`IQuerySession` scoped delegados al factory. Listeners Wolverine reciben `Envelope` y propagan `TenantId` al puerto. Tests cross-tenant isolation cubren aggregate, catálogos y `CatalogoSyncState`. Reset schema dev confirmado en fixture, SQL backfill staging preparado (FU-58 ops). |
+| **mt-3** — JWT propagation a ERP | ⏳ Pendiente | Propagar JWT entrante a `MaquinariaErpClient` (FU-44). Decidir estrategia para sagas que corren fuera de scope HTTP (token de servicio dedicado vs. capturar JWT en envelope Wolverine). Agrupable con FU-57 (`DescartarNovedadPreopErpListener` logs con tenant). |
+| **mt-4** — Smoke E2E + observabilidad | ⏳ Pendiente | Tests E2E con 2 tenants concurrentes, asserts de no-leak, métricas App Insights por `IdEmpresa`. Cierra FU-56 (validar Wolverine 3 prefiere overload tenant-aware) y FU-59 (test rebuild cross-tenant defensivo). |
 
 ### Decisiones secundarias firmadas (spec mt-1)
 
@@ -2169,7 +2169,11 @@ HTTP Response
 
 ### Followups
 
-- **FU-55** (placeholder — abrir al iniciar mt-2): documentar cómo invalidar la caché Marten al cambiar `tenant_id` mid-session (no debería pasar en mt-1, pero es posible en sagas con context-switch).
+- **FU-55** (abierto desde mt-2): documentar cómo invalidar la caché Marten al cambiar `tenant_id` mid-session. No emergió en mt-2 (cada request abre sesión fresca); placeholder defensivo para sagas con context-switch.
+- **FU-56** (abierto desde mt-2): validar en mt-4 con smoke E2E real que Wolverine 3 prefiere la overload tenant-aware del listener (`HandleAsync(evento, Envelope, ct)`) sobre la legacy. Si no, remover la legacy.
+- **FU-57** (abierto desde mt-2): propagar `Envelope.TenantId` a logs estructurados de `DescartarNovedadPreopErpListener`. Agrupable con mt-3.
+- **FU-58** (abierto desde mt-2): ejecutar SQL backfill staging post-merge. Documentado en `slices/mt-2-marten-conjoined-tenancy/green-notes.md §"SQL backfill staging"`.
+- **FU-59** (abierto desde mt-2): test defensivo de rebuild cross-tenant del aggregate. Cabe en `Domain.Tests`, valida que `Apply` no introdujo lógica tenant-aware accidental.
 - **FU-44** (vivo desde el sub-track ERP): propagación JWT al cliente HTTP del ERP. Rola a mt-3 según decisión D-MT1-10.
 
 ---

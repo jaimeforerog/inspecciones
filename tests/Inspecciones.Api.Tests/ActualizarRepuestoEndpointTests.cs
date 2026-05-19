@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using Inspecciones.Domain.Comun;
 using Inspecciones.Domain.Inspecciones;
@@ -10,24 +10,24 @@ namespace Inspecciones.Api.Tests;
 /// <summary>
 /// Tests E2E del endpoint
 /// <c>PATCH /api/v1/inspecciones/{inspeccionId}/hallazgos/{hallazgoId}/repuestos/{repuestoId}</c>
-/// contra la app real con Postgres en Testcontainers. Spec slice 1o §9.
+/// contra la app real con Postgres en Testcontainers. Spec slice 1o Â§9.
 ///
 /// Todos los tests fallan con NotImplementedException hasta que green implemente
 /// <see cref="Inspecciones.Application.Inspecciones.ActualizarRepuestoHandler.Handle"/>.
 ///
 /// Cubre:
-/// §6.1  — Happy path: 200 OK + body con estado post-update.
-/// §6.5  — PRE-2/I-H7: inspección firmada → 422 + codigoError "I-H7".
-/// §6.6  — PRE-3: HallazgoId inexistente → 404 + codigoError "PRE-3".
-/// §6.7  — PRE-4: hallazgo eliminado → 422 + codigoError "PRE-4-ELIMINADO".
-/// §6.8  — PRE-5: RepuestoId inexistente → 404 + codigoError "PRE-5".
-/// §6.9  — PRE-5: RepuestoId en hallazgo incorrecto → 404 + codigoError "PRE-5".
-/// §6.10 — PRE-7: Cantidad≤0 → 422 + codigoError "PRE-7".
-/// §6.11 — PRE-8: ambos campos null → 400 + codigoError "PRE-8".
-/// §6.12 — PRE-1: InspeccionId inexistente → 404 + codigoError "PRE-1".
-/// PRE-0 — capability ausente → 403 Forbidden + codigoError "PRE-0".
-/// Header — X-Client-Command-Id ausente → 400 + codigoError "HEADER-REQUERIDO".
-/// ADR-008 — Idempotencia (Skip: requiere Wolverine envelope dedup en producción).
+/// Â§6.1  â€” Happy path: 200 OK + body con estado post-update.
+/// Â§6.5  â€” PRE-2/I-H7: inspecciÃ³n firmada â†’ 422 + codigoError "I-H7".
+/// Â§6.6  â€” PRE-3: HallazgoId inexistente â†’ 404 + codigoError "PRE-3".
+/// Â§6.7  â€” PRE-4: hallazgo eliminado â†’ 422 + codigoError "PRE-4-ELIMINADO".
+/// Â§6.8  â€” PRE-5: RepuestoId inexistente â†’ 404 + codigoError "PRE-5".
+/// Â§6.9  â€” PRE-5: RepuestoId en hallazgo incorrecto â†’ 404 + codigoError "PRE-5".
+/// Â§6.10 â€” PRE-7: Cantidadâ‰¤0 â†’ 422 + codigoError "PRE-7".
+/// Â§6.11 â€” PRE-8: ambos campos null â†’ 400 + codigoError "PRE-8".
+/// Â§6.12 â€” PRE-1: InspeccionId inexistente â†’ 404 + codigoError "PRE-1".
+/// PRE-0 â€” capability ausente â†’ 403 Forbidden + codigoError "PRE-0".
+/// Header â€” X-Client-Command-Id ausente â†’ 400 + codigoError "HEADER-REQUERIDO".
+/// ADR-008 â€” Idempotencia (Skip: requiere Wolverine envelope dedup en producciÃ³n).
 /// </summary>
 [Collection(nameof(InspeccionesAppCollection))]
 [Trait("Category", "Integration")]
@@ -36,12 +36,12 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
     private static readonly DateTimeOffset CapturadoEn =
         new(2026, 5, 8, 15, 0, 0, TimeSpan.Zero);
 
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Helpers de siembra
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
-    /// Siembra un stream con inspección EnEjecucion + hallazgo + repuesto activo.
+    /// Siembra un stream con inspecciÃ³n EnEjecucion + hallazgo + repuesto activo.
     /// Devuelve los tres IDs del stream.
     /// </summary>
     private async Task<(Guid InspeccionId, Guid HallazgoId, Guid RepuestoId)>
@@ -52,7 +52,7 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         var hallazgoId = Guid.NewGuid();
         var repuestoId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
                 InspeccionId: inspeccionId,
@@ -76,10 +76,10 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
                 EvaluacionOrigenId: null,
                 ParteEquipoId: 77,
                 ActividadId: null,
-                ActividadDescripcion: "Revisión sello hidráulico",
+                ActividadDescripcion: "RevisiÃ³n sello hidrÃ¡ulico",
                 NovedadTecnica: "Sello con desgaste avanzado",
                 AccionRequerida: AccionRequerida.RequiereIntervencion,
-                AccionCorrectiva: "Reemplazar sello hidráulico",
+                AccionCorrectiva: "Reemplazar sello hidrÃ¡ulico",
                 TipoFallaId: 3,
                 CausaFallaId: 12,
                 ObservacionCampo: null,
@@ -103,7 +103,7 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
     }
 
     /// <summary>
-    /// Siembra una inspección firmada completa (para PRE-2 §6.5).
+    /// Siembra una inspecciÃ³n firmada completa (para PRE-2 Â§6.5).
     /// </summary>
     private async Task<(Guid InspeccionId, Guid HallazgoId, Guid RepuestoId)>
         SembrarInspeccionFirmadaConRepuesto(int equipoId)
@@ -113,7 +113,7 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         var hallazgoId = Guid.NewGuid();
         var repuestoId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
                 InspeccionId: inspeccionId,
@@ -137,8 +137,8 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
                 EvaluacionOrigenId: null,
                 ParteEquipoId: 77,
                 ActividadId: null,
-                ActividadDescripcion: "Revisión general",
-                NovedadTecnica: "Estado sin hallazgos críticos",
+                ActividadDescripcion: "RevisiÃ³n general",
+                NovedadTecnica: "Estado sin hallazgos crÃ­ticos",
                 AccionRequerida: AccionRequerida.NoRequiereIntervencion,
                 AccionCorrectiva: null,
                 TipoFallaId: null,
@@ -160,13 +160,13 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
                 AsignadoEn: CapturadoEn),
             new DiagnosticoEmitido_v1(
                 InspeccionId: inspeccionId,
-                DiagnosticoFinal: "Inspección completa sin hallazgos críticos",
+                DiagnosticoFinal: "InspecciÃ³n completa sin hallazgos crÃ­ticos",
                 EmitidoPor: "rmartinez",
                 EmitidoEn: CapturadoEn),
             new DictamenEstablecido_v1(
                 InspeccionId: inspeccionId,
                 Dictamen: DictamenOperacion.PuedeOperar,
-                Justificacion: "Sin hallazgos de intervención",
+                Justificacion: "Sin hallazgos de intervenciÃ³n",
                 EmitidoPor: "rmartinez",
                 EstablecidoEn: CapturadoEn),
             new InspeccionFirmada_v1(
@@ -181,7 +181,7 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
     }
 
     /// <summary>
-    /// Siembra inspección EnEjecucion con hallazgo eliminado.
+    /// Siembra inspecciÃ³n EnEjecucion con hallazgo eliminado.
     /// </summary>
     private async Task<(Guid InspeccionId, Guid HallazgoId, Guid RepuestoId)>
         SembrarInspeccionConHallazgoEliminado(int equipoId)
@@ -191,7 +191,7 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         var hallazgoId = Guid.NewGuid();
         var repuestoId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
                 InspeccionId: inspeccionId,
@@ -215,7 +215,7 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
                 EvaluacionOrigenId: null,
                 ParteEquipoId: 77,
                 ActividadId: null,
-                ActividadDescripcion: "Revisión",
+                ActividadDescripcion: "RevisiÃ³n",
                 NovedadTecnica: "Desgaste leve",
                 AccionRequerida: AccionRequerida.RequiereIntervencion,
                 AccionCorrectiva: "Reemplazar",
@@ -280,14 +280,14 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         return request;
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Header — X-Client-Command-Id ausente → 400 Bad Request
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Header â€” X-Client-Command-Id ausente â†’ 400 Bad Request
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_sin_header_ClientCommandId_responde_400_HEADER_REQUERIDO()
     {
-        // Given: cualquier ruta válida (el header check es pre-handler)
+        // Given: cualquier ruta vÃ¡lida (el header check es pre-handler)
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionConRepuesto(equipoId: 100001);
 
@@ -304,14 +304,14 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("HEADER-REQUERIDO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // PRE-0 — capability "ejecutar-inspeccion" ausente → 403 Forbidden
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // PRE-0 â€” capability "ejecutar-inspeccion" ausente â†’ 403 Forbidden
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_sin_capability_ejecutar_inspeccion_responde_403_PRE0()
     {
-        // Given: cualquier ruta válida
+        // Given: cualquier ruta vÃ¡lida
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionConRepuesto(equipoId: 100002);
 
@@ -321,20 +321,20 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         // When
         var response = await client.SendAsync(request);
 
-        // Then: 403 — PRE-0 capability gate
+        // Then: 403 â€” PRE-0 capability gate
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
         body!.CodigoError.Should().Be("PRE-0");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.1 — Happy path: 200 OK con body correcto
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.1 â€” Happy path: 200 OK con body correcto
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_happy_path_solo_cantidad_responde_200_OK()
     {
-        // Given: inspección EnEjecucion con repuesto R1 (Cantidad=1, Justificacion="Cambio rutinario")
+        // Given: inspecciÃ³n EnEjecucion con repuesto R1 (Cantidad=1, Justificacion="Cambio rutinario")
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionConRepuesto(equipoId: 100003);
 
@@ -347,27 +347,27 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
 
         // Then: 200 OK con estado post-update
         response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "ActualizarRepuesto devuelve 200 OK — el recurso ya existe (spec §9 D-6)");
+            "ActualizarRepuesto devuelve 200 OK â€” el recurso ya existe (spec Â§9 D-6)");
 
         var body = await response.Content.ReadFromJsonAsync<RespuestaActualizarRepuesto>();
         body.Should().NotBeNull();
         body!.RepuestoId.Should().Be(repuestoId);
         body.Cantidad.Should().Be(2m, "Cantidad actualizada");
         body.Justificacion.Should().Be("Cambio rutinario",
-            "Justificacion no cambió — ObservacionNueva=null preserva el valor anterior");
+            "Justificacion no cambiÃ³ â€” ObservacionNueva=null preserva el valor anterior");
         body.ActualizadoEn.Should().BeCloseTo(CapturadoEn, precision: TimeSpan.FromMinutes(5));
     }
 
     [Fact]
     public async Task PATCH_repuesto_happy_path_ambos_campos_responde_200_OK()
     {
-        // Given: inspección EnEjecucion con repuesto activo
+        // Given: inspecciÃ³n EnEjecucion con repuesto activo
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionConRepuesto(equipoId: 100004);
 
         var client = factory.CreateClient();
         var request = BuildRequest(inspeccionId, hallazgoId, repuestoId,
-            cantidadNueva: 3m, observacionNueva: "Revisión extendida, se necesitan 3");
+            cantidadNueva: 3m, observacionNueva: "RevisiÃ³n extendida, se necesitan 3");
 
         // When
         var response = await client.SendAsync(request);
@@ -376,17 +376,17 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<RespuestaActualizarRepuesto>();
         body!.Cantidad.Should().Be(3m);
-        body.Justificacion.Should().Be("Revisión extendida, se necesitan 3");
+        body.Justificacion.Should().Be("RevisiÃ³n extendida, se necesitan 3");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.5 — PRE-2/I-H7: inspección firmada → 422 + codigoError "I-H7"
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.5 â€” PRE-2/I-H7: inspecciÃ³n firmada â†’ 422 + codigoError "I-H7"
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_inspeccion_firmada_responde_422_I_H7()
     {
-        // Given: inspección en estado Firmada
+        // Given: inspecciÃ³n en estado Firmada
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionFirmadaConRepuesto(equipoId: 100005);
 
@@ -396,20 +396,20 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         // When
         var response = await client.SendAsync(request);
 
-        // Then: 422 Unprocessable Entity con código I-H7
+        // Then: 422 Unprocessable Entity con cÃ³digo I-H7
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
         body!.CodigoError.Should().Be("I-H7");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.6 — PRE-3: HallazgoId inexistente → 404 + codigoError "PRE-3"
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.6 â€” PRE-3: HallazgoId inexistente â†’ 404 + codigoError "PRE-3"
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_hallazgo_inexistente_responde_404_PRE3()
     {
-        // Given: inspección EnEjecucion con repuesto; pero se usa un hallazgoId inexistente
+        // Given: inspecciÃ³n EnEjecucion con repuesto; pero se usa un hallazgoId inexistente
         var (inspeccionId, _, repuestoId) =
             await SembrarInspeccionConRepuesto(equipoId: 100006);
 
@@ -425,14 +425,14 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-3");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.7 — PRE-4: hallazgo eliminado → 422 + codigoError "PRE-4-ELIMINADO"
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.7 â€” PRE-4: hallazgo eliminado â†’ 422 + codigoError "PRE-4-ELIMINADO"
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_hallazgo_eliminado_responde_422_PRE4_ELIMINADO()
     {
-        // Given: inspección EnEjecucion con hallazgo eliminado
+        // Given: inspecciÃ³n EnEjecucion con hallazgo eliminado
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionConHallazgoEliminado(equipoId: 100007);
 
@@ -448,14 +448,14 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-4-ELIMINADO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.8 — PRE-5: RepuestoId inexistente → 404 + codigoError "PRE-5"
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.8 â€” PRE-5: RepuestoId inexistente â†’ 404 + codigoError "PRE-5"
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_repuesto_inexistente_responde_404_PRE5()
     {
-        // Given: inspección EnEjecucion con hallazgo activo pero RepuestoId no existe
+        // Given: inspecciÃ³n EnEjecucion con hallazgo activo pero RepuestoId no existe
         var (inspeccionId, hallazgoId, _) =
             await SembrarInspeccionConRepuesto(equipoId: 100008);
 
@@ -471,14 +471,14 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-5");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.10 — PRE-7: Cantidad ≤ 0 → 422 + codigoError "PRE-7"
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.10 â€” PRE-7: Cantidad â‰¤ 0 â†’ 422 + codigoError "PRE-7"
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_cantidad_cero_responde_422_PRE7()
     {
-        // Given: inspección EnEjecucion con repuesto activo
+        // Given: inspecciÃ³n EnEjecucion con repuesto activo
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionConRepuesto(equipoId: 100009);
 
@@ -495,14 +495,14 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-7");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.11 — PRE-8: ambos campos null → 400 + codigoError "PRE-8"
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.11 â€” PRE-8: ambos campos null â†’ 400 + codigoError "PRE-8"
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_ambos_campos_null_responde_400_PRE8()
     {
-        // Given: inspección EnEjecucion con repuesto activo
+        // Given: inspecciÃ³n EnEjecucion con repuesto activo
         var (inspeccionId, hallazgoId, repuestoId) =
             await SembrarInspeccionConRepuesto(equipoId: 100010);
 
@@ -513,20 +513,20 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         // When
         var response = await client.SendAsync(request);
 
-        // Then: 400 PRE-8 — comando vacío
+        // Then: 400 PRE-8 â€” comando vacÃ­o
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
         body!.CodigoError.Should().Be("PRE-8");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.12 — PRE-1: InspeccionId inexistente → 404 + codigoError "PRE-1"
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.12 â€” PRE-1: InspeccionId inexistente â†’ 404 + codigoError "PRE-1"
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task PATCH_repuesto_inspeccion_inexistente_responde_404_PRE1()
     {
-        // Given: no existe ningún stream con este InspeccionId
+        // Given: no existe ningÃºn stream con este InspeccionId
         var client = factory.CreateClient();
         var request = BuildRequest(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 
@@ -539,12 +539,12 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-1");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Idempotencia ADR-008 — Skip: requiere Wolverine envelope dedup
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Idempotencia ADR-008 â€” Skip: requiere Wolverine envelope dedup
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    [Fact(Skip = "Idempotencia ADR-008 requiere Wolverine envelope dedup en producción. " +
-                 "Followup #15. Ver spec §7.")]
+    [Fact(Skip = "Idempotencia ADR-008 requiere Wolverine envelope dedup en producciÃ³n. " +
+                 "Followup #15. Ver spec Â§7.")]
     public async Task PATCH_repuesto_retry_con_mismo_ClientCommandId_no_emite_segundo_evento_ADR008()
     {
         // Escenario ADR-008: dos PATCH con mismo X-Client-Command-Id devuelven el mismo resultado
@@ -552,9 +552,9 @@ public class ActualizarRepuestoEndpointTests(InspeccionesAppFactory factory)
         await Task.CompletedTask;
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DTOs de respuesta (privados — solo para deserialización en tests)
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // DTOs de respuesta (privados â€” solo para deserializaciÃ³n en tests)
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private sealed record RespuestaActualizarRepuesto(
         Guid           InspeccionId,

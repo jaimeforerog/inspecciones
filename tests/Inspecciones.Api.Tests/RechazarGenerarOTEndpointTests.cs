@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using Inspecciones.Domain.Comun;
 using Inspecciones.Domain.Inspecciones;
@@ -9,23 +9,23 @@ namespace Inspecciones.Api.Tests;
 
 /// <summary>
 /// Tests E2E del endpoint <c>POST /api/v1/inspecciones/{id}/rechazar-generar-ot</c>
-/// contra la app real con Postgres en Testcontainers. Spec slice 1l §9.
+/// contra la app real con Postgres en Testcontainers. Spec slice 1l Â§9.
 ///
 /// Cubre:
-/// §6.1  — happy path (200 OK + body con RechazadaEn/RechazadoPor/Motivo + estado CerradaSinOT).
-/// §6.3  — PRE-1 capability "generar-ot" ausente → 403 Forbidden.
-/// §6.12 — PRE-2 InspeccionId inexistente → 404 Not Found.
-/// §6.4  — PRE-3 motivo &lt; 10 chars → 422 Unprocessable Entity + codigoError I-F6-MOTIVO.
-/// §6.6  — PRE-4 inspección no firmada → 422 + codigoError I-F6-ESTADO.
-/// §6.8  — PRE-5 sin hallazgos RequiereIntervencion → 422 + codigoError I-F6-SIN-INTERVENCION.
-/// §6.10 — PRE-6 OT ya solicitada → 409 Conflict + codigoError I-F6-OT-YA-SOLICITADA.
-/// §6.13 — Idempotencia ADR-008 (Skip: requiere Wolverine envelope dedup en producción).
-/// Header — X-Client-Command-Id ausente → 400 Bad Request + codigoError HEADER-REQUERIDO.
+/// Â§6.1  â€” happy path (200 OK + body con RechazadaEn/RechazadoPor/Motivo + estado CerradaSinOT).
+/// Â§6.3  â€” PRE-1 capability "generar-ot" ausente â†’ 403 Forbidden.
+/// Â§6.12 â€” PRE-2 InspeccionId inexistente â†’ 404 Not Found.
+/// Â§6.4  â€” PRE-3 motivo &lt; 10 chars â†’ 422 Unprocessable Entity + codigoError I-F6-MOTIVO.
+/// Â§6.6  â€” PRE-4 inspecciÃ³n no firmada â†’ 422 + codigoError I-F6-ESTADO.
+/// Â§6.8  â€” PRE-5 sin hallazgos RequiereIntervencion â†’ 422 + codigoError I-F6-SIN-INTERVENCION.
+/// Â§6.10 â€” PRE-6 OT ya solicitada â†’ 409 Conflict + codigoError I-F6-OT-YA-SOLICITADA.
+/// Â§6.13 â€” Idempotencia ADR-008 (Skip: requiere Wolverine envelope dedup en producciÃ³n).
+/// Header â€” X-Client-Command-Id ausente â†’ 400 Bad Request + codigoError HEADER-REQUERIDO.
 ///
-/// NOTA FU-32 (resuelto): los tests del slice 1l estuvieron en skip explícito mientras
-/// <c>RunOaktonCommands(args)</c> en <c>Program.cs</c> impedía que
+/// NOTA FU-32 (resuelto): los tests del slice 1l estuvieron en skip explÃ­cito mientras
+/// <c>RunOaktonCommands(args)</c> en <c>Program.cs</c> impedÃ­a que
 /// <c>WebApplicationFactory&lt;Program&gt;</c> arranque el pipeline HTTP. Fix: condicionar
-/// el arranque a <c>args.Length &gt; 0</c> (fix-FU-32). Los tests están destrabados desde
+/// el arranque a <c>args.Length &gt; 0</c> (fix-FU-32). Los tests estÃ¡n destrabados desde
 /// el commit del fix. Cobertura adicional en:
 ///   - <c>Inspecciones.Domain.Tests/Inspecciones/RechazarGenerarOTTests.cs</c> (18 tests, 94.92% cobertura).
 ///   - <c>Inspecciones.Application.Tests/Inspecciones/RechazarGenerarOTHandlerTests.cs</c>
@@ -38,15 +38,15 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     private static readonly DateTimeOffset CapturadoEn =
         new(2026, 5, 8, 15, 0, 0, TimeSpan.Zero);
 
-    // SkipReasonFu32 eliminada — FU-32 cerrado. Los tests a continuación ya no requieren skip.
+    // SkipReasonFu32 eliminada â€” FU-32 cerrado. Los tests a continuaciÃ³n ya no requieren skip.
 
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Helpers de siembra
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
-    /// Siembra un stream de inspección técnica en estado Firmada con hallazgo
-    /// RequiereIntervencion y dictamen NoPuedeOperar — cumple todas las I-F6.
+    /// Siembra un stream de inspecciÃ³n tÃ©cnica en estado Firmada con hallazgo
+    /// RequiereIntervencion y dictamen NoPuedeOperar â€” cumple todas las I-F6.
     /// </summary>
     private async Task<Guid> SembrarInspeccionFirmadaConIntervencion(int equipoId)
     {
@@ -54,7 +54,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
         var inspeccionId = Guid.NewGuid();
         var hallazgoId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
 
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
@@ -79,8 +79,8 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
                 EvaluacionOrigenId: null,
                 ParteEquipoId: 77,
                 ActividadId: null,
-                ActividadDescripcion: "Revisión brazo hidráulico",
-                NovedadTecnica: "Falla estructural en brazo hidráulico",
+                ActividadDescripcion: "RevisiÃ³n brazo hidrÃ¡ulico",
+                NovedadTecnica: "Falla estructural en brazo hidrÃ¡ulico",
                 AccionRequerida: AccionRequerida.RequiereIntervencion,
                 AccionCorrectiva: "Reemplazar brazo",
                 TipoFallaId: 1,
@@ -91,13 +91,13 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
                 RegistradoEn: CapturadoEn),
             new DiagnosticoEmitido_v1(
                 InspeccionId: inspeccionId,
-                DiagnosticoFinal: "Falla estructural en brazo hidráulico",
+                DiagnosticoFinal: "Falla estructural en brazo hidrÃ¡ulico",
                 EmitidoPor: "carlos.ruiz",
                 EmitidoEn: CapturadoEn),
             new DictamenEstablecido_v1(
                 InspeccionId: inspeccionId,
                 Dictamen: DictamenOperacion.NoPuedeOperar,
-                Justificacion: "Equipo fuera de operación",
+                Justificacion: "Equipo fuera de operaciÃ³n",
                 EmitidoPor: "carlos.ruiz",
                 EstablecidoEn: CapturadoEn),
             new InspeccionFirmada_v1(
@@ -112,14 +112,14 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
     }
 
     private static object RequestBodyBase(
-        string motivo = "El equipo será dado de baja definitiva en 10 días") => new
+        string motivo = "El equipo serÃ¡ dado de baja definitiva en 10 dÃ­as") => new
     {
         motivo
     };
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.1 Happy path — 200 OK con body correcto
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.1 Happy path â€” 200 OK con body correcto
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_rechazar_generar_ot_happy_path_responde_200_OK_con_body_correcto()
@@ -137,22 +137,22 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
 
         var response = await client.SendAsync(request);
 
-        // D-4: 200 OK (no 202) — el cierre es síncrono.
+        // D-4: 200 OK (no 202) â€” el cierre es sÃ­ncrono.
         response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "RechazarGenerarOT devuelve 200 porque el cierre es síncrono (D-4 spec §9)");
+            "RechazarGenerarOT devuelve 200 porque el cierre es sÃ­ncrono (D-4 spec Â§9)");
 
         var resultado = await response.Content.ReadFromJsonAsync<RespuestaRechazarOT>();
         resultado.Should().NotBeNull();
         resultado!.InspeccionId.Should().Be(inspeccionId);
         resultado.Estado.Should().Be("CerradaSinOT");
         resultado.RechazadoPor.Should().NotBeNullOrEmpty();
-        resultado.Motivo.Should().Be("El equipo será dado de baja definitiva en 10 días");
+        resultado.Motivo.Should().Be("El equipo serÃ¡ dado de baja definitiva en 10 dÃ­as");
         resultado.RechazadaEn.Should().BeCloseTo(CapturadoEn, precision: TimeSpan.FromMinutes(5));
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.3 PRE-1 — capability "generar-ot" ausente → 403 Forbidden
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.3 PRE-1 â€” capability "generar-ot" ausente â†’ 403 Forbidden
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_rechazar_generar_ot_sin_capability_generar_ot_responde_403_Forbidden_PRE_1()
@@ -175,9 +175,9 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
             "PRE-1: el endpoint debe rechazar si el aprobador no tiene capability 'generar-ot'");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.12 PRE-2 — InspeccionId inexistente → 404 Not Found
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.12 PRE-2 â€” InspeccionId inexistente â†’ 404 Not Found
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_rechazar_generar_ot_inspeccion_inexistente_responde_404_Not_Found_PRE_2()
@@ -196,9 +196,9 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.4 PRE-3 — motivo < 10 chars → 422 Unprocessable Entity
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.4 PRE-3 â€” motivo < 10 chars â†’ 422 Unprocessable Entity
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_rechazar_generar_ot_motivo_corto_responde_422_I_F6_MOTIVO()
@@ -221,9 +221,9 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("I-F6-MOTIVO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.6 PRE-4 — inspección no firmada → 422
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.6 PRE-4 â€” inspecciÃ³n no firmada â†’ 422
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_rechazar_generar_ot_inspeccion_no_firmada_responde_422_I_F6_ESTADO()
@@ -231,7 +231,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
         var store = factory.Services.GetRequiredService<IDocumentStore>();
         var inspeccionId = Guid.NewGuid();
 
-        await using var session = store.LightweightSession();
+        await using var session = factory.OpenSeedingSessionForDefaultTenant();
         session.Events.StartStream<Inspeccion>(inspeccionId,
             new InspeccionIniciada_v1(
                 InspeccionId: inspeccionId,
@@ -264,9 +264,9 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("I-F6-ESTADO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.10 PRE-6 — OT ya solicitada → 409 Conflict
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.10 PRE-6 â€” OT ya solicitada â†’ 409 Conflict
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_rechazar_generar_ot_OT_ya_solicitada_responde_409_Conflict_I_F6_OT_YA_SOLICITADA()
@@ -275,7 +275,7 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
 
         // Siembra OTSolicitada_v1 directamente para preparar el escenario PRE-6.
         var store = factory.Services.GetRequiredService<IDocumentStore>();
-        await using (var session = store.LightweightSession())
+        await using (var session = factory.OpenSeedingSessionForDefaultTenant())
         {
             session.Events.Append(inspeccionId,
                 new OTSolicitada_v1(
@@ -305,22 +305,22 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("I-F6-OT-YA-SOLICITADA");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // §6.13 Idempotencia ADR-008 — mismo X-Client-Command-Id no duplica eventos (Skip)
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Â§6.13 Idempotencia ADR-008 â€” mismo X-Client-Command-Id no duplica eventos (Skip)
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact(Skip = "Requiere Wolverine envelope storage con MessageId dedup. " +
                  "El store en Testcontainers no tiene Wolverine envelope habilitado. " +
-                 "Implementar cuando el handler esté registrado como Wolverine handler " +
-                 "con durable local queues. Ver spec §6.13, §7, ADR-008 §9.16.")]
+                 "Implementar cuando el handler estÃ© registrado como Wolverine handler " +
+                 "con durable local queues. Ver spec Â§6.13, Â§7, ADR-008 Â§9.16.")]
     public async Task POST_rechazar_generar_ot_replay_mismo_ClientCommandId_no_duplica_eventos_ADR_008()
     {
         await Task.CompletedTask;
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // Header X-Client-Command-Id ausente → 400 Bad Request
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Header X-Client-Command-Id ausente â†’ 400 Bad Request
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public async Task POST_rechazar_generar_ot_sin_header_X_Client_Command_Id_responde_400_Bad_Request()
@@ -343,9 +343,9 @@ public class RechazarGenerarOTEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("HEADER-REQUERIDO");
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DTOs locales de lectura — independientes del namespace de la API
-    // ─────────────────────────────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // DTOs locales de lectura â€” independientes del namespace de la API
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private sealed record RespuestaRechazarOT(
         Guid           InspeccionId,

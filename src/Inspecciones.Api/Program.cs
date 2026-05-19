@@ -34,6 +34,18 @@ builder.Services.AddMarten((StoreOptions options) =>
         options.Connection(connectionString);
         options.DatabaseSchemaName = "inspecciones";
 
+        // ── Multi-tenancy Conjoined (ADR-009, slice mt-2) ──────────────────────
+        //
+        // Cada documento y cada evento del event store gana una columna `tenant_id`
+        // con índice. Las queries y los appends filtran/persisten implícitamente
+        // por el tenant de la sesión (ver TenantedDocumentSessionFactory + Marten
+        // session.LightweightSession(tenantId)).
+        //
+        // D5 firmada: TODOS los documentos son por-empresa (sin excepciones single-tenant).
+        // D2: tenancy style = Conjoined (no schema-per-tenant ni DB-per-tenant).
+        options.Policies.AllDocumentsAreMultiTenanted();
+        options.Events.TenancyStyle = Marten.Storage.TenancyStyle.Conjoined;
+
         // PKs de catálogos ERP usan nombre de campo semántico (no "Id") — registrar identidad explícita.
         options.Schema.For<EquipoLocal>().Identity(x => x.EquipoId);
         options.Schema.For<RutinaTecnicaLocal>().Identity(x => x.RutinaId);
@@ -184,11 +196,13 @@ builder.Services.AddHttpClient<IMaquinariaErpClient, MaquinariaErpClient>((sp, h
 builder.Services.AddScoped<SincronizarEquipoDesdeErpHandler>();
 builder.Services.AddScoped<SeedManualCatalogoHandler>();
 
-// Sync de catálogos globales on-app-open (ADR-004, erp-4).
-// MartenCatalogoSyncRepository recibe IDocumentStore (singleton) para abrir sesiones
-// independientes por catálogo — evita la race condition de IDocumentSession compartida
-// en Task.WhenAll (hallazgo #1 review erp-4).
-builder.Services.AddSingleton<ICatalogoSyncRepository, MartenCatalogoSyncRepository>();
+// Sync de catálogos globales on-app-open (ADR-004, erp-4) + per-empresa (mt-2 D5).
+// MartenCatalogoSyncRepository recibe ITenantedDocumentSessionFactory (scoped) y abre
+// sesiones independientes por catálogo via el factory — evita la race condition de
+// IDocumentSession compartida en Task.WhenAll (hallazgo #1 review erp-4) y garantiza
+// que cada sync queda discriminado por tenant_id (MT2-INV-3).
+// Registro scoped porque depende del factory (que es scoped).
+builder.Services.AddScoped<ICatalogoSyncRepository, MartenCatalogoSyncRepository>();
 builder.Services.AddScoped<SincronizarCatalogosHandler>();
 
 // Puerto de lectura del aggregate Inspeccion — usado por SincronizarDictamenVigenteListener (erp-3).
@@ -223,6 +237,25 @@ if (!builder.Environment.IsEnvironment("Test"))
 }
 // En env Test la fixture (InspeccionesAppFactory) registra la implementación
 // (TestHeaderAwareSessionService por default, FakeSessionService override por test).
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenanted Marten sessions (slice mt-2 — ADR-009).
+//
+// El puerto ITenantedDocumentSessionFactory abre IDocumentSession/IQuerySession
+// con el tenant_id derivado de ISessionService.IdEmpresa. El IDocumentSession
+// scoped que Marten registró via AddMarten() se sobrescribe con un factory
+// delegate para que TODOS los handlers existentes (que reciben IDocumentSession
+// por DI) reciban una sesión tenant-aware sin tocar sus constructores.
+//
+// MT2-INV-1: prohibido store.LightweightSession() directo en producción —
+// usar siempre el puerto. Bypass legal: OpenSessionForTenant(tenantId) para
+// listeners Wolverine que leen el envelope.TenantId.
+// ─────────────────────────────────────────────────────────────────────────────
+builder.Services.AddScoped<ITenantedDocumentSessionFactory, TenantedDocumentSessionFactory>();
+builder.Services.AddScoped<IDocumentSession>(
+    sp => sp.GetRequiredService<ITenantedDocumentSessionFactory>().OpenSession());
+builder.Services.AddScoped<IQuerySession>(
+    sp => sp.GetRequiredService<ITenantedDocumentSessionFactory>().OpenQuerySession());
 
 var app = builder.Build();
 
