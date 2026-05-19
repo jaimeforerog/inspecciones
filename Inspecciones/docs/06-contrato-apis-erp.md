@@ -8,14 +8,18 @@
 
 A partir de la fecha de este documento, los slices del módulo deben referenciar **este archivo** como contrato. Los anteriores quedan como histórico.
 
-**Última revisión:** 2026-05-16 (verificación contra `Maquinaria API v1` — ver §0)
-**Estado del contrato:** propuesta del módulo, **pendiente de firma cross-team con cada equipo Sinco**. Verificación parcial 2026-05-16 reveló gaps materiales — ver §0.
+**Última revisión:** 2026-05-19 (§0.8 agregado tras reconciliación bilateral 2026-05-13 + slices erp-1..erp-4 acoplados; §0.1..§0.7 mantienen la verificación swagger 2026-05-16)
+**Estado del contrato:** propuesta del módulo, **parcialmente reconciliada con el microservicio ERP Maquinaria_V4** (ver §0). Verificación 2026-05-16 reveló gaps materiales (§0.1..§0.7). Reconciliación bilateral 2026-05-13 + acople real del módulo (§0.8). Lo no reconciliado sigue pendiente de firma cross-team con cada equipo Sinco.
 
 > **Convención de naming "obra" vs "proyecto" (decisión 2026-04-30, followup #4 cerrado):** el módulo de Inspecciones usa internamente el término **`Proyecto`** en su modelo de dominio (`ProyectoId`, `ProyectoLocal`, etc.). El ERP Sinco mantiene **`Obra`** en sus URLs y DTOs (`/api/v1/catalogos/obras`, query param `?obra=`, claim `sinco_obras`). El **adapter del módulo traduce `Proyecto` ↔ `Obra`** al hablar con MYE. Este documento conserva los nombres del ERP (obra) tal como están porque define el contrato del lado ERP. Los nombres del módulo (proyecto) viven en `01-modelo-dominio.md`. Si en el futuro Sinco corporativo estandariza a "proyecto" en sus URLs/DTOs (pregunta abierta para David en doc 07), este documento se actualizará y el adapter eliminará la traducción.
 
 ---
 
-## 0. ⚠️ Verificación contra `Maquinaria API v1` (2026-05-16)
+## 0. ⚠️ Verificación contra `Maquinaria API v1` (2026-05-16) + reconciliación bilateral 2026-05-13
+
+> **Lectura:** §0.1..§0.7 reflejan el análisis directo del swagger en vivo de Maquinaria_V4 publicado el 2026-05-16. **§0.8** complementa con la reconciliación bilateral 2026-05-13 (acuerdos cross-team) y el estado de los slices Inspecciones (`erp-1..erp-4`) que ya acoplan contra esta API. Si una afirmación de §0.1..§0.7 contradice §0.8, prima la fecha más reciente (2026-05-19 / §0.8) salvo que se trate de un detalle puramente técnico del swagger.
+
+## 0.A Verificación contra `Maquinaria API v1` (2026-05-16)
 
 > **Origen:** el 2026-05-16 se inspeccionó el swagger en vivo de la API real publicada por David en `http://localhost:5289/api/v4/Maquinaria/swagger/v1/swagger.json` (title `Maquinaria API v1`, description "APIs de integración con el módulo SincoMyE del ERP SincoErp"). El análisis reveló que **el contrato propuesto en este documento (§1..§8) divergió de la implementación real** en aspectos materiales. Esta sección consolida los gaps, sin reescribir las secciones detalladas — esas siguen siendo "lo que el módulo necesita". Esta sección dice "lo que el ERP ofrece hoy".
 
@@ -102,6 +106,62 @@ A partir de la fecha de este documento, los slices del módulo deben referenciar
 6. **¿I-1/I-2 (Inventario/SKUs) viven en otra API?** `GET /api/productos` cubre productos pero no se documentó como SKU/insumo del contrato.
 7. **¿Versionado `/v1` planeado o se queda `/api/{recurso}`?** Define qué prefix codifica el adapter.
 8. **¿Paginación REST estándar planeada antes de exceder 5000 equipos/registros?** Hoy hay tope hardcoded.
+## 0.B Reconciliación bilateral 2026-05-13 + slices Inspecciones acoplados
+
+> **Fecha:** 2026-05-19. Complementa §0.A (verificación 2026-05-16 contra el swagger en vivo). Mientras §0.A documenta el **gap técnico** detectado por inspección directa de la API, esta §0.B documenta los **acuerdos cross-team de 2026-05-13** (qué endpoints quedan descartados bilateralmente vs cuáles requieren adaptación) y el **estado de acople real del módulo** tras cerrar los slices `erp-1..erp-4`.
+
+**Fuente de la reconciliación:** `Maquinaria_V4/docs/endpoints-faltantes-inspecciones.md` (proyecto hermano `C:\Fuentes\FuentesNET3.0\AzureV4\Maquinaria_V4`).
+
+### 0.B.1 Decisiones cross-team que cierran los gaps de §0.A
+
+Algunos gaps de §0.A no se cierran agregando endpoints sino descartando bilateralmente:
+
+- **M-2 (`GET /mye/ot-correctivas?inspeccionId=`):** descartado bilateralmente — el ERP no almacena `inspeccionId`, así que no puede indexar por ese campo. Implicación: el fallback ADR-003 queda inaplicable y M-1 debe cumplir idempotencia real estricta (no hay "consultar antes de crear").
+- **M-3b (detalle consolidado de equipo):** descartado bilateralmente — la UI cubre el caso con `M-3 + M-5 + M-16` por separado.
+- **M-13 (`GET /catalogos/obras`):** descartado bilateralmente — el catálogo lo gestiona el host PWA aparte, el módulo no lo sincroniza.
+- **M-9 / I-2 / P-2..P-5:** NO aplican al módulo — viven en otro punto del ecosistema (M-9, I-2) o son cubiertos por endpoints bulk (P-5 cubierto por P-6, P-2 por shape completo de P-1) o redirigidos al **Document Service externo** (P-3, P-4, M-1b).
+- **M-17 (rutinas técnicas globales):** no requiere endpoint dedicado. Workaround acordado: el adapter sintetiza el catálogo desde `EquipoErpDto.RutinaMantenimientoId` que viene en M-3, dentro de `SincronizarEquipoDesdeErpHandler`.
+
+Tras estos descartes, los **bloqueadores reales** de §0.A se reducen a uno: **M-1** (slice 8 de Maquinaria_V4 pausado por DDL DBA).
+
+### 0.B.2 Mapa final tras reconciliación
+
+| Categoría | Cuenta | Endpoints |
+|---|---|---|
+| ✅/⚠️ Acoplables (cubiertos por adapter erp-1..erp-4) | 9 | `P-1, P-6, M-3, M-5, M-7, M-8, M-16, M-W-1`, + `M-17 (sintetizado)`, + `M-4/I-1 (productos)` |
+| ❌ NO aplica (con razón documentada) | 8 | `M-1b, M-9, I-2, P-2, P-3, P-4, P-5` + 1 categoría diferida histórica |
+| ❌ Descartado bilateral | 3 | `M-2, M-3b, M-13` |
+| ❌ Bloqueante real | 1 | `M-1` (DDL DBA pendiente) |
+
+### 0.B.3 Slices Inspecciones que ya acoplan
+
+| Slice | Commit | Comando / responsabilidad | Endpoints Maquinaria_V4 consumidos |
+|---|---|---|---|
+| **erp-1** | `4c2ef4e` | Adapter base (HTTP client tipado `IMaquinariaErpClient`, retry, ETag, error envelope, 11 DTOs espejo, 14 tests WireMock) | — (infra) |
+| **erp-2** | `63082fa` | `DescartarNovedadPreop` con outbox Wolverine → `P-6`. Idempotencia natural por PODId (`200 yaCerradas` / `409 YA_CERRADO` = éxito silencioso). Política ADR-006: 5xx retry 5s→30s→2m→10m, 4xx + `ArgumentException` → dead-letter inmediato. 11 tests. | `POST /api/preoperacional-fallas/cerrar` |
+| **erp-3** | `28de25b` | `SincronizarDictamenVigenteListener` reactivo a `InspeccionFirmada_v1` → `M-W-1`. Mapeo `PuedeOperar→0`, `ConRestriccion→1`, `NoPuedeOperar→2`. Puerto `IInspeccionReader` + `MartenInspeccionReader` (`AggregateStreamAsync`). 11 tests con `FakeInspeccionReader`. | `PUT /api/equipos/{codigo}/dictamen-vigente` |
+| **erp-4** | `fb44741` | Endpoint `POST /api/v1/catalogos/sync` (ADR-004 canonical, sin cron). Wipe-and-replace de 3 catálogos globales puros: `causas-falla`, `tipos-falla`, `productos`. ETag por catálogo en document Marten `CatalogoSyncState`. `If-None-Match` → cache local intacto si `304`. Body vacío → `"vaciado-sospechoso"`, cache intacto. Partial-failure por catálogo. Atomicidad cross-catálogo via `LightweightSession` propia por catálogo (`MartenCatalogoSyncRepository` recibe `IDocumentStore`). 23 tests con `FakeCatalogoSyncRepository`. | `GET /api/causas-falla`, `GET /api/tipos-falla`, `GET /api/productos` |
+
+Slices `erp-5..erp-N` (consumo de productos para BOM, sync monitoreo per-equipo, integración OT correctiva M-1) quedan en backlog hasta que (a) emerja el comando del módulo que los requiere y (b) se desbloquee M-1.
+
+### 0.B.4 Decisiones que aún requieren input cross-team (D-3..D-5 del análisis erp-1)
+
+Subset de §0.A.7 que no se cerró bilateralmente y sigue pendiente:
+
+- **D-3 (Document Service externo):** URL base + contrato + identidad. ¿Reusa JWT del host? Owner: **David**. Bloquea `AdjuntarArchivo` comando.
+- **D-4 (matriz parte↔producto):** M-4 no expone `ParteIdsCompatibles`. ¿Dónde vive la matriz parte↔producto? Owner: **David**. Bloquea acople real de `AsignarRepuesto`.
+- **D-5 (M-17 política definitiva):** ¿basta con sintetizar desde equipo o se necesita endpoint dedicado? Owner: **Jaime**.
+
+### 0.B.5 Convenciones diferenciadas (canónica vs real)
+
+| Aspecto | Canónica (§1) | Maquinaria_V4 real |
+|---|---|---|
+| Path base | `/api/v1/...` | `/api/v4/Maquinaria/api/...` |
+| Versionado | URL (v1, v2) | URL (v4 a nivel gateway) |
+| Auth | JWT del host vía `Authorization: Bearer` + capability | JWT con 5 claims validado por `MiddlewareAuthorizationToken` (`SincoSoft.MYE.Common 1.5.3`); claims: `UsuarioId, NomUsuario, IdEmpresa, IdSucursal, IdProyecto` |
+| Idempotency | Header `Idempotency-Key`, ventana ≥30 días | Por confirmar slice por slice — slice 9 (P-6) sí soporta; M-1 pendiente |
+| ETag / `If-None-Match` | Obligatorio en catálogos | Implementado en slices 2/3/5/6; ausente en slice 7 (preoperacional-fallas) |
+| Error envelope | `{ code, message, details, traceId }` | `{ codigo, mensaje }` minimal; adapter normaliza al shape canónico |
 
 ---
 
@@ -207,6 +267,8 @@ Forma esperada de respuestas 4xx/5xx (a confirmar con cada equipo):
 
 #### P-1 `GET /api/v1/preop/novedades`
 
+> **Estado 2026-05-13:** ⚠️ Alineado con shape distinto — Maquinaria_V4 slice 7 expone `GET /api/preoperacional-fallas?desde&hasta&equipoId&texto` (path real `/api/v4/Maquinaria/api/preoperacional-fallas`). **Sin ETag** (a diferencia de los otros slices de lectura). Adapter del módulo mapea query params (`q` → `texto`) y normaliza shape.
+
 Lista viva de novedades **pendientes** (no snapshot). Consultada cuando el técnico abre el flujo "Importar novedades". El endpoint solo devuelve novedades en estado pendiente — los otros estados (verificada, descartada) no son consultables vía este endpoint en MVP.
 
 - **Query params**:
@@ -221,6 +283,8 @@ Lista viva de novedades **pendientes** (no snapshot). Consultada cuando el técn
 - **Notas**: la lista cambia entre llamadas (otros operadores pueden haber agregado novedades). El UI refresca al volver a la pantalla.
 
 #### P-2 `GET /api/v1/preop/novedades/{id}`
+
+> **Estado 2026-05-13:** ❌ NO aplica — P-1 (`GET /api/preoperacional-fallas`) ya devuelve el shape completo de cada novedad; no se requiere endpoint de detalle separado. Maquinaria_V4 no implementa este endpoint y el módulo no lo necesita.
 
 Detalle textual de una novedad. Se invoca cuando el técnico expande una novedad de la lista P-1. **No incluye contenido ni metadata de adjuntos** (eso es responsabilidad de P-3).
 
@@ -273,6 +337,8 @@ Detalle textual de una novedad. Se invoca cuando el técnico expande una novedad
 
 #### P-3 `GET /api/v1/preop/novedades/{id}/adjuntos`
 
+> **Estado 2026-05-13:** ❌ NO aplica — los adjuntos de novedades preoperacionales viven en un **Document Service externo** al ERP. Maquinaria_V4 no expone metadata de adjuntos. Cuando el módulo requiera adjuntos, consumirá el Document Service directamente (fuera de este contrato).
+
 Lista metadata de adjuntos de una novedad. **Endpoint barato** que se invoca solo cuando el técnico decide procesar una novedad (verificar / seguimiento / descartar con evidencia visual). Si nunca se invoca P-3, el ERP no carga metadata pesada — patrón lazy.
 
 - **Path param**: `{id}` = `int` (PK de la novedad).
@@ -306,6 +372,8 @@ Lista metadata de adjuntos de una novedad. **Endpoint barato** que se invoca sol
 
 #### P-4 `GET /api/v1/preop/adjuntos/{id}`
 
+> **Estado 2026-05-13:** ❌ NO aplica — Document Service externo (mismo razonamiento que P-3). Maquinaria_V4 no sirve binarios de adjuntos preoperacionales.
+
 Descarga el contenido binario de un adjunto específico (foto en resolución completa, PDF, etc.). Se invoca cuando el técnico abre un adjunto a pantalla completa.
 
 - **Path param**: `{id}` = `int` (PK del adjunto) obtenido de P-3.
@@ -318,6 +386,8 @@ Descarga el contenido binario de un adjunto específico (foto en resolución com
 - **Errors**: `404` si no existe o no es accesible.
 
 #### P-5 `POST /api/v1/preop/novedades/{id}/verificar`
+
+> **Estado 2026-05-13:** ❌ NO aplica — Maquinaria_V4 no expone un endpoint unitario de verificación. El flujo bulk-first de P-6 (`POST /api/preoperacional-fallas/cerrar`) cubre el caso enviando un array de 1 novedad. Adapter del módulo siempre usa P-6 (sea individual o bulk).
 
 Marca la novedad como verificada por la inspección técnica. Cierra el ciclo del operador respecto a esa novedad.
 
@@ -356,6 +426,8 @@ Marca la novedad como verificada por la inspección técnica. Cierra el ciclo de
 - **⚠️ Irreversibilidad**: la verificación es **vinculante**. Si la inspección se cancela posteriormente (`InspeccionCancelada_v1`), la novedad **queda como verificada** en el ERP con la `inspeccionId` cancelada como referencia. **No hay endpoint de revert**. Decisión documentada como invariante: una vez asignada, la novedad pertenece a la inspección que la asignó (vivos o cancelada).
 
 #### P-6 `POST /api/v1/preop/novedades/descartar` (bulk-capable, 1..N en JSON)
+
+> **Estado 2026-05-13:** ✅ Alineado — Maquinaria_V4 slice 9 expone `POST /api/preoperacional-fallas/cerrar` (path real `/api/v4/Maquinaria/api/preoperacional-fallas/cerrar`) con semántica bulk-first 1..N, consistente con la decisión 2026-04-30. **Acoplado en Inspecciones slice erp-2** (adapter `DescartarNovedadPreop` con outbox Wolverine). Adapter normaliza el body y mapea el response al shape canónico.
 
 > **Decisión final 2026-04-30:** path `/preop/novedades/descartar` (sin id en path) acordado con David soporta arrays de 1 a N novedades. **El módulo solo emite arrays de 1** en MVP (descarte rápido individual con motivo autogenerado, ver §15.9 del modelo). El contrato bulk se mantiene por flexibilidad futura (sagas de limpieza, reusa del endpoint sin nuevo trabajo cross-team). **🚧 Confirmar path final con David** en `07-preguntas-destrabar-followups.md`.
 
@@ -412,6 +484,8 @@ Cierra **una o varias novedades** como **descartadas** por el técnico (decisió
 
 #### M-1 `POST /api/v1/mye/ot-correctivas`
 
+> **Estado 2026-05-13:** ❌ **Bloqueante real** — slice 8 de Maquinaria_V4 (creación de OT correctiva) está **pausado por DDL DBA** (cambios de esquema en la tabla de OTs del ERP Sinco on-prem pendientes de aprobación). Es el único bloqueo de implementación pendiente tras la reconciliación bilateral. Cuando se desbloquee, Inspecciones cierra el slice `erp-5` (saga generación OT) contra el endpoint real.
+
 > **🚧 Revisión de detalle diferida (2026-04-29)**: el shape exacto del body/response, la lista final de campos y el catálogo de prioridad/unidades quedan pendientes para una iteración posterior cuando el producto esté más maduro y haya conversación con MYE núcleo. El contrato canónico **vigente** (idempotencia real, matriz 200/4xx/5xx/409, fallback GET, tests requeridos del adapter, ventana ≥30 días) ya está consolidado en **ADR-003 §13** del modelo de dominio. Este endpoint sigue siendo el más crítico del contrato, pero su detalle granular se trabaja después.
 
 Crea OT correctiva en MYE con BOM consolidado de la inspección. **Crítico** — es la integración más importante del módulo.
@@ -457,6 +531,8 @@ Crea OT correctiva en MYE con BOM consolidado de la inspección. **Crítico** �
 
 #### M-1b `POST /api/v1/mye/ot-correctivas/{otCorrectivaIdSinco}/adjuntos`
 
+> **Estado 2026-05-13:** ❌ NO aplica — los adjuntos de OT correctiva se redirigen al **Document Service externo**, no a Maquinaria_V4. La saga `EjecutarOTSaga` apuntará al Document Service cuando se reactive (fuera de este contrato). El PDF de inspección no entra al ERP por este path.
+
 > **Origen:** decisión 2026-04-30 a partir de observación de Sergio — *"cuando se genere una OT, debe llegar como adjunto a esta, el PDF de la inspección"*. Detalle del modelo en §17 ADR-007 sub-sección "Generación de PDF de inspección y adjunto a OT".
 
 Sube el PDF de la inspección como adjunto de la OT correctiva ya creada en MYE. Invocado por `EjecutarOTSaga` tras éxito de M-1.
@@ -496,6 +572,8 @@ Sube el PDF de la inspección como adjunto de la OT correctiva ya creada en MYE.
 
 #### M-2 `GET /api/v1/mye/ot-correctivas?inspeccionId={id}`
 
+> **Estado 2026-05-13:** ❌ **Descartado bilateralmente** — imposibilidad técnica: el ERP Sinco **no almacena el `inspeccionId` del módulo** en la entidad de OT, por lo que es imposible indexar OTs por ese campo. El fallback ADR-003 (consultar antes de crear) queda inaplicable. **Implicación dura:** M-1 debe cumplir idempotencia real estricta — no hay segunda red de seguridad. Si M-1 devuelve `409`/`5xx`, el adapter debe reintentar con la misma `Idempotency-Key` y confiar en que MYE no duplica.
+
 > **🚧 Revisión de detalle diferida** — par lógico de M-1; cuando se reabra M-1 se reabre este. Contrato actual en ADR-003 §13.
 
 Fallback condicional. **Opcional si M-1 cumple idempotencia real; obligatorio si no.**
@@ -506,6 +584,10 @@ Fallback condicional. **Opcional si M-1 cumple idempotencia real; obligatorio si
 - **Auth**: capability `ejecutar-inspeccion`.
 
 #### M-W-1 `PUT /api/v1/equipos/{equipoCodigo}/dictamen-vigente`
+
+> **Estado 2026-05-13:** ✅ Alineado — Maquinaria_V4 slice 11 expone `PUT /api/equipos/{codigo}/dictamen-vigente` (path real `/api/v4/Maquinaria/api/equipos/{codigo}/dictamen-vigente`). **Acoplado en Inspecciones slice erp-3** (`SincronizarDictamenVigenteSaga`).
+>
+> **Divergencia 2026-05-13:** el contrato canónico define `dictamen: "PuedeOperar" | "ConRestriccion" | "NoPuedeOperar"` (string enum), pero Maquinaria_V4 acepta `Estado: int` con códigos `0=PuedeOperar`, `1=ConRestriccion`, `2=NoPuedeOperar`. **El adapter mapea string↔int en ambas direcciones.** El contrato canónico se conserva tal cual (string enum es la forma idealmente expresiva); la traducción vive en `SincronizarDictamenVigenteHandler`.
 
 > **Origen:** decisión 2026-04-30 a partir de observación de Sergio (consultor producto) — *"debe existir un servicio para actualizar este campo en el ERP"*. Ver §17 ADR-007 sub-sección "Integración con MYE: dictamen vigente del equipo" del modelo de dominio.
 
@@ -547,6 +629,8 @@ Actualiza el dictamen vigente del equipo en MYE. Invocado en **toda firma** de i
 Consumidos por: pantalla de inicio de inspección (selector de equipo, carga de rutina), wizard de hallazgo (selector de parte/actividad), proyección Reporting.
 
 #### M-3 `GET /api/v1/equipos`
+
+> **Estado 2026-05-13:** ✅ Alineado — Maquinaria_V4 slice 2 expone `GET /api/equipos?filtro=` (path real `/api/v4/Maquinaria/api/equipos`) con ETag y soporte de `If-None-Match`. **Acoplado en Inspecciones slice erp-4** (sync on-app-open). Adapter mapea `q` → `filtro`. El campo `EquipoErpDto.RutinaMantenimientoId` sirve además como fuente sintetizada del catálogo de rutinas técnicas (workaround M-17 — ver §0.4).
 
 Lista **liviana** de equipos del usuario para el selector / autocomplete al iniciar inspección. Diseñada para latencia baja en `q=` autocomplete.
 
@@ -590,6 +674,8 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
   - Lista de campos del item es propuesta inicial; se refina con MYE núcleo cuando avance la integración.
 
 #### M-3b `GET /api/v1/equipos/{equipoCodigo}` (decisión 2026-05-04)
+
+> **Estado 2026-05-13:** ❌ **Descartado bilateralmente** — Maquinaria_V4 no expone un endpoint de detalle agregado por equipo. La UI cubre el caso combinando **M-3 (lista/búsqueda de equipos) + M-5 (`/api/partes-equipos?idEquipo=`) + M-16 (`/api/rutinas-monitoreo?equipoId=`)** en llamadas paralelas. El árbol de partes y la rutina de monitoreo aplicable se resuelven por separado en lugar de viajar embebidos en un único response.
 
 **Detalle completo del equipo.** Invocado cuando el técnico **selecciona un equipo** desde la lista (M-3) para iniciar inspección. Incluye partes (absorbe M-4), `rutinaTecnicaId` (asignación per-equipo, MVP) y `grupoMantenimientoId` (resuelve rutinas-monitoreo client-side, Fase 2). Una sola llamada → todo el contexto operativo del equipo cargado.
 
@@ -647,6 +733,8 @@ Lista **liviana** de equipos del usuario para el selector / autocomplete al inic
 
 #### M-4 `GET /api/v1/equipos/{equipoCodigo}/partes` ❌ ELIMINADO
 
+> **Estado 2026-05-13:** ✅ El árbol de partes vive en Maquinaria_V4 slice 3 como `GET /api/partes-equipos?idEquipo=` (path real `/api/v4/Maquinaria/api/partes-equipos`) con ETag. Como M-3b fue descartado bilateralmente, el adapter llama a este endpoint per-equipo cuando el técnico lo selecciona (la "absorción en M-3b" no aplica en la práctica). **Importante:** en este documento "M-4" originalmente refería a `/equipos/.../partes`; en el mapa §0.4 el ID "M-4" refiere al catálogo de insumos/productos. Ambos usos son históricos — usar siempre la ruta real para evitar ambigüedad.
+
 > **Eliminado el 2026-05-04 — absorbido por M-3b.** El árbol de partes ahora viaja embebido en el detalle del equipo (M-3b). Mantener M-4 implicaría dos llamadas para la misma operación (selección de equipo). Esta entrada queda solo como referencia histórica para slices que aún apunten a M-4 — todos deben migrar a M-3b.
 
 ---
@@ -670,6 +758,8 @@ Sincronizados **on-app-open** vía `If-None-Match`/`ETag` (ADR-004 canonical 202
 
 #### M-10 `GET /api/v1/catalogos/causas-falla`
 
+> **Estado 2026-05-13:** ✅ Alineado — Maquinaria_V4 slice 5 expone `GET /api/causas-falla?texto=` (path real `/api/v4/Maquinaria/api/causas-falla`) con ETag y `304 Not Modified`. **Acoplado en Inspecciones slice erp-4** (sync on-app-open → `CausaFallaLocal`).
+
 Catálogo cerrado de causas de falla. **Crítico MVP** — referenciado por cada hallazgo con `RequiereIntervencion` (invariante I-H4 §15.3).
 
 - **Estructura**: catálogo **plano** (sin jerarquía padre-hijo).
@@ -692,6 +782,8 @@ Catálogo cerrado de causas de falla. **Crítico MVP** — referenciado por cada
 
 #### M-11 `GET /api/v1/catalogos/tipos-falla`
 
+> **Estado 2026-05-13:** ✅ Alineado — Maquinaria_V4 slice 6 expone `GET /api/tipos-falla?texto=` (path real `/api/v4/Maquinaria/api/tipos-falla`) con ETag. Campo `Prioridad: string` confirmado en el shape. **Acoplado en Inspecciones slice erp-4** (sync on-app-open → `TipoFallaLocal`).
+
 Catálogo cerrado de tipos de falla. **Crítico MVP** — referenciado por cada hallazgo con `RequiereIntervencion` (invariante I-H4 §15.3). Ortogonal a M-10: causa = *por qué* falló; tipo = *qué tipo* de falla (mecánica, hidráulica, eléctrica, etc.).
 
 - **Estructura**: catálogo **plano** (sin jerarquía).
@@ -709,6 +801,8 @@ Catálogo cerrado de tipos de falla. **Crítico MVP** — referenciado por cada 
 - **Solo tipos activos**, sin paginación, cache headers, sync on-app-open (ADR-004 canonical 2026-05-05) → `TipoFallaLocal`. Mismas reglas que M-10 (incluyendo conservación de descontinuados en proyección local para audit histórico — ADR-004).
 
 #### M-13 `GET /api/v1/catalogos/obras`
+
+> **Estado 2026-05-13:** ❌ **Descartado bilateralmente** — NO aplica. El catálogo de obras lo gestiona el host PWA SincoMyE aparte; el módulo no sincroniza obras desde Maquinaria_V4. Si el módulo necesita resolver `ObraId` → descripción, lo hará vía el host o denormalizando en el response de equipos.
 
 Catálogo de obras (que el módulo internamente conoce como "proyectos"). **Crítico MVP** — `ProyectoId` aparece en cada inspección, hallazgo, novedad preop, equipo.
 
@@ -749,6 +843,10 @@ Catálogo cerrado de unidades para los medidores de equipos (referenciado por P-
 - **Sync**: on-app-open + `ETag` (`If-None-Match`) con `304 Not Modified` cuando aplique. Decisión 2026-05-05 ADR-004 canonical (sin cron).
 
 #### M-17 `GET /api/v1/catalogos/rutinas` (decisión 2026-05-04 — crítico MVP)
+
+> **Estado 2026-05-13:** ⚠️ **NO existe endpoint dedicado** en Maquinaria_V4. **Workaround acordado:** el adapter sintetiza el catálogo de rutinas técnicas desde el campo `EquipoErpDto.RutinaMantenimientoId` que viene en M-3 (`/api/equipos`), agregando per-equipo en `SincronizarEquipoDesdeErpHandler`. No se requiere endpoint nuevo en Maquinaria_V4. La proyección local `RutinaTecnicaLocal` se puebla incrementalmente a partir del sync de equipos.
+>
+> **Divergencia 2026-05-13:** el contrato canónico asume un catálogo plano con `items[]` por rutina (instrucciones, obligatoriedad). El workaround **solo trae el id** de la rutina por equipo; los items quedan **sin sincronizar** en MVP (consistente con la nota canónica de que "items son metadata sugerida no obligatoria"). Si el flujo monitoreo requiere items, se reabrirá la conversación cross-team.
 
 > **Origen:** la revisión por flujos del 2026-05-04 detectó que el modelo (§12.11.1) asumía la existencia de un sync de rutinas técnicas, pero el contrato lo tenía diferido a post-MVP (M-6/M-7 ⏸). Sin sync, el handler `IniciarInspeccion` no podía resolver `Equipo.RutinaTecnicaId` contra una proyección local. Este endpoint cierra el gap.
 
@@ -795,6 +893,10 @@ Catálogo de definiciones de rutinas técnicas. Sincronizado **on-app-open** con
 - **🚧 TODO con David** (ver `07-preguntas-destrabar-followups.md` pregunta 5 + nueva entrada): confirmar que el ERP soporta el filtrado por `tipo=Tecnica` (server-side o vía query) y que la cardinalidad real es 1 rutina técnica por equipo.
 
 #### M-16 `GET /api/v1/catalogos/rutinas-monitoreo` (Fase 2 — diferido)
+
+> **Estado 2026-05-13:** ⚠️ Alineado con shape distinto — Maquinaria_V4 slice 10 expone `GET /api/rutinas-monitoreo?equipoId=` (path real `/api/v4/Maquinaria/api/rutinas-monitoreo`). **Filtro per-equipo server-side**, no catálogo global.
+>
+> **Divergencia 2026-05-13:** el contrato canónico (decisión 2026-05-05) asume un catálogo global con `grupoMantenimientoId` por rutina, y el cliente filtra client-side por el grupo del equipo. Maquinaria_V4 hace el filtrado **server-side por `equipoId`** — el cliente no necesita resolver el grupo. Implicación: la proyección local `RutinaMonitoreoLocal` ya no es un catálogo global sino un mapa `equipoId → [rutinas aplicables]`, cargado bajo demanda cuando el técnico selecciona el equipo. Sin sync masivo on-app-open para este recurso. El razonamiento del modelo §12.11.5 punto 9 (asignación derivada por grupo) se preserva conceptualmente, pero el ERP lo encapsula y el cliente solo consume la lista resuelta.
 
 > **Decisión 2026-05-04:** este endpoint reemplaza al `GET /api/v1/rutinas-monitoreo?grupo={g}` planteado inicialmente. La asignación equipo↔rutinas se movió al detalle del equipo (M-3b); este catálogo solo trae **definiciones** de rutinas, sin filtro por grupo. Detalle del modelo en `01-modelo-dominio.md` §12.11.5 punto 9.
 
@@ -852,6 +954,10 @@ Catálogo completo de definiciones de rutinas de monitoreo. Sincronizado **on-ap
 
 #### I-1 `GET /api/v1/insumos`
 
+> **Estado 2026-05-13:** ⚠️ Alineado con shape distinto — Maquinaria_V4 slice 4 expone `GET /api/productos?texto=` (path real `/api/v4/Maquinaria/api/productos`). Adapter mapea `q` → `texto` y normaliza `producto` → `insumo` en el shape de respuesta.
+>
+> **Divergencia 2026-05-13:** el response **no incluye `ParteIdsCompatibles`** (campo de compatibilidad por parte). El módulo MVP tampoco lo usa — la búsqueda es por texto libre cross-catálogo (consistente con la nota canónica "sin filtro `parteId`"). El followup §8 sobre filtrado por `parteId` queda **descartado** post-reconciliación.
+
 Búsqueda interactiva durante el wizard de hallazgo. **Critical UX** — latencia debe ser <500ms para autocomplete (preferiblemente atendida por proyección local `InsumoLocal` poblada por I-3).
 
 - **Query params**:
@@ -886,6 +992,10 @@ Búsqueda interactiva durante el wizard de hallazgo. **Critical UX** — latenci
 - **Notas**: el módulo originalmente usaba `/repuestos`; consolidado a `/insumos` siguiendo nomenclatura del ERP.
 
 #### I-2 `GET /api/v1/catalogos/insumos`
+
+> **Estado 2026-05-13:** ❌ NO aplica como endpoint independiente — el detalle del insumo ya existe en otro punto del ecosistema (consistente con el patrón "no duplicamos catálogos que el host ya gestiona"). El sync masivo on-app-open de insumos se sirve por el **mismo endpoint `/api/productos`** que I-1 (paginando exhaustivamente), no por un catálogo distinto. Adapter usa un cliente unificado para ambos roles.
+>
+> **Divergencia 2026-05-13:** el contrato separa I-1 (búsqueda interactiva) e I-2 (sync masivo); la realidad consolida ambos en `/api/productos`. El handler diferencia rol por presencia de paginación + `If-None-Match`.
 
 Sync on-app-open del catálogo completo de insumos (ADR-004 canonical 2026-05-05 — sin cron). Alimenta la proyección local `InsumoLocal` que sirve la búsqueda I-1 con baja latencia.
 
