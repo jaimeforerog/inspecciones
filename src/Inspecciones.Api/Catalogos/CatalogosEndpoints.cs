@@ -10,9 +10,22 @@ namespace Inspecciones.Api.Catalogos;
 /// Endpoints administrativos para sincronizar / sembrar el catálogo local
 /// (<c>EquipoLocal</c>, <c>RutinaTecnicaLocal</c>, <c>ParteEquipoLocal</c>)
 /// desde Maquinaria_V4 o desde un payload manual.
+///
+/// Capability check (review post-mt-4 §3): TODOS los endpoints administrativos
+/// requieren capability <c>administrar-catalogos</c> en el JWT del host (paridad
+/// con la decisión D-MT1-9 ya aplicada a <c>POST /api/v1/catalogos/sync</c>).
+/// Cierra el boquete detectado en la revisión del sub-track multi-tenancy:
+/// pasa-pisos al ERP no debían estar accesibles a cualquier usuario autenticado.
 /// </summary>
 public static class CatalogosEndpoints
 {
+    private const string CapabilityAdmin = "administrar-catalogos";
+    private const string MensajeCapabilityAdmin = "Capability 'administrar-catalogos' requerida.";
+
+    /// <summary>Construye 403 Forbidden con body { codigoError, mensaje } — paridad con InspeccionesEndpoints.Forbidden403.</summary>
+    private static IResult Forbidden403Admin() =>
+        Results.Json(new { codigoError = "PRE-1", mensaje = MensajeCapabilityAdmin }, statusCode: 403);
+
     public static IEndpointRouteBuilder MapCatalogosEndpoints(this IEndpointRouteBuilder app)
     {
         // ── POST /api/v1/admin/sincronizar-equipo/{equipoId} ────────────────
@@ -20,8 +33,14 @@ public static class CatalogosEndpoints
         app.MapPost("/api/v1/admin/sincronizar-equipo/{equipoId:int}", async (
                 int equipoId,
                 SincronizarEquipoDesdeErpHandler handler,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 try
                 {
                     var result = await handler.EjecutarAsync(equipoId, ct);
@@ -67,8 +86,14 @@ public static class CatalogosEndpoints
         app.MapPost("/api/v1/admin/seed-equipo", async (
                 SeedManualCatalogoCommand cmd,
                 SeedManualCatalogoHandler handler,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 if (cmd.EquipoId <= 0)
                 {
                     return Results.BadRequest(new { codigoError = "EQUIPO_ID_INVALIDO", mensaje = "EquipoId debe ser entero positivo" });
@@ -101,8 +126,14 @@ public static class CatalogosEndpoints
         app.MapGet("/api/v1/admin/equipos-erp", async (
                 string? filtro,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 try
                 {
                     var result = await erp.ListarEquiposAsync(filtro, ifNoneMatch: null, ct);
@@ -129,8 +160,14 @@ public static class CatalogosEndpoints
         app.MapGet("/api/v1/admin/causas-falla-erp", async (
                 string? texto,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 try
                 {
                     var result = await erp.ListarCausasFallaAsync(string.IsNullOrEmpty(texto) ? "-1" : texto, ifNoneMatch: null, ct);
@@ -150,8 +187,14 @@ public static class CatalogosEndpoints
         app.MapGet("/api/v1/admin/tipos-falla-erp", async (
                 string? texto,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 try
                 {
                     var result = await erp.ListarTiposFallaAsync(string.IsNullOrEmpty(texto) ? "-1" : texto, ifNoneMatch: null, ct);
@@ -171,8 +214,14 @@ public static class CatalogosEndpoints
         app.MapGet("/api/v1/admin/productos-erp", async (
                 string? texto,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 try
                 {
                     var result = await erp.ListarProductosAsync(string.IsNullOrEmpty(texto) ? "-1" : texto, ifNoneMatch: null, ct);
@@ -195,8 +244,14 @@ public static class CatalogosEndpoints
                 int? equipoId,
                 string? texto,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 DateOnly desdeDate = DateOnly.TryParseExact(desde ?? "", "yyyy-MM-dd", out var d) ? d : DateOnly.MinValue;
                 DateOnly hastaDate = DateOnly.TryParseExact(hasta ?? "", "yyyy-MM-dd", out var h) ? h : DateOnly.MinValue;
                 try
@@ -219,8 +274,14 @@ public static class CatalogosEndpoints
         app.MapGet("/api/v1/admin/rutinas-monitoreo-erp/{equipoId:int}", async (
                 int equipoId,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 try
                 {
                     var result = await erp.ListarRutinasMonitoreoPorEquipoAsync(equipoId, ifNoneMatch: null, ct);
@@ -241,8 +302,14 @@ public static class CatalogosEndpoints
         app.MapGet("/api/v1/admin/catalogo-equipo/{equipoId:int}", async (
                 int equipoId,
                 IDocumentSession session,
+                ISessionService userSession,
                 CancellationToken ct) =>
             {
+                if (!userSession.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 var equipo = await session.LoadAsync<EquipoLocal>(equipoId, ct);
                 if (equipo is null)
                 {
@@ -268,8 +335,14 @@ public static class CatalogosEndpoints
         app.MapPost("/api/v1/admin/cerrar-preop-erp", async (
                 CerrarPreoperacionalFallasRequestDto body,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 if (body is null || body.PodIds.Count == 0)
                 {
                     return Results.BadRequest(new { codigoError = "POD_IDS_VACIO", mensaje = "podIds debe contener al menos un id" });
@@ -343,8 +416,14 @@ public static class CatalogosEndpoints
                 int equipoCodigo,
                 ActualizarDictamenEquipoRequestDto body,
                 IMaquinariaErpClient erp,
+                ISessionService session,
                 CancellationToken ct) =>
             {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
                 if (body.Estado is < 0 or > 2)
                 {
                     return Results.BadRequest(new { codigoError = "ESTADO_INVALIDO", mensaje = "estado debe ser 0, 1 o 2" });

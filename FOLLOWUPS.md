@@ -411,17 +411,33 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Acción sugerida:** en el constructor del fixture, capturar `ArgumentException` y dejar el `_connectionString = null`. Cada `[Fact]` recibe `SkipUnless(_connectionString)` evaluado dinámicamente (xUnit `IClassFixture` con flag). Trabajo aislado.
 **Notas:** la doc actual en CLAUDE.md ya advierte "Requiere POSTGRES_TEST_CONNSTRING exportada"; FU-63 mejora el mensaje de fallo pero no es bloqueante.
 
-### #64 — Test del counter `inspecciones.erp.calls` con `MeterListener` 🟢
+### #64 — Test del counter `inspecciones.erp.calls` con `MeterListener` ✅ MOVIDO A CERRADOS
 
-**Origen:** slice mt-4 review §3 hallazgo #4
-**Fecha:** 2026-05-19
-**Tipo:** cobertura defensiva · observabilidad
-**Descripción:** `InspeccionesMeters.RegistrarLlamadaErp(...)` se invoca en los 2 listeners ERP en éxito/fallo/idempotencia, pero ningún test verifica el incremento del counter. Si un refactor futuro elimina la línea por error, no hay safety-net. `System.Diagnostics.Metrics.MeterListener` permite suscribirse al meter en tests y asertar incrementos.
-**Disparador para abrir slice:** primer refactor del listener que toque la sección try/catch del adapter. O cuando se introduzca un tercer punto de medición (p. ej. histogram `inspecciones.command.duration` para los handlers).
-**Acción sugerida:** test integración que invoca el listener con `FakeMaquinariaErpClient` y verifica que el `MeterListener` recibió incremento taggeado con `id_empresa`, `endpoint`, `resultado` esperados.
-**Notas:** baja prioridad — la métrica es informacional, no garantía de comportamiento de negocio.
+(Ver sección `## Cerrados` abajo — cerrado por revisión post-mt-4 el 2026-05-21.)
+
+### #65 — `MartenInspeccionReader` resuelve `IQuerySession` eager en listeners Wolverine 🟢
+
+**Origen:** revisión post-mt-4 (sesión 2026-05-21) — riesgo #1 del veredicto.
+**Fecha:** 2026-05-21
+**Tipo:** bug latente · multi-tenancy · DI scoping
+**Descripción:** `MartenInspeccionReader` (`src/Inspecciones.Infrastructure/Erp/MartenInspeccionReader.cs:27`) recibe `IQuerySession ambientSession` en su constructor. En `Program.cs:282-283` ese `IQuerySession` se registra con factory `sp.GetRequiredService<ITenantedDocumentSessionFactory>().OpenQuerySession()`, y `OpenQuerySession()` lee eagerly `_session.IdEmpresa`. Cuando Wolverine instancia `SincronizarDictamenVigenteListener` para procesar un mensaje del outbox **fuera de HTTP scope**, el contenedor resuelve `MartenInspeccionReader` → resuelve `IQuerySession` ambient → invoca `OpenQuerySession()` → llama `_session.IdEmpresa` (sin HttpContext) → `SincoMiddlewareSessionService.LeerEntero("IdEmpresa")` lanza `ClaimRequeridaException` → el listener falla en la construcción, antes de leer `envelope.TenantId`. Los tests usan `FakeInspeccionReader` y nunca instancian el reader real desde el contenedor — el problema solo se manifiesta en producción real con outbox despachando.
+**Disparador para abrir slice:** antes del primer deploy multi-empresa con outbox real (FU-58 + esto son bloqueantes). Equivalente: smoke E2E con Postgres real + Wolverine en proceso completo que dispare `InspeccionFirmada_v1` al outbox y verifique que el listener no falle en construcción.
+**Opciones de fix (a decidir cuando se abra slice):**
+1. Quitar `IQuerySession ambientSession` del constructor; eliminar la sobrecarga `LeerAsync(Guid, CancellationToken)` sin tenant (en producción nadie debería usarla post-mt-2). Solo dejar `LeerAsync(Guid, string tenantId, CancellationToken)`.
+2. Envolver la dependencia en `Lazy<IQuerySession>` / `Func<IQuerySession>` para resolución on-demand cuando el caller la necesita explícitamente.
+3. Inyectar `ITenantedDocumentSessionFactory` y abrir sesión on-demand dentro del método legacy.
+**Acción sugerida:** opción 1 (más limpia). Verificar primero que no haya callers de la sobrecarga sin tenant en producción (grep `_inspeccionReader.LeerAsync(...)` excluyendo tests).
+**Notas:** usuario solicitó NO arreglarlo en la sesión del 2026-05-21 — pidió mantener el item abierto y registrar el riesgo claramente para slice futuro.
 
 ## Cerrados
+
+### #64 — Test del counter `inspecciones.erp.calls` con `MeterListener` ✅
+
+**Origen:** slice mt-4 review §3 hallazgo #4
+**Fecha apertura \ cierre:** 2026-05-19 / 2026-05-21
+**Cierre:** revisión post-mt-4 (sesión 2026-05-21) — usuario solicitó cerrar todos los hallazgos menos el #1 (DI eager de `MartenInspeccionReader`).
+**Tipo:** cobertura defensiva · observabilidad
+**Resolución:** test unit `tests/Inspecciones.Infrastructure.Tests/Erp/InspeccionesMetersTests.cs` (5 tests) usa `MeterListener` de BCL para capturar emisiones del counter `inspecciones.erp.calls`. Cubre: tags `id_empresa`/`endpoint`/`resultado` en éxito y fallo; fallback `desconocido` cuando `tenantId == null` (MT4-INV-3 defensiva); acumulación de varias emisiones; estabilidad del nombre del counter (OpenTelemetry naming). El test es independiente de Postgres y de WireMock.
 
 ### #56 — Validar Wolverine 3 prefiere overload `HandleAsync(evento, Envelope, ct)` en producción ✅
 

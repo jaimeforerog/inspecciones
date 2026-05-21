@@ -38,10 +38,13 @@ public sealed class MartenCatalogoSyncRepository : ICatalogoSyncRepository
     }
 
     // ── Lectura de estado de sync ───────────────────────────────────────────
+    //
+    // Sesiones read-only (IQuerySession): sin tracking ni unit-of-work, más baratas
+    // que IDocumentSession para puro Load/Query (review post-mt-4 §2).
 
     public async Task<CatalogoSyncState?> LeerSyncStateAsync(string catalogoId, CancellationToken ct = default)
     {
-        await using var session = _sessions.OpenSession();
+        await using var session = _sessions.OpenQuerySession();
         return await session.LoadAsync<CatalogoSyncState>(catalogoId, ct).ConfigureAwait(false);
     }
 
@@ -49,19 +52,19 @@ public sealed class MartenCatalogoSyncRepository : ICatalogoSyncRepository
 
     public async Task<int> ContarCausasFallaAsync(CancellationToken ct = default)
     {
-        await using var session = _sessions.OpenSession();
+        await using var session = _sessions.OpenQuerySession();
         return await session.Query<CausaFallaCatalogo>().CountAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<int> ContarTiposFallaAsync(CancellationToken ct = default)
     {
-        await using var session = _sessions.OpenSession();
+        await using var session = _sessions.OpenQuerySession();
         return await session.Query<TipoFallaCatalogo>().CountAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<int> ContarProductosAsync(CancellationToken ct = default)
     {
-        await using var session = _sessions.OpenSession();
+        await using var session = _sessions.OpenQuerySession();
         return await session.Query<RepuestoLocal>().CountAsync(ct).ConfigureAwait(false);
     }
 
