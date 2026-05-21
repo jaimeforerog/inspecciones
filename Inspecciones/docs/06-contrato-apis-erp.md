@@ -146,11 +146,15 @@ Slices `erp-5..erp-N` (consumo de productos para BOM, sync monitoreo per-equipo,
 
 ### 0.B.4 Decisiones que aún requieren input cross-team (D-3..D-5 del análisis erp-1)
 
-Subset de §0.A.7 que no se cerró bilateralmente y sigue pendiente:
+Subset de §0.A.7 que no se cerró bilateralmente. Estado actualizado 2026-05-21:
 
-- **D-3 (Document Service externo):** URL base + contrato + identidad. ¿Reusa JWT del host? Owner: **David**. Bloquea `AdjuntarArchivo` comando.
-- **D-4 (matriz parte↔producto):** M-4 no expone `ParteIdsCompatibles`. ¿Dónde vive la matriz parte↔producto? Owner: **David**. Bloquea acople real de `AsignarRepuesto`.
-- **D-5 (M-17 política definitiva):** ¿basta con sintetizar desde equipo o se necesita endpoint dedicado? Owner: **Jaime**.
+| Decisión | Pregunta abierta | Owner | Estado | Slices bloqueados | Notas / próximo paso |
+|---|---|---|---|---|---|
+| **D-3** Document Service externo | URL base + contrato + identidad. ¿Reusa JWT del host o tiene credencial propia? ¿Tiering Cool tras 90 días confirmado? | David (ERP) | 🔴 Abierto | `AdjuntarArchivo` (slice ~3.11). Toda la línea de adjuntos de hallazgos + PDFs de inspección (presupuesto ≥1 TB / 7 años retención, roadmap §1.10). | Necesita reunión cross-team David + IT. Sin esto el slice 3.11 no puede arrancar. Probablemente Fase 2. |
+| **D-4** Matriz parte ↔ producto | `M-4` no expone `ParteIdsCompatibles`. ¿Dónde vive la matriz parte↔producto (compatibilidad de SKUs por parte de equipo)? ¿Endpoint dedicado en `Maquinaria_V4` o tabla cliente-side? | David (ERP) | 🔴 Abierto | Acople real de `AsignarRepuesto` (slice 1f ya cerrado en módulo, pero sin verificación de compatibilidad). | Hoy el módulo acepta cualquier `ProductoId` para cualquier `ParteId`. Riesgo: técnicos asignan SKUs incompatibles. Mitigación temporal: validación opcional en frontend con catálogo plano. |
+| **D-5** M-17 política definitiva | ¿Basta con sintetizar el catálogo desde `EquipoErpDto.RutinaMantenimientoId` o se necesita endpoint dedicado `GET /catalogos/rutinas-tecnicas`? | Jaime (Módulo) | 🟢 **Cerrada bilateral 2026-05-13** — síntesis cliente-side desde equipo. Implementada en `SincronizarEquipoDesdeErpHandler` (slice erp-1). | Ninguno (resuelta). | Mantener entrada por trazabilidad histórica. Si emerge segundo cliente que requiera el endpoint dedicado, reabrir. |
+
+**Resumen del impacto en roadmap:** D-3 y D-4 son cross-team con David y necesitan agendar reunión antes de iniciar Fase 2 (adjuntos + repuestos con verificación). D-5 está cerrada y sólo se conserva por trazabilidad.
 
 ### 0.B.5 Convenciones diferenciadas (canónica vs real)
 
