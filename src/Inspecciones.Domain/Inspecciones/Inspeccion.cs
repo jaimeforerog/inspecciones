@@ -279,6 +279,31 @@ public sealed class Inspeccion
                 "NovedadPreopOrigenId es obligatorio cuando Origen=PreOperacional.");
         }
 
+        // PRE-11 / INV-ND1 (slice 1p, cierra FU-40): una novedad ya descartada en esta
+        // inspección no puede importarse como hallazgo. Lado simétrico de Descartar PRE-6.
+        if (cmd.Origen == OrigenHallazgo.PreOperacional
+            && cmd.NovedadPreopOrigenId is int novedadDescartada
+            && _novedadesDescartadas.Contains(novedadDescartada))
+        {
+            throw new NovedadDescartadaNoImportableException(
+                $"La novedad preoperacional {novedadDescartada} ya fue descartada en esta inspección; " +
+                "no se puede importar como hallazgo.");
+        }
+
+        // PRE-12 / I-H13 (slice 1p, cierra Gap 6b del contrato front): una novedad preop
+        // solo puede tener un hallazgo activo (no eliminado) por inspección. Bloquea la
+        // doble importación. Re-importar tras eliminar el hallazgo previo SÍ se permite (D-1).
+        if (cmd.Origen == OrigenHallazgo.PreOperacional
+            && cmd.NovedadPreopOrigenId is int novedadImportada
+            && _hallazgos.Any(h => !h.Eliminado
+                && h.Origen == OrigenHallazgo.PreOperacional
+                && h.NovedadPreopOrigenId == novedadImportada))
+        {
+            throw new NovedadPreopYaImportadaException(
+                $"La novedad preoperacional {novedadImportada} ya fue importada como hallazgo activo " +
+                "en esta inspección. Edita o elimina el hallazgo existente antes de volver a importar.");
+        }
+
         // PRE-6 / I-H3: Manual prohíbe NovedadPreopOrigenId.
         if (cmd.Origen == OrigenHallazgo.Manual && cmd.NovedadPreopOrigenId is not null)
         {
@@ -560,6 +585,31 @@ public sealed class Inspeccion
     {
         _novedadesDescartadas.Add(e.NovedadId);
         _contribuyentes.Add(e.DescartadaPor);
+    }
+
+    /// <summary>
+    /// Estado de la novedad preop <paramref name="novedadId"/> respecto de esta
+    /// inspección (slice 1q). El módulo no guarda las novedades — viven en el ERP —;
+    /// este aggregate es la fuente de verdad de qué pasó con cada una dentro de la
+    /// inspección. <see cref="EstadoNovedadImportacion.Importada"/> (hallazgo activo)
+    /// tiene prioridad sobre <see cref="EstadoNovedadImportacion.Descartada"/>; ambas
+    /// son mutuamente excluyentes por INV-ND1. Lectura pura, sin efectos.
+    /// </summary>
+    public EstadoNovedadImportacion EstadoNovedadPreop(int novedadId)
+    {
+        if (_hallazgos.Any(h => !h.Eliminado
+            && h.Origen == OrigenHallazgo.PreOperacional
+            && h.NovedadPreopOrigenId == novedadId))
+        {
+            return EstadoNovedadImportacion.Importada;
+        }
+
+        if (_novedadesDescartadas.Contains(novedadId))
+        {
+            return EstadoNovedadImportacion.Descartada;
+        }
+
+        return EstadoNovedadImportacion.Disponible;
     }
 
     // ── Slice 1d — ActualizarHallazgo ────────────────────────────────────────

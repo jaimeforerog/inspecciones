@@ -199,7 +199,7 @@ public sealed record RepuestoEstimado_v1(
 - I2: estado = `EnEjecucion`.
 - `Cantidad > 0`.
 - `Justificacion` no vacía.
-- **Hard error de compatibilidad SKU↔Parte**: el handler rechaza si `ParteEquipoId` del hallazgo NO está en `RepuestoLocal.ParteIdsCompatibles[SkuId]`. Asume catálogo bien mantenido (confirmado §3.2 brief).
+- ~~**Hard error de compatibilidad SKU↔Parte**~~ **RETIRADA (2026-05)**: se eliminó la validación que rechazaba si `ParteEquipoId` del hallazgo no estaba en `RepuestoLocal.ParteIdsCompatibles[SkuId]`. No hay limitante sobre qué insumo se gasta en un hallazgo y el ERP no expone ese campo (reconciliación 2026-05-13). Cualquier SKU del catálogo es asignable.
 - I10: si `AccionRequerida ≠ RequiereIntervencion` para el hallazgo, rechaza (UI también bloquea).
 - SKU no duplicado entre repuestos **activos** (los removidos no cuentan, permite re-agregar).
 

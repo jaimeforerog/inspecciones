@@ -2,6 +2,8 @@ using System.Globalization;
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Inspecciones;
 using Inspecciones.Infrastructure.Auth;
+using Inspecciones.Infrastructure.Erp;
+using Marten;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
@@ -272,6 +274,8 @@ public static class InspeccionesEndpoints
                         AccionCorrectivaRequeridaException     => "PRE-8",
                         NovedadTecnicaVaciaException           => "PRE-9",
                         OrigenNoSoportadoException             => "PRE-10",
+                        NovedadDescartadaNoImportableException => "INV-ND1",  // slice 1p — FU-40
+                        NovedadPreopYaImportadaException       => "I-H13",    // slice 1p — Gap 6b
                         _                                      => "DOMINIO"
                     };
                     return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
@@ -430,7 +434,6 @@ public static class InspeccionesEndpoints
                         CantidadInvalidaException                  => "PRE-E",
                         SkuDuplicadoEnHallazgoException            => "PRE-G",
                         RepuestoNoEncontradoEnCatalogoException    => "PRE-H1",
-                        SkuIncompatibleConParteException           => "PRE-H2",
                         _                                          => "DOMINIO"
                     };
                     return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });
@@ -1249,6 +1252,211 @@ public static class InspeccionesEndpoints
                 }
             })
            .WithName("ActualizarRepuesto");
+
+        // ── Listar inspecciones de un equipo (historia completa) ────────────
+        // GET /api/v1/inspecciones?equipoId={int} — todas las inspecciones del equipo
+        // (cualquier estado), más recientes primero. Fuente: proyección histórica
+        // InspeccionResumenView (una fila por inspección). equipoId es obligatorio
+        // (sin él el listado sería no acotado) — su ausencia da 400 automático.
+        app.MapGet("/api/v1/inspecciones", async (
+                int equipoId,
+                IQuerySession query,
+                ISessionService session,
+                CancellationToken ct) =>
+            {
+                // PRE-1 — capability "ejecutar-inspeccion" requerida.
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var filas = await query.Query<InspeccionResumenView>()
+                    .Where(v => v.EquipoId == equipoId)
+                    .OrderByDescending(v => v.IniciadaEn)
+                    .ToListAsync(ct);
+
+                var inspecciones = filas.Select(v => new
+                {
+                    inspeccionId = v.InspeccionId,
+                    tipo = v.Tipo,
+                    estado = v.Estado,
+                    rutinaId = v.RutinaId,
+                    rutinaCodigo = v.RutinaCodigo,
+                    tecnicoIniciador = v.TecnicoIniciador,
+                    proyectoId = v.ProyectoId,
+                    fechaReportada = v.FechaReportada,
+                    iniciadaEn = v.IniciadaEn,
+                    firmadaEn = v.FirmadaEn,
+                    canceladaEn = v.CanceladaEn,
+                    cerradaEn = v.CerradaEn,
+                    dictamen = v.Dictamen,
+                    otSolicitada = v.OTSolicitada,
+                    otRechazada = v.OTRechazada,
+                    motivoCancelacion = v.MotivoCancelacion,
+                    hallazgos = new
+                    {
+                        total = v.TotalHallazgos,
+                        requierenIntervencion = v.HallazgosRequierenIntervencion,
+                        requierenSeguimiento = v.HallazgosRequierenSeguimiento,
+                        sinIntervencion = v.HallazgosSinIntervencion
+                    }
+                }).ToList();
+
+                return Results.Ok(new
+                {
+                    equipoId,
+                    total = inspecciones.Count,
+                    inspecciones
+                });
+            })
+           .WithName("ListarInspeccionesPorEquipo");
+
+        // ── Recuperar inspección por id ─────────────────────────────────────
+        // GET /api/v1/inspecciones/{id} — reconstruye el aggregate desde su stream
+        // de eventos y devuelve el estado completo. Resuelve "no queda guardada":
+        // la PWA relee el estado persistido para reentrar al flujo.
+        //
+        // Sin header X-Client-Command-Id (ADR-008 aplica solo a comandos de escritura).
+        // El tenant lo resuelve el IQuerySession ambient del reader vía IdEmpresa
+        // (ITenantedDocumentSessionFactory) — claim ausente ⇒ 401 por el handler global.
+        app.MapGet("/api/v1/inspecciones/{id:guid}", async (
+                Guid id,
+                IInspeccionReader reader,
+                ISessionService session,
+                CancellationToken ct) =>
+            {
+                // PRE-1 — capability "ejecutar-inspeccion" requerida.
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var inspeccion = await reader.LeerAsync(id, ct);
+                if (inspeccion is null)
+                {
+                    return Results.NotFound(new
+                    {
+                        codigoError = "PRE-2",
+                        mensaje = $"No existe una inspección con id {id}."
+                    });
+                }
+
+                return Results.Ok(RecuperarInspeccionResponse.Desde(inspeccion));
+            })
+           .WithName("RecuperarInspeccion");
+
+        // ── Listar novedades preop importables de una inspección (slice 1q) ──
+        // GET /api/v1/inspecciones/{id}/novedades-preop?desde=&hasta=&texto=&estado=
+        // Pasa-piso a Maquinaria_V4 (GET /api/preoperacional-fallas) acotado al equipo
+        // de la inspección + derivación server-side del Estado (Disponible|Importada|
+        // Descartada) desde el aggregate. Capability ejecutar-inspeccion (técnico en campo).
+        // Cierra FU-5.
+        //
+        // parteEquipoId / responsable NO están disponibles upstream sin cambio en
+        // Maquinaria_V4 (ver 09-solicitud-cambio-maquinaria-preop-fallas.md) — el front
+        // resuelve parteEquipoId con el selector de parte manual del Paso 1.
+        app.MapGet("/api/v1/inspecciones/{id:guid}/novedades-preop", async (
+                Guid id,
+                string? desde,
+                string? hasta,
+                string? texto,
+                EstadoNovedadImportacion? estado,
+                IInspeccionReader reader,
+                IMaquinariaErpClient erp,
+                ISessionService session,
+                CancellationToken ct) =>
+            {
+                // PRE-1 — capability "ejecutar-inspeccion" requerida.
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                // PRE-2 — la inspección debe existir: provee el EquipoId del filtro al
+                // ERP y el estado derivado de cada novedad.
+                var inspeccion = await reader.LeerAsync(id, ct);
+                if (inspeccion is null)
+                {
+                    return Results.NotFound(new
+                    {
+                        codigoError = "PRE-2",
+                        mensaje = $"No existe una inspección con id {id}."
+                    });
+                }
+
+                var desdeDate = DateOnly.TryParseExact(desde ?? "", "yyyy-MM-dd", out var d) ? d : DateOnly.MinValue;
+                var hastaDate = DateOnly.TryParseExact(hasta ?? "", "yyyy-MM-dd", out var h) ? h : DateOnly.MinValue;
+
+                try
+                {
+                    var resp = await erp.ListarPreoperacionalFallasAsync(
+                        desdeDate, hastaDate, inspeccion.EquipoId, string.IsNullOrEmpty(texto) ? "-1" : texto, ct);
+
+                    // Estado derivado por el aggregate (fuente de verdad — slice 1q).
+                    // Filtro opcional ?estado= aplicado tras derivar.
+                    var novedades = resp.Fallas
+                        .Select(f => NovedadPreopImportableDto.Desde(f, inspeccion.EstadoNovedadPreop(f.Id)))
+                        .Where(n => estado is null || n.Estado == estado)
+                        .ToList();
+
+                    return Results.Ok(new ListarNovedadesPreopResponse(
+                        InspeccionId: id,
+                        EquipoId: inspeccion.EquipoId,
+                        Novedades: novedades,
+                        Total: novedades.Count));
+                }
+                catch (MaquinariaErpException ex)
+                {
+                    return Results.Json(
+                        new { codigoError = "ERP_ERROR", mensaje = ex.Message, statusErp = (int?)ex.StatusCode },
+                        statusCode: StatusCodes.Status502BadGateway);
+                }
+                catch (HttpRequestException ex)
+                {
+                    return Results.Json(
+                        new { codigoError = "ERP_INACCESIBLE", mensaje = ex.Message },
+                        statusCode: StatusCodes.Status502BadGateway);
+                }
+            })
+           .WithName("ListarNovedadesPreopImportables");
+
+        // ── Inspección activa de un equipo ──────────────────────────────────
+        // GET /api/v1/inspecciones/activa?equipoId={int} — lee la proyección
+        // InspeccionAbiertaPorEquipoView (misma lectura que la idempotencia I-I1).
+        // Sin choque de ruteo con {id:guid} porque "activa" no es un Guid.
+        app.MapGet("/api/v1/inspecciones/activa", async (
+                int equipoId,
+                IQuerySession query,
+                ISessionService session,
+                CancellationToken ct) =>
+            {
+                // PRE-1 — capability "ejecutar-inspeccion" requerida.
+                if (!session.Capabilities.Contains("ejecutar-inspeccion"))
+                {
+                    return Forbidden403("PRE-1", MensajeCapabilityEjecutarInspeccion);
+                }
+
+                var activa = await query.LoadAsync<InspeccionAbiertaPorEquipoView>(equipoId, ct);
+                if (activa is null)
+                {
+                    return Results.NotFound(new
+                    {
+                        codigoError = "SIN_INSPECCION_ACTIVA",
+                        mensaje = $"El equipo {equipoId} no tiene una inspección activa."
+                    });
+                }
+
+                return Results.Ok(new
+                {
+                    equipoId = activa.EquipoId,
+                    inspeccionId = activa.InspeccionId,
+                    tecnicoIniciador = activa.TecnicoIniciador,
+                    iniciadaEn = activa.IniciadaEn,
+                    proyectoId = activa.ProyectoId,
+                    tipo = activa.Tipo
+                });
+            })
+           .WithName("RecuperarInspeccionActivaPorEquipo");
 
         return app;
     }

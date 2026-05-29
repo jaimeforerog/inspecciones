@@ -199,13 +199,17 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         body!.CodigoError.Should().Be("PRE-H1");
     }
 
-    // â”€â”€ PRE-H2: SKU no compatible con la parte del hallazgo â†’ 422 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€ Compatibilidad SKU↔Parte ELIMINADA: cualquier SKU del catÃ¡logo es asignable â”€â”€
+    // Antes esto daba 422 PRE-H2. DecisiÃ³n de negocio: no hay limitante sobre quÃ© insumo
+    // se gasta en un hallazgo. AdemÃ¡s el ERP no expone ParteIdsCompatibles (sync lo deja
+    // vacÃ­o), por lo que la validaciÃ³n rechazaba todo insumo en producciÃ³n.
 
     [Fact]
-    public async Task POST_repuesto_sku_incompatible_con_parte_responde_422_PRE_H2()
+    public async Task POST_repuesto_sku_sin_compatibilidad_declarada_responde_201()
     {
-        // Given: RepuestoLocal.ParteIdsCompatibles=[10,20] â€” no incluye ParteEquipoId=77
-        await SembrarRepuestoLocal(skuId: 888, parteIdsCompatibles: [10, 20]);
+        // Given: RepuestoLocal con ParteIdsCompatibles que NO incluye la parte del hallazgo
+        // (incluso vacÃ­o, como en el sync real). Debe asignarse igual.
+        await SembrarRepuestoLocal(skuId: 888, parteIdsCompatibles: []);
         var (inspeccionId, hallazgoId) = await SembrarInspeccionConHallazgo(equipoId: 16004);
         var client = factory.CreateClient();
         var request = NuevoRequest(inspeccionId, hallazgoId, skuId: 888);
@@ -214,10 +218,10 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         // When
         var response = await client.SendAsync(request);
 
-        // Then: 422 PRE-H2
-        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
-        var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
-        body!.CodigoError.Should().Be("PRE-H2");
+        // Then: 201 Created â€” sin restricciÃ³n de compatibilidad
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var body = await response.Content.ReadFromJsonAsync<RespuestaAsignarRepuesto>();
+        body!.SkuId.Should().Be(888);
     }
 
     private sealed record RespuestaAsignarRepuesto(

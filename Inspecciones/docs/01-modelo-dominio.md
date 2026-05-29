@@ -709,7 +709,7 @@ public sealed record RepuestoLocal(
     string Nombre,
     string Unidad,
     decimal? PrecioReferencia,
-    List<int> ParteIdsCompatibles,
+    List<int> ParteIdsCompatibles,          // ya NO se usa para validar (compat. SKU↔Parte retirada 2026-05); el ERP no lo expone
     DateTime SincronizadoEn);
 ```
 
@@ -1333,7 +1333,7 @@ public sealed record RepuestoLocal(
     string UnidadMedida,                    // "galon", "unidad"
     AplicabilidadMYE AplicaMYE,
     decimal? PrecioReferencia,
-    List<int> ParteIdsCompatibles,         // si la relación existe
+    List<int> ParteIdsCompatibles,         // ya NO se usa para validar (compat. SKU↔Parte retirada 2026-05); el ERP no lo expone
     DateTime SincronizadoEn);
 
 public enum AplicabilidadMYE { NoAplica, Opcional, Requerido }
@@ -2511,7 +2511,7 @@ Decisiones del usuario para el comando `EstimarRepuesto` y su evento:
 | Decisión | Valor | Notas |
 |---|---|---|
 | **`Unidad`** | Eliminada del comando | Se deriva del catálogo `RepuestoLocal.UnidadMedida` al guardar |
-| **Compatibilidad SKU↔Parte** | Hard error | El handler rechaza si `ParteId` del hallazgo NO está en `RepuestoLocal.ParteIdsCompatibles` del SKU |
+| **Compatibilidad SKU↔Parte** | ~~Hard error~~ **RETIRADA (2026-05)** | Decisión original: el handler rechazaba si `ParteId` del hallazgo NO estaba en `RepuestoLocal.ParteIdsCompatibles`. **Eliminada:** no hay limitante sobre qué insumo se gasta en un hallazgo, y el ERP no expone `ParteIdsCompatibles` (reconciliación bilateral 2026-05-13, ver `06-contrato-apis-erp.md §0.B`) por lo que el sync lo dejaba vacío y rechazaba todo insumo. Cualquier SKU del catálogo (PRE-H1) es asignable. |
 | **`Cantidad`** | Decimal > 0 | Permite galones, litros, fracciones; rechaza ≤ 0 |
 | **`AccionRequerida`** | UI bloquea agregar repuestos si no es `RequiereIntervencion` | I10 también enforcea en handler como defensa en profundidad |
 | **`UbicacionGps?` y `EmitidoPor`** | SE AGREGAN al evento | Consistencia con resto de eventos de captura. `EmitidoPor` actualiza la lista derivada de contribuyentes |
@@ -2573,12 +2573,10 @@ public IEnumerable<object> Handle(EstimarRepuesto cmd, Inspeccion state, ...)
     var sku = await refData.ObtenerRepuesto(cmd.SkuId, ct)
         ?? throw new DomainException($"SKU {cmd.SkuId} no existe en catálogo");
 
-    // HARD ERROR: SKU debe ser compatible con la parte del hallazgo (decisión 2026-04-27)
-    if (!sku.ParteIdsCompatibles.Contains(hallazgo.ParteId))
-        throw new DomainException(
-            $"SKU {sku.CodigoSinco} ({sku.Descripcion}) no está catalogado como compatible " +
-            $"con la parte del hallazgo. Si crees que es un error, " +
-            $"escala al admin del catálogo de inventario.");
+    // NOTA (2026-05): la validación de compatibilidad SKU↔Parte (hard error de la
+    // decisión 2026-04-27) fue RETIRADA. No hay limitante sobre qué insumo se gasta en
+    // un hallazgo, y el ERP no expone ParteIdsCompatibles (sync lo deja vacío). Cualquier
+    // SKU existente en el catálogo es asignable. Ver tabla §12.10.12 + 06-contrato §0.B.
 
     // No duplicar SKU en el mismo hallazgo
     var yaExiste = state.Repuestos
@@ -3588,6 +3586,22 @@ I-H12  Solo hallazgos con AccionRequerida = RequiereIntervencion pueden tener
        repuestos asignados (registrada formalmente al cerrar slice-1f
        AsignarRepuesto, 2026-05-06; antes vivía como "I10" en §12.10.12 sin
        código canónico. Implementada como PRE-C del comando AsignarRepuesto)
+I-H13  Una novedad preop puede tener a lo sumo UN hallazgo activo (no eliminado)
+       por inspección. Re-importar la misma NovedadPreopOrigenId cuando ya existe
+       un HallazgoRegistrado_v1 no eliminado con Origen=PreOperacional se rechaza
+       (dedupe de importación). Re-importar tras eliminar el hallazgo previo SÍ se
+       permite. Enforcada como PRE-12 de RegistrarHallazgo (slice 1p, 2026-05-29;
+       cierra Gap 6b del contrato de la PWA). I-H6 (múltiples hallazgos sobre la
+       misma ParteEquipoId) sigue vigente: I-H13 acota por novedad, no por parte.
+
+INV-ND1  Una novedad preop NO puede estar simultáneamente descartada y convertida
+         en hallazgo (no eliminado) dentro de la misma inspección. Exclusión mutua:
+         o NovedadPreopDescartada_v1 o HallazgoRegistrado_v1 con
+         NovedadPreopOrigenId == novedadId, nunca ambos. Enforcada por ambos lados:
+         · Descartar PRE-5 (no doble descarte) + PRE-6 (no descartar una ya importada)
+           — slice 1n.
+         · RegistrarHallazgo PRE-11 (no importar una ya descartada) — slice 1p,
+           2026-05-29 (cierra FU-40, simetría que faltaba desde 1n §12 P-3).
 ```
 
 ### 15.4 Catálogo final del MVP — 20 eventos

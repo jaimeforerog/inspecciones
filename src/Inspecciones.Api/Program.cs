@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json.Serialization;
 using Inspecciones.Api.Catalogos;
+using Inspecciones.Api.Equipos;
 using Inspecciones.Api.Inspecciones;
 using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
@@ -71,6 +72,13 @@ builder.Services.AddMarten((StoreOptions options) =>
         // a EventProjection inline (slice 1g). Maneja InspeccionIniciada_v1 (upsert),
         // InspeccionFirmada_v1 (delete) e InspeccionCancelada_v1 (delete).
         options.Projections.Add<InspeccionAbiertaPorEquipoProjection>(Marten.Events.Projections.ProjectionLifecycle.Inline);
+
+        // InspeccionResumenView — historia completa (una fila por inspección, cualquier
+        // estado) para el listado por equipo GET /api/v1/inspecciones?equipoId=. Inline:
+        // se materializa en la misma transacción que los eventos. EquipoId se duplica a
+        // columna indexada para acelerar el filtro WHERE EquipoId = @id.
+        options.Projections.Add<InspeccionResumenProjection>(Marten.Events.Projections.ProjectionLifecycle.Inline);
+        options.Schema.For<InspeccionResumenView>().Duplicate(x => x.EquipoId);
     })
     // Wolverine outbox transaccional integrado con Marten — persistencia atómica
     // de eventos + mensajes a despachar (regla CLAUDE.md, ADR-006).
@@ -347,6 +355,7 @@ var endpointsGroup = app.MapGroup(string.Empty)
     .AddEndpointFilter<SessionLoggingScopeFilter>();
 endpointsGroup.MapInspeccionesEndpoints();
 endpointsGroup.MapCatalogosEndpoints();
+endpointsGroup.MapEquiposEndpoints();
 
 // Endpoint informativo en root — útil para diagnóstico rápido.
 app.MapGet("/", () => Results.Ok(new

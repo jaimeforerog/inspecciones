@@ -1,3 +1,4 @@
+using Inspecciones.Application.Inspecciones;
 using Inspecciones.Domain.Catalogos;
 using Inspecciones.Infrastructure.Auth;
 using Inspecciones.Infrastructure.Erp;
@@ -445,6 +446,43 @@ public static class CatalogosEndpoints
             .WithName("ActualizarDictamenEquipoErp")
             .WithTags("Admin")
             .WithSummary("Pasa-piso a Maquinaria_V4: actualiza dictamen vigente del equipo (M-W-1).");
+
+        // ── POST /api/v1/admin/proyecciones/inspeccion-resumen/rebuild ──────
+        // Reconstruye InspeccionResumenView desde cero re-aplicando TODO el stream
+        // de eventos. Necesario para poblar el listado GET /api/v1/inspecciones?equipoId=
+        // con la data anterior al despliegue de la proyección (las proyecciones inline
+        // solo materializan eventos que llegan después de registrarse).
+        //
+        // Multi-tenancy Conjoined (ADR-009): el daemon procesa la secuencia global de
+        // eventos (mt_events.seq_id) que abarca TODOS los tenants en una sola pasada;
+        // cada documento reconstruido hereda el tenant_id de su stream. Una sola llamada
+        // cubre todas las empresas.
+        //
+        // Operación pesada y bloqueante: pensada para escala de piloto. Para volúmenes
+        // grandes, ejecutar fuera del request (job/comando Oakton) y monitorear el daemon.
+        app.MapPost("/api/v1/admin/proyecciones/inspeccion-resumen/rebuild", async (
+                IDocumentStore store,
+                ISessionService session,
+                CancellationToken ct) =>
+            {
+                if (!session.Capabilities.Contains(CapabilityAdmin))
+                {
+                    return Forbidden403Admin();
+                }
+
+                using var daemon = await store.BuildProjectionDaemonAsync();
+                await daemon.RebuildProjectionAsync<InspeccionResumenProjection>(ct);
+
+                return Results.Ok(new
+                {
+                    proyeccion = nameof(InspeccionResumenView),
+                    estado = "rebuild-completado",
+                    nota = "Reconstrucción cross-tenant (Conjoined) sobre la secuencia global de eventos."
+                });
+            })
+            .WithName("RebuildInspeccionResumen")
+            .WithTags("Admin")
+            .WithSummary("Reconstruye la proyección InspeccionResumenView desde el event store (poblar data preexistente).");
 
         return app;
     }

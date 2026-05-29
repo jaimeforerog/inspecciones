@@ -283,3 +283,23 @@ public sealed class RepuestoNoEncontradoException(string mensaje)
 /// comando tenga efecto. HTTP 400 Bad Request, <c>codigoError="PRE-8"</c>.</summary>
 public sealed class ComandoSinCambiosException(string mensaje)
     : InspeccionDomainException(mensaje);
+
+// ── Slice 1p — Unicidad de novedad preop en RegistrarHallazgo ─────────────────
+
+/// <summary>PRE-11 / INV-ND1 (aggregate) — <c>RegistrarHallazgo</c> con
+/// <c>Origen=PreOperacional</c> referencia una <c>NovedadPreopOrigenId</c> que ya
+/// fue descartada en esta inspección (<see cref="NovedadPreopDescartada_v1"/> en el
+/// stream). Lado simétrico de <c>Descartar</c> PRE-6 (slice 1n). Cierra FU-40.
+/// HTTP 422 Unprocessable Entity, <c>codigoError="INV-ND1"</c>.</summary>
+public sealed class NovedadDescartadaNoImportableException(string mensaje)
+    : InspeccionDomainException(mensaje);
+
+/// <summary>PRE-12 / I-H13 (aggregate) — <c>RegistrarHallazgo</c> con
+/// <c>Origen=PreOperacional</c> referencia una <c>NovedadPreopOrigenId</c> que ya
+/// tiene un hallazgo **activo** (no eliminado) con <c>Origen=PreOperacional</c> en
+/// esta inspección. Una novedad preop solo puede importarse una vez como hallazgo
+/// activo (Gap 6b del contrato de la PWA). Re-importar tras eliminar el hallazgo
+/// previo SÍ está permitido (D-1). HTTP 422 Unprocessable Entity,
+/// <c>codigoError="I-H13"</c>.</summary>
+public sealed class NovedadPreopYaImportadaException(string mensaje)
+    : InspeccionDomainException(mensaje);

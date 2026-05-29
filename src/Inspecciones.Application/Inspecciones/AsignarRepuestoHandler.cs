@@ -9,10 +9,18 @@ namespace Inspecciones.Application.Inspecciones;
 /// <list type="number">
 ///   <item>PRE-F — carga el aggregate; lanza <see cref="InspeccionNoEncontradaException"/> si no existe.</item>
 ///   <item>PRE-H1 — valida que <c>SkuId</c> exista en <c>RepuestoLocal</c>.</item>
-///   <item>PRE-H2 — valida compatibilidad SKU↔Parte (§12.10.12).</item>
 ///   <item>Delega PRE-A, PRE-B1/B2, PRE-C, PRE-D, PRE-E, PRE-G al aggregate.</item>
 ///   <item>Append + commit atómico (un único <c>SaveChangesAsync</c>).</item>
 /// </list>
+///
+/// <para><b>Compatibilidad SKU↔Parte (PRE-H2) eliminada.</b> Se retiró el hard-error que
+/// exigía que el <c>ParteEquipoId</c> del hallazgo estuviera en
+/// <c>RepuestoLocal.ParteIdsCompatibles</c>. Razones: (1) decisión de negocio — no hay
+/// limitante sobre qué insumo se gasta en un hallazgo; (2) el ERP Maquinaria_V4 no expone
+/// ese campo de compatibilidad (reconciliación bilateral 2026-05-13, ver
+/// <c>06-contrato-apis-erp.md §0.B</c>), por lo que el sync real deja
+/// <c>ParteIdsCompatibles</c> vacío y la validación rechazaba <i>todo</i> insumo en
+/// producción. Cualquier SKU existente en el catálogo (PRE-H1) es asignable.</para>
 /// </summary>
 public sealed class AsignarRepuestoHandler(IDocumentSession session, TimeProvider time)
 {
@@ -39,16 +47,7 @@ public sealed class AsignarRepuestoHandler(IDocumentSession session, TimeProvide
                 $"El SKU {cmd.SkuId} no existe en el catálogo local. Refresca el catálogo de inventario.");
         }
 
-        // PRE-H2: el SKU debe ser compatible con la parte del hallazgo destino.
-        var hallazgoDestino = inspeccion.Hallazgos.FirstOrDefault(h => h.HallazgoId == cmd.HallazgoId);
-        if (hallazgoDestino is not null
-            && !repuestoLocal.ParteIdsCompatibles.Contains(hallazgoDestino.ParteEquipoId))
-        {
-            throw new SkuIncompatibleConParteException(
-                $"El SKU {repuestoLocal.CodigoSinco} no está catalogado como compatible con la parte " +
-                $"{hallazgoDestino.ParteEquipoId} del hallazgo. " +
-                "Si crees que es un error, escala al admin del catálogo de inventario.");
-        }
+        // (PRE-H2 eliminada — sin restricción de compatibilidad SKU↔Parte; ver doc de la clase.)
 
         // Delegar PRE-A, PRE-B1, PRE-B2, PRE-C, PRE-D, PRE-E, PRE-G al aggregate.
         var ahora = _time.GetUtcNow();

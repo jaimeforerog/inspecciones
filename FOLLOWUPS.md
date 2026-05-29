@@ -21,7 +21,7 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 
 
 
-### #5 — Endpoints de listado de hallazgos importables con filtros 🟢
+### #5 — Endpoints de listado de hallazgos importables con filtros 🟡
 
 **Origen:** notas reunión diseño 2026-04-29 — "filtros para importar hallazgos deben estar disponibles antes de mostrar el listado, permitiendo filtrar por parte, fecha y usuario".
 **Fecha:** 2026-04-29 · **Refinado:** 2026-05-04
@@ -32,6 +32,7 @@ Backlog de deuda técnica sin slice propio. Cada item lo abre `reviewer` con ver
 - **`07-preguntas-destrabar-followups.md` pregunta 7**: redactada y pendiente de enviar a David — confirma forma exacta del filtro server-side y si los filtros aplican al endpoint del preop directamente.
 **Disparador para abrir slice:** previo al slice del wizard de hallazgo (paso 3.37 `POST /hallazgos`). Resolver con David si es lectura directa o local antes de codear el adapter.
 **Notas:** No bloqueante hasta que Santiago llegue al slice de importación. Daniel ya está iterando UX en Figma.
+**Resolución parcial (2026-05-29, slice 1q):** lado **preoperacional** cerrado — `GET /api/v1/inspecciones/{id}/novedades-preop` (capability `ejecutar-inspeccion`), pasa-piso a Maquinaria_V4 acotado al equipo de la inspección + `estado` derivado server-side (Disponible/Importada/Descartada) vía `Inspeccion.EstadoNovedadPreop`. Filtros `desde`/`hasta`/`texto`/`estado`. Sin cambio en el ERP: `parteEquipoId`/responsable no se exponen (ver `09-solicitud-cambio-maquinaria-preop-fallas.md`); folio sintetizado. **Sigue abierto** el lado *seguimientos* (`GET /equipos/{id}/seguimientos-importables`) — depende del aggregate `SeguimientoHallazgo` (roadmap 3.C, sin construir). Mantener 🟡 hasta cerrar ese lado.
 
 
 
@@ -264,7 +265,7 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 
 **Notas:** Slice 1m verificado a nivel Domain (213/228 verde, cobertura 94.9% del aggregate) + Api (38/42 verde con `POSTGRES_TEST_CONNSTRING`). Application.Tests del slice 1m (`CancelarInspeccionHandlerTests`) compilan pero requieren Docker hasta cerrar este followup.
 
-### #40 — `RegistrarHallazgo` no verifica `_novedadesDescartadas` — INV-ND1 asimétrica 🟢
+### #40 — `RegistrarHallazgo` no verifica `_novedadesDescartadas` — INV-ND1 asimétrica ✅
 
 **Origen:** slice 1n review hallazgo #1
 **Fecha:** 2026-05-11
@@ -273,8 +274,9 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Disparador para abrir slice:** antes de cerrar Fase 1, o cuando emerja un test de integración cross-slice que ejercite el flujo inverso.
 **Acción:** añadir guardia en `Inspeccion.RegistrarHallazgo` cuando `cmd.Origen == OrigenHallazgo.PreOperacional && cmd.NovedadPreopOrigenId.HasValue` — si `_novedadesDescartadas.Contains(cmd.NovedadPreopOrigenId.Value)` → `NovedadYaDescartadaException` (o nueva excepción simétrica). Test correspondiente.
 **Notas:** vinculado a FU-41 (documentar INV-ND1 canónicamente en §15.3).
+**Resolución:** slice 1p (`feat(slice-1p): unicidad novedad preop`, 2026-05-29). Guarda PRE-11 en `Inspeccion.RegistrarHallazgo` con nueva excepción `NovedadDescartadaNoImportableException` (no se reusó `NovedadYaDescartadaException` para no conflictuar la semántica de doble-descarte de `Descartar`). Test `RegistrarHallazgo_de_novedad_ya_descartada_lanza_NovedadDescartadaNoImportable_INV_ND1` (§6.1) + rebuild-driven §6.6. Mapeo HTTP 422 `INV-ND1`. El slice 1p además cerró Gap 6b (PRE-12 / I-H13 — dedupe de importación). ✅ Verde verificado: `Domain.Tests` 260/0/19 con SDK .NET 9.0.314 instalado en sesión 2026-05-29.
 
-### #41 — INV-ND1 sin entrada formal en `01-modelo-dominio.md §15.3` 🟢
+### #41 — INV-ND1 sin entrada formal en `01-modelo-dominio.md §15.3` ✅
 
 **Origen:** slice 1n review hallazgo #2
 **Fecha:** 2026-05-11
@@ -282,6 +284,7 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Descripción:** El spec 1n §5 propuso agregar INV-ND1 ("una novedad preop NO puede estar simultáneamente en `_novedadesDescartadas` y referenciada como `NovedadPreopOrigenId` por un `HallazgoRegistrado_v1` no eliminado") al catálogo de invariantes §15.3 del modelo de dominio. La invariante existe operacionalmente (PRE-6 del slice 1n la verifica en `Descartar`) pero no tiene entrada canónica en §15.3. Futuros tests no pueden referenciarla por código (`INV_ND1` en nombre de test) sin definición formal.
 **Disparador para cerrar:** PR de documentación junto con FU-40 (fix simetría) o antes del cierre de Fase 1.
 **Acción:** agregar entrada INV-ND1 a `Inspecciones/docs/01-modelo-dominio.md §15.3` con shape canónico de invariantes (enunciado, comandos que la enforcean, slices relacionados).
+**Resolución:** slice 1p (2026-05-29). Entradas canónicas **INV-ND1** e **I-H13** agregadas a `01-modelo-dominio.md §15.3` con enunciado, comandos que las enforcean (Descartar PRE-5/PRE-6 + RegistrarHallazgo PRE-11/PRE-12) y slices relacionados (1n, 1p).
 
 ### #42 — Test E2E §6.9 (`PRE-5 cross-hallazgo`) ausente en `ActualizarRepuestoEndpointTests` 🟢
 
@@ -637,7 +640,7 @@ Sin las tres respuestas, redactar el ADR de extensión a ADR-004 es prematuro.
 **Tipo:** infra · ADR-004
 **Descripción:** El `MaquinariaErpClient` ya soporta `If-None-Match` / `304 Not Modified` (verificado por test). Pero la cadena completa "GET catálogo → cache ETag → persistir en Marten → emitir cuando staleness > N" todavía no existe. Necesita: (a) tabla/documento Marten `CatalogoMetadataLocal { Codigo, EtagUltimoSync, UltimoSyncEn }` por catálogo; (b) job de sync que lea el ETag, llame al adapter con `If-None-Match`, y si responde 304 solo actualice `UltimoSyncEn`; si responde 200, upserte los documentos individuales (`CausaFallaLocal`, `TipoFallaLocal`, `RepuestoLocal`, etc.) y actualice el ETag; (c) endpoint admin `/api/v1/admin/sincronizar-catalogos` que dispare todos los syncs en paralelo; (d) modo degradado: si la última sync es >7 días, bloquear arranque de inspección con error claro.
 **Disparador para abrir slice:** cuando se integre la PWA cliente y se confirme el flujo de sync on-app-open (ADR-004 canonical 2026-05-05). Ahora bloquea: la PWA puede consumir directamente los endpoints `/admin/*-erp` para QA, sin cache.
-**Notas:** el shape de `RepuestoLocal` (campo `ParteIdsCompatibles: IReadOnlyList<int>`) NO viene del endpoint `/api/productos` de Maquinaria_V4 (que solo expone Codigo/Descripcion/UnidadContable). La compatibilidad parte ↔ producto vive en otro punto del ERP — confirmar con David antes del slice.
+**Notas:** el shape de `RepuestoLocal` (campo `ParteIdsCompatibles: IReadOnlyList<int>`) NO viene del endpoint `/api/productos` de Maquinaria_V4 (que solo expone Codigo/Descripcion/UnidadContable). **Actualización 2026-05:** ya no hace falta confirmar la matriz de compatibilidad con David — la validación de compatibilidad SKU↔Parte (PRE-H2) fue **retirada** (decisión de negocio: sin limitante de insumo por hallazgo; ver `06-contrato-apis-erp.md` D-4 cerrada + `01-modelo-dominio.md §12.10.12`). El campo `ParteIdsCompatibles` queda en el record pero sin uso de validación; el sync puede dejarlo vacío.
 
 ### #46 — Endpoints de Inspecciones que aún no acoplan a Maquinaria_V4 (sagas + comandos de escritura) 🟢
 
