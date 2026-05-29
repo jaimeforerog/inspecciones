@@ -93,7 +93,7 @@ public void {Accion}_rebuild_desde_stream_reproduce_estado()
 
 Este test es **blocker** en la fase review si falta (regla del reviewer §5.3).
 
-### 2.3 Mocks y dobles de prueba
+### 2.4 Mocks y dobles de prueba
 
 - **Agregados**: cero mocks. Siempre Given/When/Then sobre eventos reales.
 - **Handlers**: cero mocks de `IDocumentSession`. Se prueban con **Marten embebido** (Testcontainers Postgres) en nivel de integración, no unitario.
@@ -141,11 +141,11 @@ Cada rol tiene un **prompt persona** estable en `templates/agent-personas/`, con
 
 **Persona en `templates/agent-personas/orchestrator.md`.** Coordina las cinco fases del ciclo TDD, identifica el siguiente comando del catálogo, valida criterios de paso, invoca sub-personas vía Agent y maneja veredictos del reviewer. No se invoca vía Agent tool — es el rol del modelo principal.
 
-**Roles que asume directamente** (no son sub-personas):
+**Roles adicionales que coordina el orquestador:**
 
-- **infra-wire**: registrar handler en Wolverine, proyección en Marten, endpoint HTTP, DTOs, hub SignalR si aplica. Se ejecuta **después** de que el slice pasó review.
-- **azure-ops**: bicep/Terraform, pipelines, observabilidad, Azure landing zone. Cadencia por hito, no por slice.
-- **doc-writer**: ADR o actualización del README cuando hay una decisión arquitectónica o cambio de contrato público.
+- **infra-wire** (`templates/agent-personas/infra-wire.md`): conecta el dominio aprobado con la capa HTTP/Wolverine/Marten. Se invoca vía Agent **después** de que el reviewer emite veredicto aprobado. Produce handler, proyección, endpoint, test de integración HTTP y test WireMock si aplica.
+- **azure-ops**: bicep/Terraform, pipelines, observabilidad, Azure landing zone. Rol directo del orquestador. Cadencia por hito, no por slice.
+- **doc-writer**: ADR o actualización del README cuando hay una decisión arquitectónica o cambio de contrato público. Rol directo del orquestador.
 
 ---
 
@@ -171,8 +171,9 @@ Supongamos que toca implementar `RegistrarHallazgo`:
 6. Orquestador: invoca reviewer.
                 → si approved → commit.
                 → si request-changes → vuelve a (3) o (4) según aplique.
-7. Orquestador: como infra-wire, registra el handler, expone el endpoint,
-                actualiza OpenAPI, escribe test de integración HTTP→PG.
+7. Orquestador: invoca infra-wire con la spec + review-notes.
+                → produce handler, endpoint, test integración HTTP→PG.
+                → verifica dotnet test verde, 0 warnings.
 8. Orquestador: presenta el slice cerrado al usuario.
 ```
 
@@ -205,6 +206,8 @@ Los prompts completos viven en `templates/agent-personas/`. Resumen del contrato
 - **refactorer**: limpia tras green sin cambiar comportamiento. Los tests deben seguir pasando idénticos. Si nota un test mal diseñado, lo anota en `refactor-notes.md` pero no lo toca.
 
 - **reviewer**: emite uno de tres veredictos: approved / approved-with-followups / request-changes. Audita cobertura de ramas del agregado, claridad de tests como documentación, completitud de invariantes, coherencia con `01-modelo-dominio.md` §15 y los ADRs.
+
+- **infra-wire**: conecta el dominio aprobado con la capa HTTP/Wolverine/Marten. Produce handler, proyección Marten, endpoint Minimal API, test de integración HTTP→Postgres y test WireMock si toca un adapter ERP. Aplica las reglas de identidad (§9.1), multi-tenancy (§9.2), propagación JWT (§9.3) y observabilidad (§9.4). Se invoca después del reviewer, nunca antes.
 
 ---
 
