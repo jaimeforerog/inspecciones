@@ -1,6 +1,6 @@
 # Metodología de trabajo — Inspecciones Sinco MYE
 
-**Estado:** vigente desde 2026-04-29
+**Estado:** vigente desde 2026-04-29 · última revisión 2026-05-29
 **Alcance:** aplica a todo código de producción del módulo de Inspecciones Técnicas y fases siguientes.
 **Tipo de metodología:** TDD estricto (Given/When/Then sobre eventos) + squad multiagente especializado de 5 roles.
 **Origen:** lift-and-shift desde el proyecto hermano `sinco presupuesto` (52 slices probados). Ver `Inspecciones/docs/desarrollo/00-origen-metodologia.md`.
@@ -33,7 +33,7 @@ public void RegistrarHallazgo_en_inspeccion_iniciada_emite_HallazgoRegistrado()
 
     // WHEN: un comando
     var cmd = new RegistrarHallazgo(/*...*/);
-    var resultado = Decidir(dados, cmd);
+    var resultado = CasoDeUso.Decidir(dados, cmd, ahora);
 
     // THEN: eventos esperados (o excepción de invariante)
     resultado.Should().ContainSingle().Which.Should()
@@ -42,19 +42,56 @@ public void RegistrarHallazgo_en_inspeccion_iniciada_emite_HallazgoRegistrado()
 }
 ```
 
-El `Decidir(historial, comando)` es una función pura derivada del agregado: hace `fold` de los eventos para reconstruir el estado, ejecuta el comando, y devuelve los eventos nuevos. No toca Marten ni base de datos — esos tests viven en el nivel de integración.
+El `CasoDeUso.Decidir(historial, comando, timeProvider)` es una función pura derivada del agregado: hace `fold` de los eventos para reconstruir el estado, ejecuta el comando, y devuelve los eventos nuevos. No toca Marten ni base de datos — esos tests viven en el nivel de integración.
 
-### 2.2 Fases del ciclo
+Para escenarios de violación de precondición o invariante:
 
-| Fase | Qué se hace | Quién | Criterio de paso |
-|---|---|---|---|
-| **0. Spec** | Define eventos, comandos, invariantes del slice. | `domain-modeler` | Firma del orquestador (usuario). |
-| **1. Red** | Escribir tests que fallen, uno por escenario de la spec. | `red` | Todos los tests compilan y fallan. |
-| **2. Green** | Código mínimo para pasar el **último** test rojo. | `green` | Todos los tests compilan y pasan. |
-| **3. Refactor** | Limpiar sin cambiar comportamiento. | `refactorer` | Tests siguen pasando; warnings en cero. |
-| **4. Review** | Auditar el slice completo. | `reviewer` | Review notes firmadas. |
+```csharp
+[Fact]
+public void RegistrarHallazgo_en_inspeccion_firmada_lanza_EstadoInvalido()
+{
+    var dados = new object[] { /* InspeccionIniciada + InspeccionFirmada ... */ };
+    var cmd = new RegistrarHallazgo(/*...*/);
+
+    var act = () => CasoDeUso.Decidir(dados, cmd, ahora);
+
+    act.Should().Throw<EstadoInspeccionInvalidoException>().WithMessage("*firmada*");
+}
+```
+
+### 2.2 Criterios de paso entre fases
+
+| Transición | Criterio | Cómo verificarlo |
+|---|---|---|
+| Spec → Red | `spec.md` firmado explícitamente por el usuario | El usuario dice "listo", "firmo" o equivalente — sin esto no se avanza |
+| Red → Green | Tests compilan y **fallan por la razón correcta** | `dotnet build && dotnet test --filter "FullyQualifiedName~{Slice}"`; los tests rojos no fallan por compilación ni timeout |
+| Green → Refactor | **Todos** los tests del repo pasan | `dotnet test`; cero rojos, cero warnings |
+| Refactor → Review | Tests en verde, warnings en cero, `refactor-notes.md` presente | `dotnet test` + `dotnet build` + verificación del archivo |
+| Review → Cierre | Veredicto `approved` o `approved-with-followups` en `review-notes.md §4` | Lectura del archivo producido por el reviewer |
 
 Se pasa a la siguiente fase solo cuando se cumple el criterio. Nunca se solapan.
+
+### 2.3 Rebuild test (obligatorio por slice con eventos)
+
+Todo slice que emita ≥1 evento incluye un test que reproyecta el stream sobre un agregado vacío y verifica que el estado resultante es coherente. Detecta validaciones intrusas en `Apply` y eventos emitidos fuera de orden causal:
+
+```csharp
+[Fact]
+public void {Accion}_rebuild_desde_stream_reproduce_estado()
+{
+    var dados = new object[] { /* historial previo */ };
+    var cmd = new {NombreComando}(/*...*/);
+    var emitidos = CasoDeUso.Decidir(dados, cmd, ahora);
+
+    var stream = dados.Concat(emitidos).ToArray();
+    var act = () => {Agregado}.Reconstruir(stream);
+
+    var agregado = act.Should().NotThrow().Subject;
+    agregado.{propiedadClave}.Should().Be({esperado});
+}
+```
+
+Este test es **blocker** en la fase review si falta (regla del reviewer §5.3).
 
 ### 2.3 Mocks y dobles de prueba
 
@@ -196,17 +233,22 @@ Un slice se considera cerrado cuando **todos** estos ítems están marcados:
 
 Algunos comandos disparan una saga (p. ej. `CerrarInspeccionSaga` orquesta apertura de seguimientos, generación de OT en MYE y push SignalR). Para sagas, además del DoD §6:
 
-- [ ] Test de saga con bus en memoria de Wolverine.
-- [ ] Idempotencia documentada: qué pasa si el adapter de MYE se reintenta (`Idempotency-Key=InspeccionId` por defecto).
-- [ ] Outbox + reintento exponencial verificado (Wolverine built-in).
+- [ ] Test de saga con bus en memoria de Wolverine que verifica la secuencia de mensajes.
+- [ ] Idempotencia documentada: qué pasa si el adapter del ERP se reintenta (`Idempotency-Key=InspeccionId` por defecto — ADR-003 — o justificación de otra clave en `spec.md §7`).
+- [ ] Política ADR-006 verificada: 5xx → retry exponencial 5s→30s→2m→10m; 4xx + `ArgumentException` → dead-letter inmediato.
+- [ ] Si el listener lee Marten: usa overload tenant-aware (`LeerAsync(id, envelope.TenantId, ct)`) — ver regla §9.2.
+- [ ] Propagación JWT al ERP via `X-Forwarded-Authorization` en envelope — ver regla §9.3.
 
 ### 7.2 Sincronización de catálogos (ADR-004)
 
-Para slices que sincronizan catálogos Sinco (equipos, partes, repuestos, obras, rutinas, causas de falla, tipos de falla):
+Para slices que sincronizan catálogos Sinco (equipos, partes, repuestos, obras, rutinas, causas de falla, tipos de falla, productos):
 
-- [ ] Stale-while-revalidate documentado.
+- [ ] Sync on-app-open con `If-None-Match`/`ETag` — sin cron nocturno (ADR-004 canonical).
+- [ ] Body vacío → `"vaciado-sospechoso"`, cache local intacto (regla de seguridad ADR-004).
+- [ ] Stale-while-revalidate documentado en `spec.md §8`.
 - [ ] Health check por catálogo registrado en App Insights.
-- [ ] Política de reglas operativas (IDs inmutables, descontinuar = `activo=false`) verificada en el adapter.
+- [ ] Reglas operativas verificadas: IDs inmutables, descontinuar = `activo=false`.
+- [ ] Atomicidad cross-catálogo: `LightweightSession` propia por catálogo vía `ITenantedDocumentSessionFactory.OpenSessionForTenant` — partial-failure por catálogo documentado.
 
 ### 7.3 Frontend slice
 
@@ -225,7 +267,7 @@ Para slices de la PWA (Fase 5 del roadmap), la spec se reformula:
 2. **Refactor sin cambio de comportamiento en otro slice.** Si el refactorer necesita tocar código fuera del slice actual, abre un slice `refactor-{N}` separado con sus propios tests de regresión.
 3. **Bug en producción.** TDD al revés: test que reproduce el bug (rojo) → fix (verde) → refactor. Mismo workflow, distinta semántica.
 4. **Bloqueo cross-team con Sinco on-prem.** Si un slice depende de un endpoint Sinco aún no expuesto (Fase 4 del roadmap), se trabaja contra el contrato acordado vía mock + WireMock. El slice se marca `🟡 mock-only` hasta que el equipo Sinco entregue el endpoint real.
-5. **Embargo de docs (vigente desde 2026-05-05).** Pausa de edits NO-triviales a `Inspecciones/docs/*` hasta cerrar 3-4 slices reales. Razón: la doc:código ratio acumulada hace que cada cambio de scope amplifique a ~5x archivos (sesión 2026-05-05 evidenció 5 cambios → ~25 archivos editados). Detalle del alcance + qué se permite + cómo levantar en `CLAUDE.md` "Embargo de docs". Aplica al orquestador y a sub-personas.
+5. **Embargo de docs (LEVANTADO 2026-05-07).** Pausa de edits NO-triviales a `Inspecciones/docs/*` estuvo vigente entre 2026-05-05 y 2026-05-07. Levantado al cerrarse 6 slices reales. Si se necesita uno nuevo, registrarlo en `CLAUDE.md` con fecha y disparador de levantamiento.
 
 ---
 
@@ -237,8 +279,28 @@ Para slices de la PWA (Fase 5 del roadmap), la spec se reformula:
 - `TimeProvider` inyectado — prohibido `DateTime.UtcNow` en dominio.
 - `Guid.NewGuid()` solo en handlers; en dominio se recibe el id desde fuera.
 - `UbicacionGps` y firma manuscrita (`bytes` PNG) son value objects del dominio; se reciben por parámetro, no se generan dentro.
-- Identidad: heredada de la PWA Sinco MYE móvil (host). El handler recibe `claims` (técnico, obras asignadas, roles) por parámetro; el dominio nunca conoce el mecanismo concreto de auth ni los JWTs. Mecanismo del host a confirmar — ADR-002 está en estado tentativo.
 - Adjuntos vía SAS upload pattern (ADR-005): el dominio solo conoce el `BlobUri` final; nunca firma SAS.
+- **Apply puro:** los métodos `Apply(Evt)` del agregado son mutaciones de estado sin validaciones ni excepciones. Las pre-condiciones viven en el método de decisión. Re-validar en `Apply` rompe el rebuild desde stream.
+
+### 9.1 Identidad HTTP (regla mt-1 — ADR-002)
+
+Todo endpoint HTTP lee identidad vía `ISessionService` (`Inspecciones.Infrastructure.Auth`). **Prohibido leer `HttpContext.User` o claims directamente en endpoints o handlers.** El `TecnicoId` del comando se construye como `session.IdUsuario.ToString(CultureInfo.InvariantCulture)`. Las capabilities se validan en el endpoint con `if (!session.Capabilities.Contains("xxx")) return Forbidden403(...)` antes de despachar al handler.
+
+### 9.2 Multi-tenancy Marten (regla mt-2 — MT2-INV-1)
+
+Toda apertura de sesión Marten en código de producción pasa por `ITenantedDocumentSessionFactory` (`Inspecciones.Infrastructure.Auth`). **Prohibido `store.LightweightSession()` o `store.QuerySession()` directo sin tenant en `src/`.** El `IDocumentSession` y `IQuerySession` scoped en DI ya vienen tenant-aware vía el factory — los handlers que los reciben por DI heredan tenancy sin tocar constructores.
+
+Bypass legal de `OpenSessionForTenant(tenantId)`: listeners Wolverine que leen el tenant del `Envelope.TenantId`, tests E2E cross-tenant, y operaciones de bootstrap/admin sin contexto HTTP.
+
+Para listeners Wolverine que escriben/leen Marten: aceptar `Wolverine.Envelope` como parámetro de `HandleAsync` y propagar el tenant explícitamente al puerto (ej. `IInspeccionReader.LeerAsync(id, tenantId, ct)`).
+
+### 9.3 Propagación JWT al ERP (regla mt-3)
+
+Las llamadas HTTP al ERP van con el bearer del usuario original (no un token global de servicio). El bearer viaja en el envelope del outbox bajo `X-Forwarded-Authorization` y los listeners lo extraen con `EnvelopeBearerExtractor`. El token se persiste solo en `wolverine_outgoing_envelopes.headers` (Postgres del módulo, red privada — aceptado por D-MT3-2). **Prohibido loguear el JWT raw** — solo `IdEmpresa`/`IdUsuario` (enteros, no PII).
+
+### 9.4 Observabilidad por `IdEmpresa` (regla mt-4 — MT4-INV-3)
+
+Los logs de handlers/listeners críticos incluyen `IdEmpresa` como propiedad estructurada para filtrado en App Insights / Azure Monitor. Para endpoints HTTP: el `SessionLoggingScopeFilter` ya lo aplica globalmente — los nuevos endpoints lo heredan sin código adicional. Para listeners Wolverine ERP: patrón `[LoggerMessage]` template con `TenantId={TenantId}` enriquecido desde `envelope.TenantId`. Métricas via `Meter("Inspecciones")` BCL (`InspeccionesMeters`) con tag `id_empresa`.
 
 ---
 
