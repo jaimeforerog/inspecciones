@@ -33,14 +33,6 @@ public sealed class ParteNoCorrespondeAlEquipoException(string mensaje)
 public sealed class RepuestoNoEncontradoEnCatalogoException(string mensaje)
     : InspeccionDomainException(mensaje);
 
-/// <summary>
-/// PRE-H2 (handler slice 1f) — el SKU referenciado no está catalogado como compatible
-/// con la parte del hallazgo destino (<c>RepuestoLocal.ParteIdsCompatibles</c>).
-/// Hard error per decisión §12.10.12. Mapea a <c>422 Unprocessable Entity</c>.
-/// </summary>
-public sealed class SkuIncompatibleConParteException(string mensaje)
-    : InspeccionDomainException(mensaje);
-
 // ── Slice 1h — IniciarInspeccionMonitoreo ────────────────────────────────────
 
 /// <summary>

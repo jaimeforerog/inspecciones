@@ -430,7 +430,6 @@ public static class InspeccionesEndpoints
                         CantidadInvalidaException                  => "PRE-E",
                         SkuDuplicadoEnHallazgoException            => "PRE-G",
                         RepuestoNoEncontradoEnCatalogoException    => "PRE-H1",
-                        SkuIncompatibleConParteException           => "PRE-H2",
                         _                                          => "DOMINIO"
                     };
                     return Results.UnprocessableEntity(new { codigoError, mensaje = ex.Message });

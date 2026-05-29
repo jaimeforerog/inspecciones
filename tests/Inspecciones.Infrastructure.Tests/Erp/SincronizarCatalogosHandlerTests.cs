@@ -553,8 +553,8 @@ public sealed class SincronizarCatalogosHandlerTests : IDisposable
         // Given: existen 2 RepuestoLocal previos
         _repo.SeedProductos(new[]
         {
-            new RepuestoLocal(100, "SKU-100", "Filtro aceite", "UND", new[] { 1, 2 }),
-            new RepuestoLocal(101, "SKU-101", "Correa distribución", "UND", new[] { 3 }),
+            new RepuestoLocal(100, "SKU-100", "Filtro aceite", "UND"),
+            new RepuestoLocal(101, "SKU-101", "Correa distribución", "UND"),
         });
         _repo.SeedState(new CatalogoSyncState { Id = "productos", EtagActual = "\"v1\"", UltimoEstado = "actualizado" });
 

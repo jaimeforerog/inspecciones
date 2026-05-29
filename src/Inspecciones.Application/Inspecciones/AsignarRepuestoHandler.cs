@@ -9,7 +9,6 @@ namespace Inspecciones.Application.Inspecciones;
 /// <list type="number">
 ///   <item>PRE-F — carga el aggregate; lanza <see cref="InspeccionNoEncontradaException"/> si no existe.</item>
 ///   <item>PRE-H1 — valida que <c>SkuId</c> exista en <c>RepuestoLocal</c>.</item>
-///   <item>PRE-H2 — valida compatibilidad SKU↔Parte (§12.10.12).</item>
 ///   <item>Delega PRE-A, PRE-B1/B2, PRE-C, PRE-D, PRE-E, PRE-G al aggregate.</item>
 ///   <item>Append + commit atómico (un único <c>SaveChangesAsync</c>).</item>
 /// </list>
@@ -37,17 +36,6 @@ public sealed class AsignarRepuestoHandler(IDocumentSession session, TimeProvide
         {
             throw new RepuestoNoEncontradoEnCatalogoException(
                 $"El SKU {cmd.SkuId} no existe en el catálogo local. Refresca el catálogo de inventario.");
-        }
-
-        // PRE-H2: el SKU debe ser compatible con la parte del hallazgo destino.
-        var hallazgoDestino = inspeccion.Hallazgos.FirstOrDefault(h => h.HallazgoId == cmd.HallazgoId);
-        if (hallazgoDestino is not null
-            && !repuestoLocal.ParteIdsCompatibles.Contains(hallazgoDestino.ParteEquipoId))
-        {
-            throw new SkuIncompatibleConParteException(
-                $"El SKU {repuestoLocal.CodigoSinco} no está catalogado como compatible con la parte " +
-                $"{hallazgoDestino.ParteEquipoId} del hallazgo. " +
-                "Si crees que es un error, escala al admin del catálogo de inventario.");
         }
 
         // Delegar PRE-A, PRE-B1, PRE-B2, PRE-C, PRE-D, PRE-E, PRE-G al aggregate.

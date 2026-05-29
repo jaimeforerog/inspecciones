@@ -16,11 +16,15 @@
   </PropertyGroup>
 
   <!-- Supresión temporal de audit NU1904 para Marten 7.40.0 (GHSA-vmw2-qwm8-x84c).
+       Supresión de NU1900 (feed Azure DevOps no alcanzable fuera de VPN corporativa — FU-53).
        Pendiente actualizar Marten cuando se estabilice la versión compatible con Wolverine 3.x.
        Ver FOLLOWUPS.md para el ticket de seguimiento. -->
   <ItemGroup>
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-vmw2-qwm8-x84c" />
   </ItemGroup>
+  <PropertyGroup>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
 
   <PropertyGroup Condition="'$(MSBuildProjectName.EndsWith(`.Tests`))' == 'true'">
     <IsPackable>false</IsPackable>

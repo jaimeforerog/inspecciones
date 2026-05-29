@@ -59,8 +59,7 @@ public sealed class SincronizarCatalogosHandler
                 fetchErp: (etag, token) => _erp.ListarProductosAsync("-1", etag, token),
                 obtenerItems: body => body.Productos,
                 // CodigoSinco no existe en el DTO de productos — se usa Codigo.ToString() como aproximación MVP.
-                // ParteIdsCompatibles tampoco está disponible en este endpoint global.
-                mapearItem: p => new RepuestoLocal(p.Codigo, p.Codigo.ToString(), p.Descripcion, p.UnidadContable, Array.Empty<int>()),
+                mapearItem: p => new RepuestoLocal(p.Codigo, p.Codigo.ToString(), p.Descripcion, p.UnidadContable),
                 persistir: (state, items, token) => _repo.PersistirSyncProductosAsync(state, items, token),
                 ct),
         };

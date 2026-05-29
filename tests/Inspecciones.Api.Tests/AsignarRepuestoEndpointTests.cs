@@ -68,16 +68,14 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         return (inspeccionId, hallazgoId);
     }
 
-    private async Task SembrarRepuestoLocal(int skuId = SkuIdOk, int[]? parteIdsCompatibles = null)
+    private async Task SembrarRepuestoLocal(int skuId = SkuIdOk)
     {
-        var store = factory.Services.GetRequiredService<IDocumentStore>();
         await using var session = factory.OpenSeedingSessionForDefaultTenant();
         session.Store(new RepuestoLocal(
             SkuId: skuId,
             CodigoSinco: $"INS-{skuId}",
-            Descripcion: "Sello hidrÃ¡ulico",
-            UnidadMedida: "unidad",
-            ParteIdsCompatibles: parteIdsCompatibles ?? [ParteEquipoId]));
+            Descripcion: "Sello hidráulico",
+            UnidadMedida: "unidad"));
         await session.SaveChangesAsync();
     }
 
@@ -197,27 +195,6 @@ public class AsignarRepuestoEndpointTests(InspeccionesAppFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
         body!.CodigoError.Should().Be("PRE-H1");
-    }
-
-    // â”€â”€ PRE-H2: SKU no compatible con la parte del hallazgo â†’ 422 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    [Fact]
-    public async Task POST_repuesto_sku_incompatible_con_parte_responde_422_PRE_H2()
-    {
-        // Given: RepuestoLocal.ParteIdsCompatibles=[10,20] â€” no incluye ParteEquipoId=77
-        await SembrarRepuestoLocal(skuId: 888, parteIdsCompatibles: [10, 20]);
-        var (inspeccionId, hallazgoId) = await SembrarInspeccionConHallazgo(equipoId: 16004);
-        var client = factory.CreateClient();
-        var request = NuevoRequest(inspeccionId, hallazgoId, skuId: 888);
-        request.Headers.Add("X-Client-Command-Id", Guid.NewGuid().ToString());
-
-        // When
-        var response = await client.SendAsync(request);
-
-        // Then: 422 PRE-H2
-        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
-        var body = await response.Content.ReadFromJsonAsync<RespuestaError>();
-        body!.CodigoError.Should().Be("PRE-H2");
     }
 
     private sealed record RespuestaAsignarRepuesto(
